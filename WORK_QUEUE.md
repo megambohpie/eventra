@@ -6,7 +6,7 @@
 
 | Fase | Status | Fokus |
 | --- | --- | --- |
-| 00 | Todo | Foundation dan standar proyek |
+| 00 | Review (menunggu persetujuan owner) | Foundation dan standar proyek |
 | 01 | Todo | Auth, RBAC, master data |
 | 02 | Todo | Aset dan QR lifecycle |
 | 03 | Todo | Ketersediaan, paket, pesanan |
@@ -25,11 +25,11 @@
 
 ## Fase 00 — Foundation dan Standar Proyek
 
-- [ ] Buat monorepo `apps/web`, `apps/mobile`, `apps/api`, `packages/shared`, dan `packages/api-client`.
-- [ ] Konfigurasi TypeScript strict, ESLint, Prettier, env validation, dan command lint/typecheck/test/build.
-- [ ] Setup React/Vite web dengan Tailwind dan DaisyUI; buat tema serta layout dasar memakai DaisyUI.
-- [ ] Setup Express API, Prisma, PostgreSQL, health endpoint, error handler, dan migrasi awal.
-- [ ] Setup React Native/Expo dan API client Axios bersama.
+- [x] Buat monorepo `apps/web`, `apps/mobile`, `apps/api`, `packages/shared`, dan `packages/api-client`.
+- [x] Konfigurasi TypeScript strict, ESLint, Prettier, env validation, dan command lint/typecheck/test/build.
+- [x] Setup React/Vite web dengan Tailwind dan DaisyUI; buat tema serta layout dasar memakai DaisyUI.
+- [x] Setup Express API, Prisma, PostgreSQL, health endpoint, error handler, dan migrasi awal.
+- [x] Setup React Native/Expo dan API client Axios bersama.
 
 **Selesai bila:** semua aplikasi build, API terhubung ke DB dev, dan CI lokal lulus lint/typecheck/test/build.
 

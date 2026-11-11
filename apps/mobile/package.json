@@ -1,0 +1,27 @@
+{
+  "name": "@eventra/mobile",
+  "version": "0.0.0",
+  "private": true,
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "typecheck": "tsc -p tsconfig.json",
+    "build": "expo export --platform android --output-dir dist",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@eventra/api-client": "workspace:*",
+    "@eventra/shared": "workspace:*",
+    "axios": "^1.21.1",
+    "expo": "^58.0.23",
+    "expo-status-bar": "^58.0.4",
+    "react": "^19.3.0",
+    "react-native": "^0.88.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "typescript": "^5.9.3"
+  }
+}

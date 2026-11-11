@@ -1,0 +1,17 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: eventra
+      POSTGRES_PASSWORD: eventra
+      POSTGRES_DB: eventra
+    ports:
+      - '5433:5432'
+    volumes:
+      - eventra-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U eventra']
+      interval: 5s
+      retries: 10
+volumes:
+  eventra-db:

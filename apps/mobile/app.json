@@ -1,0 +1,16 @@
+{
+  "expo": {
+    "name": "Eventra",
+    "slug": "eventra",
+    "version": "0.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "android": {
+      "package": "id.eventra.mobile"
+    },
+    "ios": {
+      "bundleIdentifier": "id.eventra.mobile"
+    },
+    "plugins": ["expo-status-bar"]
+  }
+}

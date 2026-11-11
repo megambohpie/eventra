@@ -1,0 +1,15 @@
+{
+  "$schema": "https://turborepo.com/schema.json",
+  "globalDependencies": ["tsconfig.base.json", ".env"],
+  "tasks": {
+    "typecheck": { "env": ["DATABASE_URL"] },
+    "test": { "env": ["DATABASE_URL"] },
+    "build": {
+      "dependsOn": ["^build"],
+      "env": ["VITE_*", "EXPO_PUBLIC_*"],
+      "outputs": ["dist/**"]
+    },
+    "dev": { "cache": false, "persistent": true },
+    "start": { "cache": false, "persistent": true }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "@eventra/api-client",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@eventra/shared": "workspace:*",
+    "axios": "^1.21.1"
+  }
+}
