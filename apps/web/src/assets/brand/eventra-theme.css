@@ -1,8 +1,42 @@
 @plugin "daisyui/theme" {
-  name: 'eventra-light'; default: true; color-scheme: light;
-  --color-primary: #2563eb; --color-primary-content: #ffffff; --color-secondary: #0ea5e9; --color-secondary-content: #ffffff; --color-accent: #0891b2; --color-accent-content: #ffffff; --color-neutral: #123b6d; --color-neutral-content: #f8fafc; --color-base-100: #ffffff; --color-base-200: #f5f9ff; --color-base-300: #d9e8fc; --color-base-content: #172554; --color-info: #0284c7; --color-success: #16a34a; --color-warning: #d97706; --color-error: #dc2626;
+  name: 'eventra-light';
+  default: true;
+  color-scheme: light;
+  --color-primary: #2563eb;
+  --color-primary-content: #ffffff;
+  --color-secondary: #0ea5e9;
+  --color-secondary-content: #ffffff;
+  --color-accent: #0891b2;
+  --color-accent-content: #ffffff;
+  --color-neutral: #123b6d;
+  --color-neutral-content: #f8fafc;
+  --color-base-100: #ffffff;
+  --color-base-200: #f5f9ff;
+  --color-base-300: #d9e8fc;
+  --color-base-content: #172554;
+  --color-info: #0284c7;
+  --color-success: #16a34a;
+  --color-warning: #d97706;
+  --color-error: #dc2626;
 }
 @plugin "daisyui/theme" {
-  name: 'eventra-dark'; prefersdark: true; color-scheme: dark;
-  --color-primary: #60a5fa; --color-primary-content: #082f49; --color-secondary: #22d3ee; --color-secondary-content: #082f49; --color-accent: #67e8f9; --color-accent-content: #082f49; --color-neutral: #0f172a; --color-neutral-content: #e0f2fe; --color-base-100: #0b1220; --color-base-200: #111c2e; --color-base-300: #1e3a5f; --color-base-content: #e6f1ff; --color-info: #38bdf8; --color-success: #4ade80; --color-warning: #fbbf24; --color-error: #f87171;
+  name: 'eventra-dark';
+  prefersdark: true;
+  color-scheme: dark;
+  --color-primary: #60a5fa;
+  --color-primary-content: #082f49;
+  --color-secondary: #22d3ee;
+  --color-secondary-content: #082f49;
+  --color-accent: #67e8f9;
+  --color-accent-content: #082f49;
+  --color-neutral: #0f172a;
+  --color-neutral-content: #e0f2fe;
+  --color-base-100: #0b1220;
+  --color-base-200: #111c2e;
+  --color-base-300: #1e3a5f;
+  --color-base-content: #e6f1ff;
+  --color-info: #38bdf8;
+  --color-success: #4ade80;
+  --color-warning: #fbbf24;
+  --color-error: #f87171;
 }

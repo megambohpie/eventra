@@ -35,7 +35,7 @@ Dokumen ini ditujukan untuk manusia, Codex, Claude Code, dan agen coding lain.
 
 1. Lakukan discovery read-only dan ringkas temuan, scope, risiko, serta file yang diperkirakan berubah.
 2. Kerjakan satu item work queue dengan perubahan terkecil yang memenuhi acceptance criteria.
-3. Tulis/ubah test yang relevan; jalankan lint, typecheck, test, dan build yang tersedia.
+3. Tulis/ubah test yang relevan; jalankan `pnpm format` (Prettier) pada file yang diubah, lalu `pnpm check` (lint, format:check, typecheck, test, build) dan pastikan hijau penuh. Format Prettier adalah standar kerapian wajib; jangan melapor selesai bila `format:check` gagal.
 4. Laporkan file berubah, hasil verifikasi aktual, asumsi, dan pekerjaan yang belum dilakukan.
 5. **Segera setelah pekerjaan selesai dan terverifikasi, update `WORK_QUEUE.md`** (centang item, tambahkan item baru bila ada pekerjaan di luar daftar, perbarui tabel Status, dan sinkronkan status fase di blok data `WORK_QUEUE_STATUS.html`) sebelum melapor. Bila kode selesai, terverifikasi, dan berjalan, langsung tandai `Done`; review dilakukan sendiri oleh owner secara manual.
 6. Jangan memulai fase berikutnya, melakukan deploy, push, mengubah kredensial, atau menghapus data tanpa instruksi eksplisit.
