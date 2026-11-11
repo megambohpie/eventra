@@ -1,0 +1,98 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 1629 >>
+stream
+BT
+/F1 16 Tf
+50 790 Td
+(EVENTRA - PROPOSAL PEKERJAAN SISTEM) Tj
+/F1 10 Tf
+0 -24 Td
+(Nomor: [ISI-NOMOR-PROPOSAL]    Tanggal: [ISI-TANGGAL]) Tj
+0 -16 Td
+(Kepada: [NAMA OWNER / PERUSAHAAN]) Tj
+0 -16 Td
+() Tj
+0 -16 Td
+(Tujuan) Tj
+0 -16 Td
+(Eventra adalah sistem kontrol aset rental event untuk membantu owner) Tj
+0 -16 Td
+(memantau kondisi, lokasi, PIC, riwayat sewa, servis, pendapatan,) Tj
+0 -16 Td
+(dan piutang dalam satu sistem.) Tj
+0 -16 Td
+() Tj
+0 -16 Td
+(Ruang Lingkup Fitur) Tj
+0 -16 Td
+(1. Dashboard owner: status aset, pengeluaran, insiden, servis, keuangan.) Tj
+0 -16 Td
+(2. QR aset: pembelian, umur, harga beli, kondisi dan riwayat barang.) Tj
+0 -16 Td
+(3. Penyewaan: stok per tanggal, paket/pcs, PIC, tanpa overbooking.) Tj
+0 -16 Td
+(4. Gudang: pick list, scan keluar/kembali, PDF dan tanda tangan PIC.) Tj
+0 -16 Td
+(5. Lapangan: laporan rusak 1-5 foto serta aset pengganti.) Tj
+0 -16 Td
+() Tj
+0 -16 Td
+(Tahapan Pekerjaan) Tj
+0 -16 Td
+(1. Foundation dan hak akses.  2. Aset dan QR.) Tj
+0 -16 Td
+(3. Stok, paket dan pesanan.  4. Gudang dan serah-terima.) Tj
+0 -16 Td
+(5. Insiden, servis dan replacement.  6. Dashboard keuangan.) Tj
+0 -16 Td
+(7. Mobile operasional.  8. Pengujian dan rilis.) Tj
+0 -16 Td
+() Tj
+0 -16 Td
+(Hasil untuk Owner) Tj
+0 -16 Td
+(Owner memperoleh dashboard usaha, kontrol kondisi barang, riwayat aset,) Tj
+0 -16 Td
+(stok yang akurat, dokumen serah-terima, pendapatan dan piutang sewa.) Tj
+0 -16 Td
+() Tj
+0 -16 Td
+(Dokumen ini menjelaskan scope pekerjaan. Jadwal dan harga dibahas terpisah.) Tj
+0 -16 Td
+() Tj
+0 -16 Td
+(Sistem dan dokumen ini dibuat oleh PT Trijaya Digital Koneksindo.) Tj
+0 -16 Td
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+6 0 obj
+<< /Title (Eventra Proposal Pekerjaan) /Author (PT Trijaya Digital Koneksindo) >>
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000001922 00000 n 
+0000001992 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R /Info 6 0 R >>
+startxref
+2089
+%%EOF
