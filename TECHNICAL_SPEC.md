@@ -20,7 +20,7 @@ docs/          dokumentasi tambahan bila diperlukan
 ```
 
 - **Web:** dashboard owner, admin, gudang, dan laporan. Semua tampilan memakai DaisyUI/Tailwind; tidak membuat CSS kustom kecuali token/global reset yang disetujui.
-- **Branding web:** gunakan `eventra-logo-v5.svg` dengan warna asli pada light maupun dark mode. Di dark mode, letakkan logo di surface terang agar wordmark terbaca. Gunakan `eventra-icon.svg` pada favicon/loading dan `eventra-theme.css` sebagai satu-satunya sumber token warna DaisyUI.
+- **Branding web:** gunakan `eventra-logo-v5.svg` lewat komponen `Logo`: warna asli tanpa kotak pada light mode, dan inversi terang tanpa kotak putih pada dark mode agar wordmark terbaca. Gunakan `eventra-icon.svg` pada favicon/loading dan `eventra-theme.css` sebagai satu-satunya sumber token warna DaisyUI.
 - **Mobile:** aplikasi operasional untuk gudang dan PIC lapangan. DaisyUI tidak mendukung React Native; gunakan komponen native dengan token desain yang sama.
 - **API:** Node.js + Express.js + TypeScript, REST, validasi request, RBAC, audit log.
 - **Database:** PostgreSQL + ORM Prisma.

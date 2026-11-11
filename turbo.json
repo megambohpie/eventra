@@ -3,7 +3,7 @@
   "globalDependencies": ["tsconfig.base.json", ".env"],
   "tasks": {
     "typecheck": { "env": ["DATABASE_URL"] },
-    "test": { "env": ["DATABASE_URL"] },
+    "test": { "env": ["DATABASE_URL", "TEST_DATABASE_URL"] },
     "build": {
       "dependsOn": ["^build"],
       "env": ["VITE_*", "EXPO_PUBLIC_*"],

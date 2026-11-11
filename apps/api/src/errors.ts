@@ -1,4 +1,5 @@
 import type { ErrorRequestHandler, RequestHandler } from 'express';
+import { Prisma } from '@prisma/client';
 import { ZodError } from 'zod';
 import type { ApiError } from '@eventra/shared';
 
@@ -41,6 +42,15 @@ export const errorHandler: ErrorRequestHandler = (err: unknown, _req, res, _next
       (fields[key] ??= []).push(issue.message);
     }
     body = { error: { code: 'VALIDATION_ERROR', message: 'Permintaan tidak valid', fields } };
+  } else if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+    status = 409;
+    body = { error: { code: 'DUPLICATE', message: 'Data dengan nilai tersebut sudah ada' } };
+  } else if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2003') {
+    status = 400;
+    body = { error: { code: 'INVALID_REFERENCE', message: 'Referensi data tidak valid' } };
+  } else if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+    status = 404;
+    body = { error: { code: 'NOT_FOUND', message: 'Data tidak ditemukan' } };
   } else if (
     typeof err === 'object' &&
     err !== null &&

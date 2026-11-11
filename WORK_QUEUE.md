@@ -7,7 +7,7 @@
 | Fase | Status | Fokus |
 | --- | --- | --- |
 | 00 | Done | Foundation dan standar proyek |
-| 01 | Todo | Auth, RBAC, master data |
+| 01 | Done | Auth, RBAC, master data |
 | 02 | Todo | Aset dan QR lifecycle |
 | 03 | Todo | Ketersediaan, paket, pesanan |
 | 04 | Todo | Gudang, scan, dan PDF |
@@ -38,11 +38,12 @@
 
 ## Fase 01 — Identity, RBAC, dan Master Data
 
-- [ ] Schema user, role, permission, customer, PIC penyewa, kategori, produk, dan lokasi.
-- [ ] Login, refresh/logout, reset password, route guard, dan capability middleware.
-- [ ] CRUD pelanggan dan minimal satu PIC penyewa wajib sebelum membuat pesanan.
-- [ ] CRUD produk dengan harga per pcs/paket dan deposit.
-- [ ] UI web seluruhnya menggunakan DaisyUI; Axios central client termasuk error/auth interceptor.
+- [x] Schema user, role, permission, customer, PIC penyewa, kategori, produk, dan lokasi.
+- [x] Login, refresh/logout, reset password, route guard, dan capability middleware.
+- [x] CRUD pelanggan dan minimal satu PIC penyewa wajib sebelum membuat pesanan.
+- [x] CRUD produk dengan harga per pcs/paket dan deposit.
+- [x] UI web seluruhnya menggunakan DaisyUI; Axios central client termasuk error/auth interceptor.
+- [x] Tambahan di luar daftar: `GET/POST /users` (capability `user.read`/`user.manage`), seed admin pertama (`pnpm db:seed`), halaman web login/lupa-reset password, pelanggan+PIC, produk, dan kategori/lokasi.
 
 **Selesai bila:** user tak berizin ditolak API dan UI; admin dapat membuat pelanggan, PIC, dan produk; test izin serta validasi lulus.
 

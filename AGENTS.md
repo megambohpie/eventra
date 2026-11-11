@@ -16,7 +16,7 @@ Dokumen ini ditujukan untuk manusia, Codex, Claude Code, dan agen coding lain.
 - Gunakan TypeScript dan JavaScript ecosystem: React web, React Native mobile, Node.js API.
 - Semua HTTP frontend memakai Axios client bersama; jangan memakai `fetch` langsung.
 - Web wajib menggunakan DaisyUI/Tailwind untuk UI. Jangan membuat CSS kustom atau komponen visual mentah bila DaisyUI menyediakan padanannya.
-- Seluruh frontend wajib memakai warna asli `eventra-logo-v5.svg` pada light maupun dark mode. Pada dark mode, tempatkan logo di surface terang; yang boleh berubah hanya token UI dari `eventra-theme.css`. Gunakan `eventra-icon.svg` untuk favicon/loading. Jangan menulis hex warna brand langsung di komponen.
+- Seluruh frontend memakai `eventra-logo-v5.svg` lewat komponen `Logo`. Pada light mode logo memakai warna asli tanpa kotak; pada dark mode logo tampil tanpa kotak putih dengan inversi terang (`invert hue-rotate-180` di komponen `Logo`) agar wordmark terbaca. Keputusan owner (menggantikan aturan surface terang). Selain itu yang boleh berubah hanya token UI dari `eventra-theme.css`. Gunakan `eventra-icon.svg` untuk favicon/loading. Jangan menulis hex warna brand langsung di komponen.
 - React Native tidak mendukung DaisyUI; gunakan komponen native dengan token/pola UI yang konsisten.
 - Jangan menyimpan rahasia, token, password, atau data produksi pada repository.
 - Jangan mengubah data historis aset, scan, pembayaran, atau dokumen bertanda tangan secara destruktif. Gunakan event revisi/koreksi yang dapat diaudit.
@@ -28,6 +28,7 @@ Dokumen ini ditujukan untuk manusia, Codex, Claude Code, dan agen coding lain.
 - **Ikon:** hanya Material Design Icons (`@mdi/js` lewat komponen `Icon`). Jangan memakai set ikon lain atau SVG inline manual.
 - **Loading pada aksi:** setiap tombol aksi memakai `Button`. Tombol harus menampilkan spinner dan nonaktif selama aksi berjalan (`loading` atau `onClick` yang mengembalikan Promise).
 - **Notifikasi error:** setiap error (API, jaringan, atau tak tertangani) wajib tampil lewat komponen `NotificationHost` (toast DaisyUI) dengan `notify`/`notifyError` dari `lib/notifications.ts`. Error API otomatis dinotifikasi oleh client Axios (`onError`); jangan membuat alert/dialog error sendiri per halaman. Pesan harus diterjemahkan (`errors.<CODE>`).
+- **Responsif:** semua halaman dan komponen wajib responsif dan nyaman dipakai dari layar ponsel (≈360 px) hingga desktop. Gunakan pendekatan mobile-first dengan breakpoint Tailwind (`sm:`/`md:`/`lg:`) dan komponen DaisyUI yang responsif; tidak boleh ada scroll horizontal pada halaman. Tabel lebar dibungkus `overflow-x-auto`, form/grid berubah menjadi satu kolom di layar kecil, dan target sentuh tombol/input cukup besar. Periksa tampilan lebar ponsel dan desktop sebelum melapor selesai.
 - **Tema:** dukung light dan dark (`eventra` dan `eventra-dark`) lewat token DaisyUI; jangan hardcode warna.
 - **Bahasa:** Inggris (`en`) dan Indonesia (`id`) lewat i18next. Semua teks tampil harus memakai kunci terjemahan di `src/i18n/locales/`; kunci `en` dan `id` harus identik (dijaga test).
 

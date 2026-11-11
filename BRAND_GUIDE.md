@@ -42,7 +42,7 @@ Untuk loading, tampilkan ikon dengan ukuran 32–48 px dan animasi rotasi/pulse 
 ## Tema light dan dark
 
 - **Light mode:** gunakan [eventra-logo-v5.svg](assets/brand/eventra-logo-v5.svg), background terang, dan primary `#2563EB`.
-- **Dark mode:** tetap gunakan [eventra-logo-v5.svg](assets/brand/eventra-logo-v5.svg) tanpa mengubah warna logo. Tempatkan logo pada surface terang (`base-100` atau panel putih/biru sangat muda) agar wordmark tetap terbaca.
+- **Dark mode:** gunakan [eventra-logo-v5.svg](assets/brand/eventra-logo-v5.svg) tanpa kotak putih; komponen `Logo` menerapkan inversi terang (`invert hue-rotate-180`) pada dark mode agar wordmark navy terbaca. Light mode tetap warna asli.
 - Ikon [eventra-icon.svg](assets/brand/eventra-icon.svg) dipakai pada kedua tema.
 - Yang berubah antar tema hanyalah token UI di [eventra-theme.css](assets/brand/eventra-theme.css): background, surface, teks, border, dan warna state. Jangan menulis hex warna brand langsung di komponen.
 

@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { ApiRequestError } from '@eventra/api-client';
 import { App } from './App';
+import { AuthProvider } from './auth/AuthProvider';
 import { i18n } from './i18n';
 import { notifyError } from './lib/notifications';
 import './index.css';
@@ -20,7 +21,9 @@ if (!root) throw new Error('Elemen #root tidak ditemukan');
 createRoot(root).render(
   <StrictMode>
     <BrowserRouter>
-      <App />
+      <AuthProvider>
+        <App />
+      </AuthProvider>
     </BrowserRouter>
   </StrictMode>,
 );

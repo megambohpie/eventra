@@ -1,0 +1,132 @@
+import { useState } from 'react';
+import { mdiPlus } from '@mdi/js';
+import { useTranslation } from 'react-i18next';
+import { listCategories, listProducts } from '@eventra/api-client';
+import type { ProductDto } from '@eventra/shared';
+import { api } from '@/api';
+import { useAuth } from '@/auth/AuthProvider';
+import { ProductModal } from '@/components/products/ProductModal';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Loading } from '@/components/ui/Loading';
+import { PageCard, PageHeader } from '@/components/ui/PageCard';
+import { Pagination } from '@/components/ui/Pagination';
+import { SearchInput } from '@/components/ui/SearchInput';
+import { useResource } from '@/hooks/useResource';
+import { formatRupiah } from '@/lib/format';
+
+const PAGE_SIZE = 20;
+
+export function ProductsPage() {
+  const { t } = useTranslation();
+  const { can } = useAuth();
+  const canWrite = can('product.write');
+  const [q, setQ] = useState('');
+  const [page, setPage] = useState(1);
+  const [selected, setSelected] = useState<ProductDto | 'new' | null>(null);
+
+  const { data, loading, reload } = useResource(
+    () => listProducts(api, { q: q || undefined, page, pageSize: PAGE_SIZE }),
+    `${q}|${page}`,
+  );
+  const categories = useResource(() => listCategories(api), 'categories');
+
+  return (
+    <>
+      <PageCard>
+        <PageHeader title={t('products.title')}>
+          <SearchInput
+            value={q}
+            onChange={(value) => {
+              setQ(value);
+              setPage(1);
+            }}
+          />
+          {canWrite && (
+            <Button
+              size="sm"
+              variant="primary"
+              icon={mdiPlus}
+              disabled={!categories.data}
+              onClick={() => setSelected('new')}
+            >
+              {t('products.new')}
+            </Button>
+          )}
+        </PageHeader>
+        {canWrite && categories.data?.length === 0 && (
+          <div role="alert" className="alert alert-info">
+            <span>{t('products.needCategory')}</span>
+          </div>
+        )}
+
+        {loading && !data ? (
+          <Loading />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="table">
+              <thead className="text-xs uppercase tracking-wide text-base-content/60">
+                <tr>
+                  <th>{t('products.name')}</th>
+                  <th>{t('products.sku')}</th>
+                  <th>{t('products.category')}</th>
+                  <th>{t('products.price')}</th>
+                  <th>{t('products.deposit')}</th>
+                  <th>{t('common.status')}</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {data?.items.map((product) => (
+                  <tr key={product.id} className="hover:bg-base-200/50">
+                    <td>{product.name}</td>
+                    <td>{product.sku ?? '-'}</td>
+                    <td>{product.category.name}</td>
+                    <td>
+                      {formatRupiah(product.price)} / {product.unitLabel}
+                      <span className="ml-1 text-xs opacity-70">
+                        ({t(`products.units.${product.pricingUnit}`)})
+                      </span>
+                    </td>
+                    <td>{formatRupiah(product.deposit)}</td>
+                    <td>
+                      <Badge variant={product.active ? 'success' : 'neutral'}>
+                        {product.active ? t('common.active') : t('common.inactive')}
+                      </Badge>
+                    </td>
+                    <td className="text-right">
+                      <Button size="sm" variant="ghost" onClick={() => setSelected(product)}>
+                        {canWrite ? t('common.edit') : t('common.view')}
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+                {data?.items.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="text-center">
+                      {t('common.empty')}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {data && (
+          <Pagination page={page} pageSize={PAGE_SIZE} total={data.total} onChange={setPage} />
+        )}
+      </PageCard>
+
+      {selected && categories.data && (
+        <ProductModal
+          key={selected === 'new' ? 'new' : selected.id}
+          product={selected === 'new' ? undefined : selected}
+          categories={categories.data}
+          readOnly={!canWrite}
+          onClose={() => setSelected(null)}
+          onChanged={reload}
+        />
+      )}
+    </>
+  );
+}

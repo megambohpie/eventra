@@ -14,3 +14,17 @@
 18.05.36 [vite] vite.config.ts changed, restarting server...
 18.05.36 [vite] server restarted.
 18.05.37 [vite] (client) [optimizer] bundling dependencies...
+18.17.33 [vite] ../../.env changed, restarting server...
+18.17.33 [vite] server restarted.
+18.30.55 [vite] (client) hmr update /src/index.css, /src/components/ui/Icon.tsx
+18.30.56 [vite] (client) hmr update /src/index.css, /src/components/ui/Icon.tsx
+18.34.55 [vite] (client) hmr update /src/pages/auth/LoginPage.tsx, /src/index.css
+18.34.56 [vite] (client) hmr update /src/pages/auth/ForgotPasswordPage.tsx, /src/index.css
+18.34.57 [vite] (client) hmr update /src/pages/auth/ResetPasswordPage.tsx, /src/index.css
+18.34.58 [vite] (client) hmr update /src/components/Layout.tsx, /src/index.css
+18.34.59 [vite] (client) hmr update /src/index.css, /src/components/ui/Logo.tsx
+18.35.07 [vite] (client) page reload src/i18n/locales/id.ts
+18.35.07 [vite] (client) page reload src/i18n/locales/en.ts
+18.35.07 [vite] ../../.env changed, restarting server...
+18.35.07 [vite] (client) Re-optimizing dependencies because lockfile has changed
+18.35.08 [vite] server restarted.
