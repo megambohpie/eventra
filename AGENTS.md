@@ -4,10 +4,11 @@ Dokumen ini ditujukan untuk manusia, Codex, Claude Code, dan agen coding lain.
 
 ## Baca Sebelum Bekerja
 
-1. Baca `PRD.md` untuk kebutuhan bisnis.
-2. Baca `TECHNICAL_SPEC.md` untuk arsitektur dan invarian.
-3. Baca `WORK_QUEUE.md`; pilih satu fase/item yang disetujui saja.
-4. Periksa state repository dan perubahan yang sudah ada sebelum mengedit.
+1. Baca `HANDOFF.md` untuk kondisi proyek terakhir dan agar pekerjaan tidak diulang.
+2. Baca `PRD.md` untuk kebutuhan bisnis.
+3. Baca `TECHNICAL_SPEC.md` untuk arsitektur dan invarian.
+4. Baca `WORK_QUEUE.md`; pilih satu fase/item yang disetujui saja.
+5. Periksa state repository dan perubahan yang sudah ada sebelum mengedit.
 
 ## Batasan Utama
 
@@ -38,6 +39,7 @@ Dokumen ini ditujukan untuk manusia, Codex, Claude Code, dan agen coding lain.
 4. Laporkan file berubah, hasil verifikasi aktual, asumsi, dan pekerjaan yang belum dilakukan.
 5. **Segera setelah pekerjaan selesai dan terverifikasi, update `WORK_QUEUE.md`** (centang item, tambahkan item baru bila ada pekerjaan di luar daftar, perbarui tabel Status, dan sinkronkan status fase di blok data `WORK_QUEUE_STATUS.html`) sebelum melapor. Bila kode selesai, terverifikasi, dan berjalan, langsung tandai `Done`; review dilakukan sendiri oleh owner secara manual.
 6. Jangan memulai fase berikutnya, melakukan deploy, push, mengubah kredensial, atau menghapus data tanpa instruksi eksplisit.
+7. Setelah pekerjaan material selesai atau terblokir, perbarui `HANDOFF.md` dengan fakta, bukti verifikasi, keputusan, dan next step terbaru.
 
 ## Invarian yang Tidak Boleh Dilanggar
 

@@ -1,5 +1,5 @@
-import logoUrl from '../../../../../assets/brand/eventra-logo-v5.svg';
-import iconUrl from '../../../../../assets/brand/eventra-icon.svg';
+import logoUrl from '@/assets/brand/eventra-logo.svg';
+import iconUrl from '@/assets/brand/eventra-icon.svg';
 
 /**
  * Logo penuh. Warna logo tidak boleh diubah; teksnya gelap, jadi selalu diletakkan

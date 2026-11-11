@@ -1,0 +1,16 @@
+
+> @eventra/web@0.0.0 dev D:\source\react\eventra\apps\web
+> vite "--host" "127.0.0.1" "--port" "5173" "--strictPort"
+
+
+  VITE v8.3.8  ready in 392 ms
+
+  ➜  Local:   http://127.0.0.1:5173/
+/*! 🌼 daisyUI 5.7.50 */
+18.02.27 [vite] (client) page reload index.html
+18.03.27 [vite] (client) hmr update /src/index.css
+18.05.35 [vite] changed tsconfig file detected: D:/source/react/eventra/apps/web/tsconfig.json - Clearing cache and forcing full-reload to ensure TypeScript is compiled with updated config values.
+18.05.35 [vite] (client) hmr update /src/index.css
+18.05.36 [vite] vite.config.ts changed, restarting server...
+18.05.36 [vite] server restarted.
+18.05.37 [vite] (client) [optimizer] bundling dependencies...

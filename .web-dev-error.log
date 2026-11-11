@@ -1,0 +1,38 @@
+18.02.42 [vite] (client) [Unhandled error] Error: Element type is invalid: expected a string (for built-in components) or a class/function (for composite components) but got: object.
+
+Check the render method of `Icon`.
+ > createFiberFromTypeAndProps ../../node_modules/react-dom/cjs/react-dom-client.development.js:5330:27
+ > createFiberFromElement ../../node_modules/react-dom/cjs/react-dom-client.development.js:5344:13
+ > reconcileChildFibersImpl ../../node_modules/react-dom/cjs/react-dom-client.development.js:7286:30
+ > ../../node_modules/react-dom/cjs/react-dom-client.development.js:7456:32
+ > reconcileChildren ../../node_modules/react-dom/cjs/react-dom-client.development.js:10096:12
+ > updateFunctionComponent ../../node_modules/react-dom/cjs/react-dom-client.development.js:10585:6
+ > beginWork ../../node_modules/react-dom/cjs/react-dom-client.development.js:12205:17
+ > runWithFiberInDEV ../../node_modules/react-dom/cjs/react-dom-client.development.js:1045:29
+ > performUnitOfWork ../../node_modules/react-dom/cjs/react-dom-client.development.js:19176:21
+ > workLoopSync ../../node_modules/react-dom/cjs/react-dom-client.development.js:19004:40
+
+18.02.42 [vite] (client) [console.warn] An error occurred in the <Icon> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+
+18.02.42 [vite] (client) [Unhandled error] Error: Element type is invalid: expected a string (for built-in components) or a class/function (for composite components) but got: object.
+
+Check the render method of `Icon`.
+ > createFiberFromTypeAndProps ../../node_modules/react-dom/cjs/react-dom-client.development.js:5330:27
+ > createFiberFromElement ../../node_modules/react-dom/cjs/react-dom-client.development.js:5344:13
+ > reconcileChildFibersImpl ../../node_modules/react-dom/cjs/react-dom-client.development.js:7286:30
+ > ../../node_modules/react-dom/cjs/react-dom-client.development.js:7456:32
+ > reconcileChildren ../../node_modules/react-dom/cjs/react-dom-client.development.js:10096:12
+ > updateFunctionComponent ../../node_modules/react-dom/cjs/react-dom-client.development.js:10585:6
+ > beginWork ../../node_modules/react-dom/cjs/react-dom-client.development.js:12205:17
+ > runWithFiberInDEV ../../node_modules/react-dom/cjs/react-dom-client.development.js:1045:29
+ > performUnitOfWork ../../node_modules/react-dom/cjs/react-dom-client.development.js:19176:21
+ > workLoopSync ../../node_modules/react-dom/cjs/react-dom-client.development.js:19004:40
+
+18.02.42 [vite] (client) [console.warn] An error occurred in the <Icon> component.
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries.
+

@@ -1,7 +1,7 @@
+@import '@/assets/brand/eventra-theme.css';
 @import 'tailwindcss';
 @plugin 'daisyui' {
   themes: false;
 }
 
 /* Satu-satunya sumber token warna: tema DaisyUI eventra-light dan eventra-dark. */
-@import '../../../assets/brand/eventra-theme.css';
