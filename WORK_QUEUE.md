@@ -6,7 +6,7 @@
 
 | Fase | Status | Fokus |
 | --- | --- | --- |
-| 00 | Review (menunggu persetujuan owner) | Foundation dan standar proyek |
+| 00 | Done | Foundation dan standar proyek |
 | 01 | Todo | Auth, RBAC, master data |
 | 02 | Todo | Aset dan QR lifecycle |
 | 03 | Todo | Ketersediaan, paket, pesanan |
@@ -30,6 +30,9 @@
 - [x] Setup React/Vite web dengan Tailwind dan DaisyUI; buat tema serta layout dasar memakai DaisyUI.
 - [x] Setup Express API, Prisma, PostgreSQL, health endpoint, error handler, dan migrasi awal.
 - [x] Setup React Native/Expo dan API client Axios bersama.
+- [x] Standar FE web: komponen bersama (`Button` dengan loading, `Badge`, `Icon` MDI), satu layout global, dark/light mode, i18n EN/ID, dan notifikasi error (toast) otomatis dari client Axios.
+- [x] Terapkan branding FE (`BRAND_GUIDE.md`): web memakai `eventra-theme.css` (`eventra-light`/`eventra-dark`) sebagai satu-satunya token, komponen `Logo`/`LogoIcon`/`Loading`, favicon `eventra-icon.svg`; mobile memakai token dan logo yang sama via `expo-image`.
+- [x] Setup Turborepo di atas pnpm workspaces (`turbo.json`, cache lint/typecheck/test/build).
 
 **Selesai bila:** semua aplikasi build, API terhubung ke DB dev, dan CI lokal lulus lint/typecheck/test/build.
 

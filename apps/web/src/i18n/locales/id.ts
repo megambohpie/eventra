@@ -9,6 +9,7 @@ export const id: Messages<typeof en> = {
     theme: { light: 'Ganti ke mode gelap', dark: 'Ganti ke mode terang' },
     language: 'Bahasa',
     close: 'Tutup',
+    loading: 'Memuat',
   },
   home: {
     title: 'Kontrol aset rental',

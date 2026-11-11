@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { getHealth } from '@eventra/api-client';
 import { api } from './src/api';
+import { Logo, LogoIcon } from './src/Logo';
 import { colors, radius, spacing } from './src/theme';
 
 type State = { kind: 'loading' } | { kind: 'ok'; db: string } | { kind: 'error'; message: string };
@@ -27,8 +28,8 @@ export default function App() {
   return (
     <View style={styles.container}>
       <View style={styles.card}>
-        <Text style={styles.title}>Eventra</Text>
-        {state.kind === 'loading' && <ActivityIndicator color={colors.primary} />}
+        <Logo />
+        {state.kind === 'loading' && <LogoIcon />}
         {state.kind === 'ok' && (
           <Text style={{ color: colors.success }}>API OK · DB {state.db}</Text>
         )}
@@ -43,11 +44,15 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.base100,
+    backgroundColor: colors.base200,
     padding: spacing.md,
     justifyContent: 'center',
   },
-  card: { backgroundColor: '#fff', borderRadius: radius.box, padding: spacing.lg, gap: spacing.sm },
-  title: { fontSize: 22, fontWeight: '700', color: colors.baseContent },
+  card: {
+    backgroundColor: colors.base100,
+    borderRadius: radius.box,
+    padding: spacing.lg,
+    gap: spacing.sm,
+  },
   footer: { marginTop: spacing.lg, textAlign: 'center', color: colors.baseContent, fontSize: 12 },
 });

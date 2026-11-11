@@ -6,6 +6,7 @@ import type { HealthResponse } from '@eventra/shared';
 import { api } from '../api';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
+import { Loading } from '../components/ui/Loading';
 
 type State = { kind: 'loading' } | { kind: 'ok'; health: HealthResponse } | { kind: 'error' };
 
@@ -32,7 +33,7 @@ export function HomePage() {
       <div className="card-body">
         <h1 className="card-title">{t('home.title')}</h1>
         <p>{t('home.statusIntro')}</p>
-        {state.kind === 'loading' && <span className="loading loading-spinner" />}
+        {state.kind === 'loading' && <Loading />}
         {state.kind === 'ok' && (
           <div className="flex gap-2">
             <Badge variant={state.health.status === 'ok' ? 'success' : 'warning'}>

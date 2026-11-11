@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 
 export type ThemeMode = 'light' | 'dark';
 const STORAGE_KEY = 'eventra.theme';
-const THEME_NAME: Record<ThemeMode, string> = { light: 'eventra', dark: 'eventra-dark' };
+const THEME_NAME: Record<ThemeMode, string> = { light: 'eventra-light', dark: 'eventra-dark' };
 
 function initialTheme(): ThemeMode {
   try {

@@ -11,6 +11,6 @@
     "ios": {
       "bundleIdentifier": "id.eventra.mobile"
     },
-    "plugins": ["expo-status-bar"]
+    "plugins": ["expo-status-bar", "expo-image"]
   }
 }

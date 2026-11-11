@@ -5,6 +5,7 @@ export const en = {
     theme: { light: 'Switch to dark mode', dark: 'Switch to light mode' },
     language: 'Language',
     close: 'Close',
+    loading: 'Loading',
   },
   home: {
     title: 'Rental asset control',

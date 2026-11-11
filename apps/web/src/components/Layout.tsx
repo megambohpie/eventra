@@ -4,6 +4,7 @@ import { NavLink, Outlet } from 'react-router-dom';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import { ThemeToggle } from './ThemeToggle';
 import { Icon } from './ui/Icon';
+import { Logo } from './ui/Logo';
 import { NotificationHost } from './ui/NotificationHost';
 
 export const FOOTER_TEXT = 'Sistem ini dibuat oleh PT Trijaya Digital Koneksindo.';
@@ -15,8 +16,8 @@ export function Layout() {
     <div className="flex min-h-screen flex-col bg-base-200">
       <div className="navbar bg-base-100 shadow-sm print:hidden">
         <div className="flex-1">
-          <NavLink to="/" className="btn btn-ghost text-xl">
-            {t('app.name')}
+          <NavLink to="/" aria-label={t('app.name')}>
+            <Logo />
           </NavLink>
         </div>
         <ul className="menu menu-horizontal px-1">

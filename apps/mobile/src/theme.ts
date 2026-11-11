@@ -1,12 +1,16 @@
-/** Token UI native; nilai selaras dengan tema DaisyUI "eventra" di web. */
+/** Token UI native; nilai disalin dari assets/brand/eventra-theme.css (tema eventra-light). */
 export const colors = {
-  base100: '#f9fafb',
-  baseContent: '#1f2937',
-  primary: '#4f46e5',
-  primaryContent: '#ffffff',
-  success: '#22c55e',
-  warning: '#facc15',
-  error: '#ef4444',
+  base100: '#FFFFFF',
+  base200: '#F5F9FF',
+  base300: '#D9E8FC',
+  baseContent: '#172554',
+  primary: '#2563EB',
+  primaryContent: '#FFFFFF',
+  neutral: '#123B6D',
+  info: '#0284C7',
+  success: '#16A34A',
+  warning: '#D97706',
+  error: '#DC2626',
 } as const;
 
 export const radius = { box: 12, field: 8 } as const;

@@ -15,5 +15,6 @@ describe('Layout', () => {
     expect(html).toContain(FOOTER_TEXT);
     expect(html).toContain('class="footer');
     expect(html).toContain('navbar');
+    expect(html).toMatch(/<img[^>]*alt="Eventra"/);
   });
 });
