@@ -35,14 +35,14 @@ export function ResetPasswordPage() {
   return (
     <AuthCard icon={mdiLockReset} title={t('auth.resetTitle')} onSubmit={submit}>
       <FormField label={t('auth.resetToken')}>
-        <label className="input w-full">
-          <Icon path={mdiKeyOutline} className="opacity-60" />
+        <label className="input ev-control">
+          <Icon path={mdiKeyOutline} className="ev-input-icon" />
           <input required value={token} onChange={(e) => setToken(e.target.value)} />
         </label>
       </FormField>
       <FormField label={t('auth.newPassword')}>
-        <label className="input w-full">
-          <Icon path={mdiLockOutline} className="opacity-60" />
+        <label className="input ev-control">
+          <Icon path={mdiLockOutline} className="ev-input-icon" />
           <input
             type="password"
             autoComplete="new-password"
@@ -58,11 +58,11 @@ export function ResetPasswordPage() {
         variant="primary"
         icon={mdiLockReset}
         loading={submitting}
-        className="w-full"
+        className="ev-btn--block"
       >
         {t('auth.resetSubmit')}
       </Button>
-      <Link to="/login" className="link link-hover text-center text-sm">
+      <Link to="/login" className="link link-hover ev-auth__link">
         {t('auth.backToLogin')}
       </Link>
     </AuthCard>

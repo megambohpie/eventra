@@ -2,8 +2,8 @@
 
 Dokumen ini adalah sumber ringkas keadaan proyek untuk manusia, Codex, Claude Code, atau agen lain. Baca sebelum implementasi agar pekerjaan tidak diulang.
 
-**Terakhir diperbarui:** 11 November 2026  
-**Status:** Fase 00 dan Fase 01 (identity, RBAC, master data) selesai dan terverifikasi; Fase 02 (aset/QR) belum dimulai dan menunggu persetujuan owner.
+**Terakhir diperbarui:** 12 November 2026  
+**Status:** Fase 00, 01, dan 02 (aset, QR, penerimaan stok, riwayat) selesai dan terverifikasi; Fase 03 belum dimulai dan menunggu persetujuan owner.
 
 ## Urutan baca
 
@@ -28,16 +28,30 @@ Dokumen ini adalah sumber ringkas keadaan proyek untuk manusia, Codex, Claude Co
 
 | Area | Fakta |
 | --- | --- |
-| Schema | Migrasi `20261111111805_identity_master_data` (aditif): `users`, `refresh_tokens`, `password_reset_tokens`, `customers`, `customer_contacts`, `categories`, `locations`, `products`. Rollback = drop tabel tersebut + hapus enum `Role`, `CustomerType`, `PricingUnit`. |
+| Schema | Migrasi `20261111111805_identity_master_data` (aditif): `users`, `refresh_tokens`, `password_reset_tokens`, `customers`, `categories`, `locations`, `products`. Rollback = drop tabel tersebut (migrasi lanjutan `drop_customer_contacts` menghapus `customer_contacts`) + hapus enum `Role`, `CustomerType`, `PricingUnit`. |
 | RBAC | Role = enum DB; capability dipetakan di `packages/shared/src/rbac.ts` (Owner baca-saja, Admin penuh, Koordinator/Gudang baca sebagian). API memakai `requireCapability`, web memakai `RequireCapability` + `useAuth().can`. |
 | Auth | Login JWT akses 15 menit; refresh token acak (hash saja di DB, 7 hari) dirotasi, pemakaian ulang token lama mencabut semua sesi. Status/role user dibaca dari DB tiap request. Reset password: token sekali pakai 1 jam, mencabut semua sesi. |
 | Reset password | Belum ada pengiriman email: antarmuka `Mailer` di `routes/auth.ts`; di dev token dicetak ke log API, di production tidak dicetak. Implementasi nyata ditunda ke Fase 08. |
-| Pelanggan/PIC | PIC wajib minimal satu saat pelanggan dibuat; PIC aktif terakhir tidak dapat dinonaktifkan (409, dikunci dengan `FOR UPDATE`). PIC dinonaktifkan, bukan dihapus. |
+| Pelanggan | Data pelanggan saja. Keputusan owner: PIC tidak disimpan di pelanggan, melainkan ditunjuk per pesanan (Fase 03, `order_pics`). Migrasi `drop_customer_contacts` menghapus tabel `customer_contacts`. |
 | Produk | Harga/deposit integer rupiah (kolom `BigInt`, DTO `number`); satuan `PCS`/`PACKAGE` + label. Kategori dengan produk tidak bisa dihapus. |
 | Audit | Semua operasi tulis dan login/reset menulis `audit_logs` (password/token disaring). |
+| Styling | Dipisah dari logika: `apps/web/src/styles/*.css` (kelas `ev-*`, `@apply` di `@layer utilities`). JSX hanya memuat nama komponen DaisyUI + kelas `ev-*`. |
 | Web | Rute `/login`, `/forgot-password`, `/reset-password`, `/customers`, `/products`, `/master`; Axios client memuat auth interceptor + refresh sekali-bersama. |
 | Admin pertama | `pnpm db:seed` memakai `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD` dari `.env` (lihat `.env.example`; `JWT_SECRET` ≥ 32 karakter wajib). |
 | Test API | Memakai database terpisah `eventra_test` (dibuat otomatis oleh `test/globalSetup.ts`; override dengan `TEST_DATABASE_URL`). Butuh Postgres dev berjalan. |
+
+## Fase 02 — yang ada sekarang
+
+| Area | Fakta |
+| --- | --- |
+| Schema | Migrasi `..._assets_qr_receipts` (aditif: `assets`, `asset_status_events`, `stock_receipts`, `stock_receipt_items` + enum) dan `..._code_sequences` (sequence `asset_code_seq`, `stock_receipt_number_seq`). Rollback = drop tabel/sequence/enum tersebut. |
+| Aset | Satu baris = satu unit fisik, kode `AST-######`, QR token acak 144 bit (`qrToken`, tidak pernah ada di DTO/audit/riwayat). Tidak ada hapus; pensiun (`RETIRED`) final. Serial unik per produk. |
+| Riwayat | `asset_status_events` append-only (RECEIVED, CREATED, STATUS/CONDITION/LOCATION_CHANGED, QR_REGENERATED, UPDATED); UPDATED hanya mencatat nama kolom, bukan nilai (harga beli tidak bocor). |
+| Status/kondisi | Transisi manual dibatasi `MANUAL_STATUS_TRANSITIONS` (shared); aset DAMAGED yang AVAILABLE otomatis QUARANTINED dan tidak bisa kembali AVAILABLE selagi DAMAGED. Transisi operasional menunggu Fase 03–04. |
+| Penerimaan | `/stock-receipts`: draft → `receive` (atomik; klaim DRAFT→RECEIVED dengan updateMany sehingga dua request bersamaan tidak menggandakan aset) membuat aset + QR + event asal per unit. Draft dapat diubah/dibatalkan. Maks 500 unit/baris, 1000/penerimaan. |
+| QR/label | PNG (`GET /assets/:id/qr.png`) dan PDF label A4 3×8 (`GET /assets/labels.pdf?ids=`, maks 100) dibuat backend (`qrcode`, `pdfkit`). Scan: `GET /assets/scan/:token` (tanpa harga/pemasok). |
+| RBAC | Capability baru: `asset.read/write/cost.read/status`, `receipt.read/write`. Harga beli/biaya hanya `asset.cost.read` (Owner, Admin). Owner baca-saja; Gudang/Koordinator: baca + ubah kondisi/status; Gudang juga menerima stok. |
+| Web | `/assets` (ringkasan, filter, pilih + cetak label, aset baru), `/assets/:id` (info, QR, riwayat, ubah kondisi/status, regenerate QR), `/receipts` (daftar, draft, receive, cetak label). |
 
 ## Keputusan yang wajib dijaga
 
@@ -64,21 +78,21 @@ pnpm.cmd dev:web -- --host 127.0.0.1 --port 5173 --strictPort
 - Jika PowerShell menolak `pnpm.ps1`, gunakan `pnpm.cmd`.
 - Backend TSX pernah gagal dalam sandbox karena akses profil OS; menjalankan development server di luar sandbox berhasil.
 
-## Verifikasi terakhir (Fase 01, 11 November 2026)
+## Verifikasi terakhir (Fase 02, 12 November 2026)
 
 | Perintah | Hasil |
 | --- | --- |
 | `pnpm lint` / `pnpm format:check` | Lulus |
 | `tsc` di api, web, mobile, shared, api-client | Lulus |
-| Test shared / api / api-client / web | Lulus: 3 / 27 / 6 / 13 |
+| Test shared / api / api-client / web | Lulus: 7 / 39 / 6 / 13 |
 | `tsup` (api) dan `build` web | Lulus; peringatan bundle >500 kB belum blocker |
-| Smoke HTTP pada build API (port 3001, DB dev) | health 200; login admin seed berhasil; tanpa token 401; pelanggan tanpa PIC 400; preflight CORS 204 |
+| `tsup` api dan build web | Lulus (pdfkit/qrcode external, dimuat dari node_modules) |
 
-**Belum terverifikasi penuh:** `pnpm check` utuh gagal pada langkah `prisma generate` karena server dev API lama (proses `tsx`, port 3000) mengunci `query_engine-windows.dll.node` (EPERM). Semua tahap lain dijalankan terpisah dan hijau. Hentikan server dev itu lalu jalankan ulang `pnpm check` untuk konfirmasi. Server tersebut juga masih memakai kode sebelum Fase 01; restart agar memuat auth.
+**Belum terverifikasi penuh:** (1) `pnpm check` utuh masih gagal di `prisma generate` (EPERM, server dev API lama mengunci `query_engine-windows.dll.node`); semua tahap lain dijalankan terpisah dan hijau. Hentikan server dev itu, lalu jalankan ulang `pnpm check`. (2) Tampilan halaman Fase 02 belum diperiksa visual di browser (ponsel ≈360 px dan desktop); hanya typecheck/lint/test/build.
 
 ## Pekerjaan berikutnya
 
-Ikuti `WORK_QUEUE.md`. Fase 02 (aset, QR, riwayat kondisi) dimulai hanya setelah owner menyetujui hasil Fase 01. Mobile belum memakai login/auth (Fase 07).
+Ikuti `WORK_QUEUE.md`. Fase 03 (paket, ketersediaan, pesanan) dimulai hanya setelah owner menyetujui hasil Fase 02. Fase 03 akan memakai `NON_ALLOCATABLE_STATUSES` (shared) dan menggerakkan status operasional aset. Mobile belum memakai login/auth (Fase 07).
 
 ## Catatan terbuka
 

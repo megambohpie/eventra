@@ -2,9 +2,6 @@ import type { AxiosInstance } from 'axios';
 import type {
   CategoryDto,
   CategoryInput,
-  CustomerContactDto,
-  CustomerContactInput,
-  CustomerContactUpdateInput,
   CustomerCreateInput,
   CustomerDto,
   CustomerUpdateInput,
@@ -25,25 +22,6 @@ export const createCustomer = async (c: AxiosInstance, input: CustomerCreateInpu
   (await c.post<Envelope<CustomerDto>>('/customers', input)).data.data;
 export const updateCustomer = async (c: AxiosInstance, id: string, input: CustomerUpdateInput) =>
   (await c.put<Envelope<CustomerDto>>(`/customers/${id}`, input)).data.data;
-export const addCustomerContact = async (
-  c: AxiosInstance,
-  customerId: string,
-  input: CustomerContactInput,
-) =>
-  (await c.post<Envelope<CustomerContactDto>>(`/customers/${customerId}/contacts`, input)).data
-    .data;
-export const updateCustomerContact = async (
-  c: AxiosInstance,
-  customerId: string,
-  contactId: string,
-  input: CustomerContactUpdateInput,
-) =>
-  (
-    await c.put<Envelope<CustomerContactDto>>(
-      `/customers/${customerId}/contacts/${contactId}`,
-      input,
-    )
-  ).data.data;
 
 export const listProducts = async (c: AxiosInstance, params: ListParams = {}) =>
   (await c.get<Envelope<Page<ProductDto>>>('/products', { params })).data.data;

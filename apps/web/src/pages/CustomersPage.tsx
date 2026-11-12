@@ -51,31 +51,31 @@ export function CustomersPage() {
         {loading && !data ? (
           <Loading />
         ) : (
-          <div className="overflow-x-auto">
+          <div className="ev-table-wrap">
             <table className="table">
-              <thead className="text-xs uppercase tracking-wide text-base-content/60">
+              <thead className="ev-table__head">
                 <tr>
                   <th>{t('customers.name')}</th>
                   <th>{t('customers.type')}</th>
                   <th>{t('customers.phone')}</th>
-                  <th>{t('customers.contacts')}</th>
+                  <th>{t('customers.email')}</th>
                   <th>{t('common.status')}</th>
                   <th />
                 </tr>
               </thead>
               <tbody>
                 {data?.items.map((customer) => (
-                  <tr key={customer.id} className="hover:bg-base-200/50">
+                  <tr key={customer.id} className="ev-table__row">
                     <td>{customer.name}</td>
                     <td>{t(`customers.types.${customer.type}`)}</td>
                     <td>{customer.phone ?? '-'}</td>
-                    <td>{customer.contacts.filter((c) => c.active).length}</td>
+                    <td>{customer.email ?? '-'}</td>
                     <td>
                       <Badge variant={customer.active ? 'success' : 'neutral'}>
                         {customer.active ? t('common.active') : t('common.inactive')}
                       </Badge>
                     </td>
-                    <td className="text-right">
+                    <td className="ev-table__actions">
                       <Button size="sm" variant="ghost" onClick={() => setSelected(customer.id)}>
                         {canWrite ? t('common.edit') : t('common.view')}
                       </Button>
@@ -84,7 +84,7 @@ export function CustomersPage() {
                 ))}
                 {data?.items.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="text-center">
+                    <td colSpan={6} className="ev-table__empty">
                       {t('common.empty')}
                     </td>
                   </tr>

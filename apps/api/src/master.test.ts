@@ -3,8 +3,7 @@ import request from 'supertest';
 import { ROLES, type Role } from '@eventra/shared';
 import { createTestApp, db, loginAs, resetDb } from '../test/helpers';
 
-const contact = { name: 'Budi', phone: '08123456789', position: 'Koordinator' };
-const customerBody = { type: 'COMPANY', name: 'PT Maju Jaya', contacts: [contact] };
+const customerBody = { type: 'COMPANY', name: 'PT Maju Jaya' };
 
 describe('RBAC', () => {
   beforeEach(resetDb);
@@ -70,91 +69,29 @@ describe('RBAC', () => {
   });
 });
 
-describe('Pelanggan dan PIC', () => {
+describe('Pelanggan', () => {
   beforeEach(resetDb);
 
-  it('admin membuat pelanggan beserta PIC dan audit log tercatat', async () => {
+  it('admin membuat pelanggan tanpa PIC dan audit log tercatat', async () => {
     const { app } = createTestApp();
     const auth = { Authorization: `Bearer ${await loginAs(app, 'ADMIN')}` };
     const res = await request(app).post('/api/v1/customers').set(auth).send(customerBody);
     expect(res.status).toBe(201);
-    expect(res.body.data.contacts).toHaveLength(1);
-    expect(res.body.data.contacts[0]).toMatchObject({ name: 'Budi', active: true });
+    expect(res.body.data).toMatchObject({ name: 'PT Maju Jaya', type: 'COMPANY', active: true });
+    expect(res.body.data).not.toHaveProperty('contacts');
     const audit = await db.auditLog.findFirstOrThrow({ where: { action: 'customer.create' } });
     expect(audit.entityId).toBe(res.body.data.id);
     expect(audit.actorId).toEqual(expect.any(String));
   });
 
-  it('pelanggan tanpa PIC ditolak', async () => {
+  it('validasi: nama wajib, jenis harus valid, email harus valid', async () => {
     const { app } = createTestApp();
     const auth = { Authorization: `Bearer ${await loginAs(app, 'ADMIN')}` };
-    for (const contacts of [undefined, []]) {
-      const res = await request(app)
-        .post('/api/v1/customers')
-        .set(auth)
-        .send({ ...customerBody, contacts });
-      expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe('VALIDATION_ERROR');
-      expect(res.body.error.fields.contacts).toBeDefined();
-    }
+    const post = (body: object) => request(app).post('/api/v1/customers').set(auth).send(body);
+    expect((await post({ ...customerBody, name: '' })).status).toBe(400);
+    expect((await post({ ...customerBody, type: 'LAIN' })).status).toBe(400);
+    expect((await post({ ...customerBody, email: 'bukan-email' })).status).toBe(400);
     expect(await db.customer.count()).toBe(0);
-  });
-
-  it('PIC aktif terakhir tidak bisa dinonaktifkan; setelah ada PIC lain boleh', async () => {
-    const { app } = createTestApp();
-    const auth = { Authorization: `Bearer ${await loginAs(app, 'ADMIN')}` };
-    const created = (await request(app).post('/api/v1/customers').set(auth).send(customerBody)).body
-      .data;
-    const first = created.contacts[0];
-    const url = (id: string) => `/api/v1/customers/${created.id}/contacts/${id}`;
-
-    const blocked = await request(app)
-      .put(url(first.id))
-      .set(auth)
-      .send({ ...contact, active: false });
-    expect(blocked.status).toBe(409);
-    expect(blocked.body.error.code).toBe('CUSTOMER_CONTACT_REQUIRED');
-
-    const second = await request(app)
-      .post(`/api/v1/customers/${created.id}/contacts`)
-      .set(auth)
-      .send({ name: 'Sari', phone: '0899999999' });
-    expect(second.status).toBe(201);
-
-    const ok = await request(app)
-      .put(url(first.id))
-      .set(auth)
-      .send({ ...contact, active: false });
-    expect(ok.status).toBe(200);
-    expect(ok.body.data.active).toBe(false);
-
-    // Sekarang Sari adalah PIC aktif terakhir.
-    const again = await request(app)
-      .put(url(second.body.data.id))
-      .set(auth)
-      .send({ name: 'Sari', phone: '0899999999', active: false });
-    expect(again.status).toBe(409);
-  });
-
-  it('dua penonaktifan PIC bersamaan tidak menyisakan nol PIC aktif', async () => {
-    const { app } = createTestApp();
-    const auth = { Authorization: `Bearer ${await loginAs(app, 'ADMIN')}` };
-    const created = (
-      await request(app)
-        .post('/api/v1/customers')
-        .set(auth)
-        .send({ ...customerBody, contacts: [contact, { name: 'Sari', phone: '0899999999' }] })
-    ).body.data;
-    const results = await Promise.all(
-      created.contacts.map((c: { id: string; name: string; phone: string }) =>
-        request(app)
-          .put(`/api/v1/customers/${created.id}/contacts/${c.id}`)
-          .set(auth)
-          .send({ name: c.name, phone: c.phone, active: false }),
-      ),
-    );
-    expect(results.map((r) => r.status).sort()).toEqual([200, 409]);
-    expect(await db.customerContact.count({ where: { active: true } })).toBe(1);
   });
 
   it('update mencatat before/after; id tak valid 404; pencarian bekerja', async () => {

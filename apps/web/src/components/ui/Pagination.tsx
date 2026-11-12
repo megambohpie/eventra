@@ -13,9 +13,9 @@ export function Pagination({ page, pageSize, total, onChange }: PaginationProps)
   const { t } = useTranslation();
   const pages = Math.max(1, Math.ceil(total / pageSize));
   return (
-    <div className="flex items-center justify-between">
-      <span className="text-sm">{t('common.totalItems', { count: total })}</span>
-      <div className="flex items-center">
+    <div className="ev-pagination">
+      <span className="ev-pagination__info">{t('common.totalItems', { count: total })}</span>
+      <div className="ev-pagination__controls">
         <Button
           variant="ghost"
           size="sm"
@@ -24,7 +24,7 @@ export function Pagination({ page, pageSize, total, onChange }: PaginationProps)
           aria-label={t('common.prev')}
           onClick={() => onChange(page - 1)}
         />
-        <span className="px-3 text-sm">{t('common.pageOf', { page, pages })}</span>
+        <span className="ev-pagination__page">{t('common.pageOf', { page, pages })}</span>
         <Button
           variant="ghost"
           size="sm"

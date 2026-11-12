@@ -43,9 +43,9 @@ function CategoryRow({
   const { t } = useTranslation();
   const [name, setName] = useState(category.name);
   return (
-    <li className="flex items-center gap-2">
+    <li className="ev-list__row">
       <input
-        className="input input-sm flex-1"
+        className="input input-sm ev-inline-form__input"
         aria-label={t('master.categoryName')}
         disabled={!canWrite}
         value={name}
@@ -104,11 +104,11 @@ function Categories({ canWrite }: { canWrite: boolean }) {
 
   return (
     <PageCard>
-      <h2 className="text-lg font-semibold">{t('master.categories')}</h2>
+      <h2 className="ev-section-title">{t('master.categories')}</h2>
       {loading && !data ? (
         <Loading />
       ) : (
-        <ul className="grid gap-2">
+        <ul className="ev-list">
           {data?.map((category) => (
             <CategoryRow
               key={`${category.id}-${category.name}`}
@@ -121,9 +121,9 @@ function Categories({ canWrite }: { canWrite: boolean }) {
         </ul>
       )}
       {canWrite && (
-        <form onSubmit={add} className="flex gap-2">
+        <form onSubmit={add} className="ev-inline-form">
           <input
-            className="input input-sm flex-1"
+            className="input input-sm ev-inline-form__input"
             placeholder={t('master.categoryName')}
             aria-label={t('master.categoryName')}
             required
@@ -175,18 +175,16 @@ function Locations({ canWrite }: { canWrite: boolean }) {
 
   return (
     <PageCard>
-      <h2 className="text-lg font-semibold">{t('master.locations')}</h2>
+      <h2 className="ev-section-title">{t('master.locations')}</h2>
       {loading && !data ? (
         <Loading />
       ) : (
-        <ul className="grid gap-2">
+        <ul className="ev-list">
           {data?.map((location) => (
-            <li key={location.id} className="flex items-center gap-2">
-              <span className="flex-1">
+            <li key={location.id} className="ev-list__row">
+              <span className="ev-list__grow">
                 {location.name}
-                {location.address && (
-                  <span className="ml-2 text-sm opacity-70">{location.address}</span>
-                )}
+                {location.address && <span className="ev-list__hint">{location.address}</span>}
               </span>
               <Badge variant={location.active ? 'success' : 'neutral'}>
                 {location.active ? t('common.active') : t('common.inactive')}
@@ -202,9 +200,9 @@ function Locations({ canWrite }: { canWrite: boolean }) {
         </ul>
       )}
       {canWrite && (
-        <form onSubmit={add} className="flex flex-wrap gap-2">
+        <form onSubmit={add} className="ev-inline-form">
           <input
-            className="input input-sm flex-1"
+            className="input input-sm ev-inline-form__input"
             placeholder={t('master.locationName')}
             aria-label={t('master.locationName')}
             required
@@ -212,7 +210,7 @@ function Locations({ canWrite }: { canWrite: boolean }) {
             onChange={(e) => setName(e.target.value)}
           />
           <input
-            className="input input-sm flex-1"
+            className="input input-sm ev-inline-form__input"
             placeholder={t('master.locationAddress')}
             aria-label={t('master.locationAddress')}
             value={address}
@@ -232,9 +230,9 @@ export function MasterPage() {
   const { can } = useAuth();
   const canWrite = can('master.write');
   return (
-    <div className="grid gap-4">
+    <div className="ev-master">
       <PageHeader title={t('master.title')} />
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="ev-master__grid">
         <Categories canWrite={canWrite} />
         <Locations canWrite={canWrite} />
       </div>

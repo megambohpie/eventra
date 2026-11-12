@@ -12,18 +12,6 @@ const optionalText = (max: number) =>
 export const CUSTOMER_TYPES = ['INDIVIDUAL', 'COMPANY'] as const;
 export type CustomerType = (typeof CUSTOMER_TYPES)[number];
 
-export const customerContactInputSchema = z.object({
-  name: z.string().trim().min(1).max(120),
-  phone: z.string().trim().min(3).max(30),
-  position: optionalText(80),
-});
-export type CustomerContactInput = z.infer<typeof customerContactInputSchema>;
-
-export const customerContactUpdateSchema = customerContactInputSchema.extend({
-  active: z.boolean().optional(),
-});
-export type CustomerContactUpdateInput = z.infer<typeof customerContactUpdateSchema>;
-
 const customerBase = z.object({
   type: z.enum(CUSTOMER_TYPES),
   name: z.string().trim().min(1).max(160),
@@ -32,10 +20,7 @@ const customerBase = z.object({
   address: optionalText(500),
   verificationNote: optionalText(500),
 });
-/** Pelanggan baru wajib membawa minimal satu PIC penyewa. */
-export const customerCreateSchema = customerBase.extend({
-  contacts: z.array(customerContactInputSchema).min(1),
-});
+export const customerCreateSchema = customerBase;
 export const customerUpdateSchema = customerBase.extend({ active: z.boolean().optional() });
 export type CustomerCreateInput = z.infer<typeof customerCreateSchema>;
 export type CustomerUpdateInput = z.infer<typeof customerUpdateSchema>;
@@ -82,14 +67,6 @@ export interface Page<T> {
   pageSize: number;
 }
 
-export interface CustomerContactDto {
-  id: string;
-  customerId: string;
-  name: string;
-  phone: string;
-  position: string | null;
-  active: boolean;
-}
 export interface CustomerDto {
   id: string;
   type: CustomerType;
@@ -99,7 +76,6 @@ export interface CustomerDto {
   address: string | null;
   verificationNote: string | null;
   active: boolean;
-  contacts: CustomerContactDto[];
 }
 export interface CategoryDto {
   id: string;

@@ -49,10 +49,10 @@ export function LoginPage() {
       onSubmit={submit}
     >
       {DEMO_EMAIL && DEMO_PASSWORD && (
-        <div role="note" className="alert alert-info alert-soft items-start text-sm">
+        <div role="note" className="alert alert-info alert-soft ev-auth__demo">
           <Icon path={mdiInformationOutline} />
-          <div className="grid gap-1">
-            <span className="font-semibold">{t('auth.demoTitle')}</span>
+          <div className="ev-auth__demo-body">
+            <span className="ev-auth__demo-title">{t('auth.demoTitle')}</span>
             <span>
               {t('auth.email')}: <code>{DEMO_EMAIL}</code>
             </span>
@@ -75,8 +75,8 @@ export function LoginPage() {
         </div>
       )}
       <FormField label={t('auth.email')}>
-        <label className="input w-full">
-          <Icon path={mdiAccountOutline} className="opacity-60" />
+        <label className="input ev-control">
+          <Icon path={mdiAccountOutline} className="ev-input-icon" />
           <input
             type="email"
             autoComplete="username"
@@ -87,8 +87,8 @@ export function LoginPage() {
         </label>
       </FormField>
       <FormField label={t('auth.password')}>
-        <label className="input w-full">
-          <Icon path={mdiLockOutline} className="opacity-60" />
+        <label className="input ev-control">
+          <Icon path={mdiLockOutline} className="ev-input-icon" />
           <input
             type="password"
             autoComplete="current-password"
@@ -103,11 +103,11 @@ export function LoginPage() {
         variant="primary"
         icon={mdiLogin}
         loading={submitting}
-        className="w-full"
+        className="ev-btn--block"
       >
         {t('auth.login')}
       </Button>
-      <Link to="/forgot-password" className="link link-hover text-center text-sm">
+      <Link to="/forgot-password" className="link link-hover ev-auth__link">
         {t('auth.forgotPassword')}
       </Link>
     </AuthCard>

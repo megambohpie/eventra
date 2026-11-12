@@ -4,3 +4,4 @@ export * from './status';
 export * from './rbac';
 export * from './identity';
 export * from './master';
+export * from './assets';

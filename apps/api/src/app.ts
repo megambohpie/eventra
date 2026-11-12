@@ -5,7 +5,9 @@ import type { PrismaClient } from '@prisma/client';
 import type { HealthResponse } from '@eventra/shared';
 import { authenticate } from './auth/middleware';
 import { errorHandler, notFoundHandler } from './errors';
+import { assetsRouter } from './routes/assets';
 import { authRouter, type Mailer } from './routes/auth';
+import { receiptsRouter } from './routes/receipts';
 import { customersRouter } from './routes/customers';
 import { masterRouter } from './routes/master';
 import { productsRouter } from './routes/products';
@@ -47,6 +49,8 @@ export function createApp({ checkDb, db, jwtSecret, mailer }: AppDeps): Express 
   protectedRouter.use(customersRouter(db));
   protectedRouter.use(productsRouter(db));
   protectedRouter.use(masterRouter(db));
+  protectedRouter.use(assetsRouter(db));
+  protectedRouter.use(receiptsRouter(db));
   v1.use(protectedRouter);
 
   app.use('/api/v1', v1);

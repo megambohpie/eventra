@@ -30,7 +30,7 @@ export function createTestApp(checkDb: () => Promise<boolean> = async () => true
 /** Kosongkan semua tabel (kecuali _prisma_migrations) antar test. */
 export async function resetDb(): Promise<void> {
   await db.$executeRawUnsafe(
-    'TRUNCATE TABLE audit_logs, refresh_tokens, password_reset_tokens, customer_contacts, customers, products, categories, locations, users RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE asset_status_events, assets, stock_receipt_items, stock_receipts, audit_logs, refresh_tokens, password_reset_tokens, customers, products, categories, locations, users RESTART IDENTITY CASCADE',
   );
 }
 

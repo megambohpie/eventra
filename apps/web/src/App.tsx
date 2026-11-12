@@ -1,10 +1,13 @@
 import { Route, Routes } from 'react-router-dom';
 import { RequireAuth, RequireCapability } from './auth/guards';
 import { Layout } from './components/Layout';
+import { AssetDetailPage } from './pages/AssetDetailPage';
+import { AssetsPage } from './pages/AssetsPage';
 import { CustomersPage } from './pages/CustomersPage';
 import { HomePage } from './pages/HomePage';
 import { MasterPage } from './pages/MasterPage';
 import { ProductsPage } from './pages/ProductsPage';
+import { ReceiptsPage } from './pages/ReceiptsPage';
 import { ForgotPasswordPage } from './pages/auth/ForgotPasswordPage';
 import { LoginPage } from './pages/auth/LoginPage';
 import { ResetPasswordPage } from './pages/auth/ResetPasswordPage';
@@ -23,6 +26,13 @@ export function App() {
           </Route>
           <Route element={<RequireCapability capability="product.read" />}>
             <Route path="products" element={<ProductsPage />} />
+          </Route>
+          <Route element={<RequireCapability capability="asset.read" />}>
+            <Route path="assets" element={<AssetsPage />} />
+            <Route path="assets/:id" element={<AssetDetailPage />} />
+          </Route>
+          <Route element={<RequireCapability capability="receipt.read" />}>
+            <Route path="receipts" element={<ReceiptsPage />} />
           </Route>
           <Route element={<RequireCapability capability="master.read" />}>
             <Route path="master" element={<MasterPage />} />

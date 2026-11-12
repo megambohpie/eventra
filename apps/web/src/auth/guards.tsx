@@ -19,7 +19,7 @@ export function RequireCapability({ capability }: { capability: Capability }) {
   const { can } = useAuth();
   if (!can(capability)) {
     return (
-      <div role="alert" className="alert alert-warning">
+      <div role="alert" className="alert alert-warning ev-notice">
         <span>{t('errors.FORBIDDEN')}</span>
       </div>
     );

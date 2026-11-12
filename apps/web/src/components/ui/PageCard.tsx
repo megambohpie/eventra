@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-/** Kartu konten halaman: sudut membulat, bayangan lembut, tanpa garis tebal. */
+/** Kartu konten halaman. Tampilan diatur di styles/base.css (`.ev-card`). */
 export function PageCard({
   children,
   className = '',
@@ -9,15 +9,13 @@ export function PageCard({
   className?: string;
 }) {
   return (
-    <section
-      className={`card rounded-3xl border border-base-300/40 bg-base-100 shadow-sm ${className}`.trim()}
-    >
-      <div className="card-body gap-5 p-5 sm:p-7">{children}</div>
+    <section className={`card ev-card ${className}`.trim()}>
+      <div className="card-body ev-card__body">{children}</div>
     </section>
   );
 }
 
-/** Judul halaman + subjudul di kiri, aksi (cari, tombol) di kanan; membungkus di layar kecil. */
+/** Judul halaman + subjudul di kiri, aksi (cari, tombol) di kanan. */
 export function PageHeader({
   title,
   subtitle,
@@ -28,12 +26,12 @@ export function PageHeader({
   children?: ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="ev-page-header">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
-        {subtitle && <p className="text-sm text-base-content/60">{subtitle}</p>}
+        <h1 className="ev-page-header__title">{title}</h1>
+        {subtitle && <p className="ev-page-header__subtitle">{subtitle}</p>}
       </div>
-      {children && <div className="flex flex-wrap items-center gap-2">{children}</div>}
+      {children && <div className="ev-page-header__actions">{children}</div>}
     </div>
   );
 }

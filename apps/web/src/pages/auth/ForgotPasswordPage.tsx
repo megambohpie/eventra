@@ -38,8 +38,8 @@ export function ForgotPasswordPage() {
       onSubmit={submit}
     >
       <FormField label={t('auth.email')}>
-        <label className="input w-full">
-          <Icon path={mdiAccountOutline} className="opacity-60" />
+        <label className="input ev-control">
+          <Icon path={mdiAccountOutline} className="ev-input-icon" />
           <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
         </label>
       </FormField>
@@ -49,11 +49,11 @@ export function ForgotPasswordPage() {
         icon={mdiEmailFast}
         loading={submitting}
         disabled={sent}
-        className="w-full"
+        className="ev-btn--block"
       >
         {t('auth.sendReset')}
       </Button>
-      <Link to="/login" className="link link-hover text-center text-sm">
+      <Link to="/login" className="link link-hover ev-auth__link">
         {t('auth.backToLogin')}
       </Link>
     </AuthCard>

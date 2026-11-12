@@ -55,7 +55,7 @@ export function ProductsPage() {
           )}
         </PageHeader>
         {canWrite && categories.data?.length === 0 && (
-          <div role="alert" className="alert alert-info">
+          <div role="alert" className="alert alert-info ev-notice">
             <span>{t('products.needCategory')}</span>
           </div>
         )}
@@ -63,9 +63,9 @@ export function ProductsPage() {
         {loading && !data ? (
           <Loading />
         ) : (
-          <div className="overflow-x-auto">
+          <div className="ev-table-wrap">
             <table className="table">
-              <thead className="text-xs uppercase tracking-wide text-base-content/60">
+              <thead className="ev-table__head">
                 <tr>
                   <th>{t('products.name')}</th>
                   <th>{t('products.sku')}</th>
@@ -78,13 +78,13 @@ export function ProductsPage() {
               </thead>
               <tbody>
                 {data?.items.map((product) => (
-                  <tr key={product.id} className="hover:bg-base-200/50">
+                  <tr key={product.id} className="ev-table__row">
                     <td>{product.name}</td>
                     <td>{product.sku ?? '-'}</td>
                     <td>{product.category.name}</td>
                     <td>
                       {formatRupiah(product.price)} / {product.unitLabel}
-                      <span className="ml-1 text-xs opacity-70">
+                      <span className="ev-table__hint">
                         ({t(`products.units.${product.pricingUnit}`)})
                       </span>
                     </td>
@@ -94,7 +94,7 @@ export function ProductsPage() {
                         {product.active ? t('common.active') : t('common.inactive')}
                       </Badge>
                     </td>
-                    <td className="text-right">
+                    <td className="ev-table__actions">
                       <Button size="sm" variant="ghost" onClick={() => setSelected(product)}>
                         {canWrite ? t('common.edit') : t('common.view')}
                       </Button>
@@ -103,7 +103,7 @@ export function ProductsPage() {
                 ))}
                 {data?.items.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="text-center">
+                    <td colSpan={7} className="ev-table__empty">
                       {t('common.empty')}
                     </td>
                   </tr>

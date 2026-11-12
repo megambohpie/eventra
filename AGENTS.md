@@ -15,7 +15,8 @@ Dokumen ini ditujukan untuk manusia, Codex, Claude Code, dan agen coding lain.
 - Fokus produk adalah kontrol aset rental untuk owner.
 - Gunakan TypeScript dan JavaScript ecosystem: React web, React Native mobile, Node.js API.
 - Semua HTTP frontend memakai Axios client bersama; jangan memakai `fetch` langsung.
-- Web wajib menggunakan DaisyUI/Tailwind untuk UI. Jangan membuat CSS kustom atau komponen visual mentah bila DaisyUI menyediakan padanannya.
+- Web wajib menggunakan DaisyUI/Tailwind untuk UI. Jangan membuat komponen visual mentah bila DaisyUI menyediakan padanannya.
+- **Styling terpisah dari logika (keputusan owner):** seluruh tampilan web berada di `apps/web/src/styles/` (`base.css`, `layout.css`, `pages.css`), memakai `@apply` Tailwind/DaisyUI dalam `@layer utilities` dengan kelas semantik berawalan `ev-` (BEM-lite, mis. `ev-card__body`). Komponen React hanya memuat nama komponen DaisyUI (`btn`, `input`, `card`, `drawer`, dst. beserta varian seperti `lg:drawer-open`) dan kelas `ev-*`; dilarang menulis utility Tailwind (`flex`, `gap-4`, `p-6`, `text-lg`, `bg-*`, dst.) langsung di JSX. Keadaan visual (mis. sidebar diciutkan) dikirim lewat atribut `data-*`/modifier `ev-x--y`, lalu di-style di CSS. Mengganti tema/tampilan = ubah `styles/` dan token `eventra-theme.css`, tanpa menyentuh logika komponen.
 - Seluruh frontend memakai `eventra-logo-v5.svg` lewat komponen `Logo`. Pada light mode logo memakai warna asli tanpa kotak; pada dark mode logo tampil tanpa kotak putih dengan inversi terang (`invert hue-rotate-180` di komponen `Logo`) agar wordmark terbaca. Keputusan owner (menggantikan aturan surface terang). Selain itu yang boleh berubah hanya token UI dari `eventra-theme.css`. Gunakan `eventra-icon.svg` untuk favicon/loading. Jangan menulis hex warna brand langsung di komponen.
 - React Native tidak mendukung DaisyUI; gunakan komponen native dengan token/pola UI yang konsisten.
 - Jangan menyimpan rahasia, token, password, atau data produksi pada repository.
@@ -25,6 +26,7 @@ Dokumen ini ditujukan untuk manusia, Codex, Claude Code, dan agen coding lain.
 
 - **Komponen bersama:** sebelum membuat UI, cari dulu di `apps/web/src/components/`. Bila sudah ada komponen yang sama/serupa, wajib dipakai ulang atau diperluas; buat komponen baru hanya bila belum ada. Komponen generik ada di `components/ui/` (`Button`, `Badge`, `Icon`, dst.).
 - **Satu layout global:** semua halaman dirender di dalam `components/Layout.tsx` (navbar, konten, footer). Dilarang membuat layout/shell terpisah per halaman.
+- **Form input:** nominal uang wajib memakai `components/ui/CurrencyInput` (awalan Rp, ribuan otomatis, tanpa spinner; nilai berupa string digit, jangan `type="number"`). Pilihan dari daftar yang bisa panjang (produk, lokasi, kategori, dst.) memakai `components/ui/SearchSelect` (dropdown dengan pencarian); `select` biasa hanya untuk opsi tetap yang sedikit.
 - **Ikon:** hanya Material Design Icons (`@mdi/js` lewat komponen `Icon`). Jangan memakai set ikon lain atau SVG inline manual.
 - **Loading pada aksi:** setiap tombol aksi memakai `Button`. Tombol harus menampilkan spinner dan nonaktif selama aksi berjalan (`loading` atau `onClick` yang mengembalikan Promise).
 - **Notifikasi error:** setiap error (API, jaringan, atau tak tertangani) wajib tampil lewat komponen `NotificationHost` (toast DaisyUI) dengan `notify`/`notifyError` dari `lib/notifications.ts`. Error API otomatis dinotifikasi oleh client Axios (`onError`); jangan membuat alert/dialog error sendiri per halaman. Pesan harus diterjemahkan (`errors.<CODE>`).

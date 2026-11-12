@@ -5,8 +5,8 @@ import { LogoIcon } from './Logo';
 export function Loading() {
   const { t } = useTranslation();
   return (
-    <div role="status" aria-label={t('common.loading')} className="flex justify-center p-4">
-      <LogoIcon className="size-10 animate-pulse" />
+    <div role="status" aria-label={t('common.loading')} className="ev-loading">
+      <LogoIcon className="ev-loading__mark" />
     </div>
   );
 }

@@ -1,0 +1,76 @@
+@layer utilities {
+  /* ---------- Rangka aplikasi: sidebar + navbar + konten ---------- */
+  .ev-drawer__content {
+    @apply flex min-h-screen flex-col bg-linear-to-br from-primary/5 via-base-200 to-secondary/10;
+  }
+  .ev-drawer__side {
+    @apply z-40 print:hidden;
+  }
+
+  .ev-navbar {
+    @apply sticky top-0 z-30 gap-2 bg-base-100/70 px-3 backdrop-blur-md sm:px-6 print:hidden;
+  }
+  .ev-navbar__start {
+    @apply flex flex-1 items-center gap-2;
+  }
+  .ev-navbar__end {
+    @apply flex items-center gap-1;
+  }
+  .ev-navbar__user {
+    @apply hidden text-sm xl:inline;
+  }
+  /* Dengan sidebar, logo navbar hanya tampil di ponsel (di desktop logo ada di sidebar). */
+  .ev-navbar__logo--with-sidebar {
+    @apply lg:hidden;
+  }
+
+  .ev-content {
+    @apply container mx-auto flex-1 p-4 sm:p-6;
+  }
+  .ev-footer {
+    @apply p-4 text-sm text-base-content/70 print:hidden;
+  }
+
+  /* ---------- Sidebar (data-collapsed="true" = hanya ikon di desktop) ---------- */
+  .ev-sidebar {
+    @apply flex min-h-full w-64 flex-col bg-base-100 shadow-lg shadow-primary/5 transition-[width] duration-200;
+  }
+  .ev-sidebar[data-collapsed='true'] {
+    @apply lg:w-16;
+  }
+  .ev-sidebar__head {
+    @apply flex h-24 items-center px-3;
+  }
+  .ev-sidebar[data-collapsed='true'] .ev-sidebar__head {
+    @apply lg:justify-center lg:px-0;
+  }
+  .ev-sidebar__logo-mark {
+    @apply hidden;
+  }
+  .ev-sidebar[data-collapsed='true'] .ev-sidebar__logo-full {
+    @apply lg:hidden;
+  }
+  .ev-sidebar[data-collapsed='true'] .ev-sidebar__logo-mark {
+    @apply lg:block;
+  }
+
+  .ev-nav {
+    @apply w-full gap-1 p-3;
+  }
+  .ev-nav__link {
+    @apply gap-3 rounded-2xl py-3 text-base-content/80 transition-colors hover:bg-base-200;
+  }
+  /* Kelas `active` diberikan otomatis oleh NavLink pada rute aktif. */
+  .ev-nav__link.active {
+    @apply bg-primary/15! font-semibold text-primary!;
+  }
+  .ev-sidebar[data-collapsed='true'] .ev-nav__link {
+    @apply lg:justify-center;
+  }
+  .ev-sidebar[data-collapsed='true'] .ev-nav__link .ev-icon {
+    @apply lg:size-6;
+  }
+  .ev-sidebar[data-collapsed='true'] .ev-nav__label {
+    @apply lg:hidden;
+  }
+}

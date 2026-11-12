@@ -10,8 +10,10 @@ import {
 } from '@eventra/shared';
 import { api } from '@/api';
 import { Button } from '@/components/ui/Button';
+import { CurrencyInput } from '@/components/ui/CurrencyInput';
 import { FormField } from '@/components/ui/FormField';
 import { Modal } from '@/components/ui/Modal';
+import { SearchSelect } from '@/components/ui/SearchSelect';
 import { notify } from '@/lib/notifications';
 
 interface ProductModalProps {
@@ -69,35 +71,33 @@ export function ProductModal({
   return (
     <Modal open title={product ? product.name : t('products.new')} onClose={onClose} wide>
       <form onSubmit={submit}>
-        <fieldset disabled={readOnly} className="grid gap-2 sm:grid-cols-2">
+        <fieldset disabled={readOnly} className="ev-form-grid">
           <FormField label={t('products.name')}>
             <input
-              className="input w-full"
+              className="input ev-control"
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
           </FormField>
           <FormField label={t('products.sku')}>
-            <input className="input w-full" value={sku} onChange={(e) => setSku(e.target.value)} />
+            <input
+              className="input ev-control"
+              value={sku}
+              onChange={(e) => setSku(e.target.value)}
+            />
           </FormField>
           <FormField label={t('products.category')}>
-            <select
-              className="select w-full"
-              required
+            <SearchSelect
+              ariaLabel={t('products.category')}
               value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
-            >
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+              onChange={setCategoryId}
+              options={categories.map((c) => ({ value: c.id, label: c.name }))}
+            />
           </FormField>
           <FormField label={t('products.pricingUnit')}>
             <select
-              className="select w-full"
+              className="select ev-control"
               value={pricingUnit}
               onChange={(e) => setPricingUnit(e.target.value as PricingUnit)}
             >
@@ -110,35 +110,19 @@ export function ProductModal({
           </FormField>
           <FormField label={t('products.unitLabel')}>
             <input
-              className="input w-full"
+              className="input ev-control"
               required
               value={unitLabel}
               onChange={(e) => setUnitLabel(e.target.value)}
             />
           </FormField>
           <FormField label={t('products.price')}>
-            <input
-              type="number"
-              className="input w-full"
-              min={0}
-              step={1}
-              required
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-            />
+            <CurrencyInput required value={price} onChange={setPrice} />
           </FormField>
           <FormField label={t('products.deposit')}>
-            <input
-              type="number"
-              className="input w-full"
-              min={0}
-              step={1}
-              required
-              value={deposit}
-              onChange={(e) => setDeposit(e.target.value)}
-            />
+            <CurrencyInput required value={deposit} onChange={setDeposit} />
           </FormField>
-          <label className="label cursor-pointer justify-start gap-2">
+          <label className="label ev-toggle-row">
             <input
               type="checkbox"
               className="toggle toggle-primary"

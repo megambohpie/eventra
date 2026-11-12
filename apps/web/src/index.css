@@ -1,7 +1,11 @@
 @import '@/assets/brand/eventra-theme.css';
 @import 'tailwindcss';
+@import './styles/index.css';
 @plugin 'daisyui' {
   themes: false;
 }
 
-/* Satu-satunya sumber token warna: tema DaisyUI eventra-light dan eventra-dark. */
+/*
+ * Token warna/tema: assets/brand/eventra-theme.css (tema DaisyUI eventra-light dan eventra-dark).
+ * Styling komponen: folder styles/ (kelas semantik `ev-*`). Komponen React tidak memuat utility Tailwind.
+ */

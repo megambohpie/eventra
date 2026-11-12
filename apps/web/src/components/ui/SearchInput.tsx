@@ -10,8 +10,8 @@ interface SearchInputProps {
 export function SearchInput({ value, onChange }: SearchInputProps) {
   const { t } = useTranslation();
   return (
-    <label className="input w-full rounded-full sm:w-64">
-      <Icon path={mdiMagnify} className="opacity-60" />
+    <label className="input ev-search">
+      <Icon path={mdiMagnify} className="ev-input-icon" />
       <input
         type="search"
         placeholder={t('common.search')}

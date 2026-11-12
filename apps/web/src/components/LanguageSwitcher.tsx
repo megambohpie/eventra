@@ -6,7 +6,7 @@ import { Icon } from './ui/Icon';
 export function LanguageSwitcher() {
   const { t, i18n } = useTranslation();
   return (
-    <label className="flex items-center gap-1">
+    <label className="ev-lang">
       <Icon path={mdiTranslate} />
       <select
         className="select select-ghost select-sm"

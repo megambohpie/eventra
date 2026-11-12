@@ -4,6 +4,7 @@ import {
   mdiArrowRight,
   mdiCube,
   mdiMapMarker,
+  mdiQrcode,
   mdiPulse,
   mdiRefresh,
   mdiWarehouse,
@@ -11,6 +12,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import {
+  getAssetSummary,
   getHealth,
   listCategories,
   listCustomers,
@@ -53,6 +55,13 @@ const SHORTCUTS: Shortcut[] = [
     count: async () => (await listProducts(api, { pageSize: 1 })).total,
   },
   {
+    to: '/assets',
+    labelKey: 'nav.assets',
+    icon: mdiQrcode,
+    capability: 'asset.read',
+    count: async () => (await getAssetSummary(api)).total,
+  },
+  {
     to: '/master',
     labelKey: 'master.categories',
     icon: mdiMapMarker,
@@ -72,22 +81,19 @@ function ShortcutCard({ shortcut }: { shortcut: Shortcut }) {
   const { t } = useTranslation();
   const { data, loading } = useResource(shortcut.count, shortcut.labelKey);
   return (
-    <Link
-      to={shortcut.to}
-      className="card rounded-3xl border border-base-300/40 bg-base-100 shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
-    >
-      <div className="card-body gap-3 p-5">
-        <div className="flex items-center justify-between">
-          <span className="flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-            <Icon path={shortcut.icon} size={1.5} />
+    <Link to={shortcut.to} className="card ev-shortcut">
+      <div className="card-body ev-shortcut__body">
+        <div className="ev-shortcut__top">
+          <span className="ev-shortcut__badge">
+            <Icon path={shortcut.icon} />
           </span>
-          <Icon path={mdiArrowRight} className="opacity-40" />
+          <Icon path={mdiArrowRight} className="ev-shortcut__arrow" />
         </div>
         <div>
-          <p className="text-3xl font-bold">
-            {loading ? <span className="loading loading-dots loading-sm" /> : (data ?? '-')}
+          <p className="ev-shortcut__count">
+            {loading ? <span className="ev-dots" /> : (data ?? '-')}
           </p>
-          <p className="text-sm text-base-content/60">{t(shortcut.labelKey)}</p>
+          <p className="ev-shortcut__label">{t(shortcut.labelKey)}</p>
         </div>
       </div>
     </Link>
@@ -116,22 +122,16 @@ export function HomePage() {
   const shortcuts = SHORTCUTS.filter((s) => can(s.capability));
 
   return (
-    <div className="grid gap-6">
-      <section className="relative overflow-hidden rounded-3xl bg-linear-to-br from-primary to-secondary p-6 text-primary-content shadow-lg sm:p-10">
-        <Icon
-          path={mdiWarehouse}
-          size={11}
-          className="pointer-events-none absolute -right-6 -bottom-8 opacity-15"
-        />
-        <p className="text-sm font-medium opacity-80">{t('home.title')}</p>
-        <h1 className="mt-1 text-3xl font-bold tracking-tight sm:text-4xl">
-          {t('home.welcome', { name: user?.name ?? '' })}
-        </h1>
-        <p className="mt-2 max-w-xl opacity-90">{t('home.welcomeSub')}</p>
+    <div className="ev-home">
+      <section className="ev-hero">
+        <Icon path={mdiWarehouse} className="ev-hero__art" />
+        <p className="ev-hero__eyebrow">{t('home.title')}</p>
+        <h1 className="ev-hero__title">{t('home.welcome', { name: user?.name ?? '' })}</h1>
+        <p className="ev-hero__text">{t('home.welcomeSub')}</p>
       </section>
 
       {shortcuts.length > 0 && (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="ev-shortcuts">
           {shortcuts.map((shortcut) => (
             <ShortcutCard key={shortcut.labelKey} shortcut={shortcut} />
           ))}
@@ -139,17 +139,17 @@ export function HomePage() {
       )}
 
       <PageCard>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <span className="flex size-10 items-center justify-center rounded-2xl bg-success/15 text-success">
+        <div className="ev-status">
+          <div className="ev-status__lead">
+            <span className="ev-status__badge">
               <Icon path={mdiPulse} />
             </span>
             <div>
-              <h2 className="font-semibold">{t('home.statusTitle')}</h2>
-              <p className="text-sm text-base-content/60">{t('home.statusIntro')}</p>
+              <h2 className="ev-status__title">{t('home.statusTitle')}</h2>
+              <p className="ev-status__text">{t('home.statusIntro')}</p>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="ev-status__actions">
             {state.kind === 'loading' && <Loading />}
             {state.kind === 'ok' && (
               <>

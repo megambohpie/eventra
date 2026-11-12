@@ -5,6 +5,8 @@ import {
   mdiHome,
   mdiLogout,
   mdiMapMarker,
+  mdiPackageDown,
+  mdiQrcode,
   mdiMenu,
   mdiMenuOpen,
 } from '@mdi/js';
@@ -32,12 +34,20 @@ const NAV_ITEMS: { to: string; labelKey: string; icon: string; capability?: Capa
     capability: 'customer.read',
   },
   { to: '/products', labelKey: 'nav.products', icon: mdiCube, capability: 'product.read' },
+  { to: '/assets', labelKey: 'nav.assets', icon: mdiQrcode, capability: 'asset.read' },
+  {
+    to: '/receipts',
+    labelKey: 'nav.receipts',
+    icon: mdiPackageDown,
+    capability: 'receipt.read',
+  },
   { to: '/master', labelKey: 'nav.master', icon: mdiMapMarker, capability: 'master.read' },
 ];
 
 /**
  * Layout global tunggal: sidebar (drawer DaisyUI) + navbar + konten via <Outlet />.
  * Desktop: sidebar dapat diciutkan menjadi hanya ikon. Ponsel: sidebar menjadi drawer overlay.
+ * Seluruh tampilan ada di styles/layout.css; komponen ini hanya memuat struktur dan logika.
  */
 export function Layout() {
   const { t } = useTranslation();
@@ -48,6 +58,7 @@ export function Layout() {
 
   const items = user ? NAV_ITEMS.filter((item) => !item.capability || can(item.capability)) : [];
   const hasSidebar = items.length > 0;
+  const toggleLabel = collapsed ? t('nav.expand') : t('nav.collapse');
 
   const handleLogout = async () => {
     await logout();
@@ -55,7 +66,7 @@ export function Layout() {
   };
 
   return (
-    <div className={`drawer ${hasSidebar ? 'lg:drawer-open' : ''}`}>
+    <div className={`drawer ${hasSidebar ? 'lg:drawer-open' : ''}`.trim()}>
       <input
         id="app-drawer"
         type="checkbox"
@@ -65,13 +76,13 @@ export function Layout() {
         aria-label={t('nav.menu')}
       />
 
-      <div className="drawer-content flex min-h-screen flex-col bg-linear-to-br from-primary/5 via-base-200 to-secondary/10">
-        <header className="navbar sticky top-0 z-30 gap-2 bg-base-100/70 px-3 backdrop-blur-md sm:px-6 print:hidden">
-          <div className="flex flex-1 items-center gap-2">
+      <div className="drawer-content ev-drawer__content">
+        <header className="navbar ev-navbar">
+          <div className="ev-navbar__start">
             {hasSidebar && (
               <>
                 <Button
-                  className="lg:hidden"
+                  className="ev-btn--mobile-only"
                   variant="ghost"
                   size="sm"
                   icon={mdiMenu}
@@ -79,62 +90,61 @@ export function Layout() {
                   onClick={() => setMobileOpen(true)}
                 />
                 <Button
-                  className="hidden lg:inline-flex"
+                  className="ev-btn--desktop-only"
                   variant="ghost"
                   size="sm"
                   icon={collapsed ? mdiMenu : mdiMenuOpen}
-                  aria-label={collapsed ? t('nav.expand') : t('nav.collapse')}
-                  title={collapsed ? t('nav.expand') : t('nav.collapse')}
+                  aria-label={toggleLabel}
+                  title={toggleLabel}
                   onClick={toggle}
                 />
               </>
             )}
-            {/* Dengan sidebar, logo ada di sidebar pada desktop. */}
-            <NavLink to="/" aria-label={t('app.name')} className={hasSidebar ? 'lg:hidden' : ''}>
+            <NavLink
+              to="/"
+              aria-label={t('app.name')}
+              className={hasSidebar ? 'ev-navbar__logo--with-sidebar' : ''}
+            >
               <Logo />
             </NavLink>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="ev-navbar__end">
             <LanguageSwitcher />
             <ThemeToggle />
             {user && (
               <>
-                <span className="hidden text-sm xl:inline">
+                <span className="ev-navbar__user">
                   {user.name} · {t(`roles.${user.role}`)}
                 </span>
                 <Button variant="ghost" size="sm" icon={mdiLogout} onClick={handleLogout}>
-                  <span className="hidden sm:inline">{t('auth.logout')}</span>
+                  <span className="ev-btn__label--wide">{t('auth.logout')}</span>
                 </Button>
               </>
             )}
           </div>
         </header>
-        <main className="container mx-auto flex-1 p-4 sm:p-6">
+        <main className="ev-content">
           <Outlet />
         </main>
         <NotificationHost />
-        <footer className="footer footer-center p-4 text-sm text-base-content/70 print:hidden">
+        <footer className="footer footer-center ev-footer">
           <p>{FOOTER_TEXT}</p>
         </footer>
       </div>
 
       {hasSidebar && (
-        <div className="drawer-side z-40 print:hidden">
+        <div className="drawer-side ev-drawer__side">
           <label htmlFor="app-drawer" aria-label={t('common.close')} className="drawer-overlay" />
-          <aside
-            className={`flex min-h-full w-64 flex-col bg-base-100 shadow-lg shadow-primary/5 transition-[width] duration-200 ${collapsed ? 'lg:w-16' : ''}`}
-          >
-            <div
-              className={`flex h-24 items-center px-3 ${collapsed ? 'lg:justify-center lg:px-0' : ''}`}
-            >
+          <aside className="ev-sidebar" data-collapsed={collapsed}>
+            <div className="ev-sidebar__head">
               <NavLink to="/" aria-label={t('app.name')} onClick={() => setMobileOpen(false)}>
-                <span className={collapsed ? 'lg:hidden' : ''}>
-                  <Logo className="h-[4.5rem]" />
+                <span className="ev-sidebar__logo-full">
+                  <Logo className="ev-logo--sidebar" />
                 </span>
-                {collapsed && <LogoMark className="hidden size-12 lg:block" />}
+                <LogoMark className="ev-sidebar__logo-mark" />
               </NavLink>
             </div>
-            <ul className="menu w-full gap-1 p-3">
+            <ul className="menu ev-nav">
               {items.map((item) => (
                 <li key={item.to}>
                   <NavLink
@@ -143,16 +153,10 @@ export function Layout() {
                     onClick={() => setMobileOpen(false)}
                     aria-label={t(item.labelKey)}
                     data-tip={t(item.labelKey)}
-                    className={({ isActive }) =>
-                      `gap-3 rounded-2xl py-3 transition-colors ${
-                        isActive
-                          ? 'bg-primary/15! font-semibold text-primary!'
-                          : 'text-base-content/80 hover:bg-base-200'
-                      } ${collapsed ? 'lg:tooltip lg:tooltip-right lg:justify-center' : ''}`
-                    }
+                    className={`ev-nav__link ${collapsed ? 'lg:tooltip lg:tooltip-right' : ''}`.trim()}
                   >
-                    <Icon path={item.icon} size={collapsed ? 1.6 : 1.25} />
-                    <span className={collapsed ? 'lg:hidden' : ''}>{t(item.labelKey)}</span>
+                    <Icon path={item.icon} />
+                    <span className="ev-nav__label">{t(item.labelKey)}</span>
                   </NavLink>
                 </li>
               ))}

@@ -1,0 +1,219 @@
+@layer utilities {
+  /* ---------- Login / lupa / reset password ---------- */
+  .ev-auth {
+    @apply flex min-h-[calc(100vh-14rem)] items-center justify-center py-6;
+  }
+  .ev-auth__card {
+    @apply w-full max-w-md border border-base-300 bg-base-100 shadow-xl;
+  }
+  .ev-auth__body {
+    @apply gap-4 p-6 sm:p-8;
+  }
+  .ev-auth__head {
+    @apply flex flex-col items-center gap-2 text-center;
+  }
+  .ev-auth__badge {
+    @apply flex size-14 items-center justify-center rounded-2xl bg-primary/10 text-primary;
+  }
+  .ev-auth__badge .ev-icon {
+    @apply size-7;
+  }
+  .ev-auth__title {
+    @apply text-2xl font-bold;
+  }
+  .ev-auth__subtitle {
+    @apply text-sm opacity-70;
+  }
+  .ev-auth__link {
+    @apply text-center text-sm;
+  }
+  .ev-auth__demo {
+    @apply items-start text-sm;
+  }
+  .ev-auth__demo-body {
+    @apply grid gap-1;
+  }
+  .ev-auth__demo-title {
+    @apply font-semibold;
+  }
+
+  /* ---------- Beranda ---------- */
+  .ev-home {
+    @apply grid gap-6;
+  }
+  .ev-hero {
+    @apply relative overflow-hidden rounded-3xl bg-linear-to-br from-primary to-secondary p-6 text-primary-content shadow-lg sm:p-10;
+  }
+  .ev-hero__art {
+    @apply pointer-events-none absolute -right-6 -bottom-8 size-44 opacity-15;
+  }
+  .ev-hero__eyebrow {
+    @apply text-sm font-medium opacity-80;
+  }
+  .ev-hero__title {
+    @apply mt-1 text-3xl font-bold tracking-tight sm:text-4xl;
+  }
+  .ev-hero__text {
+    @apply mt-2 max-w-xl opacity-90;
+  }
+
+  .ev-shortcuts {
+    @apply grid gap-4 sm:grid-cols-2 xl:grid-cols-5;
+  }
+  .ev-shortcut {
+    @apply rounded-3xl border border-base-300/40 bg-base-100 shadow-sm transition hover:-translate-y-1 hover:shadow-lg;
+  }
+  .ev-shortcut__body {
+    @apply gap-3 p-5;
+  }
+  .ev-shortcut__top {
+    @apply flex items-center justify-between;
+  }
+  .ev-shortcut__badge {
+    @apply flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary;
+  }
+  .ev-shortcut__badge .ev-icon {
+    @apply size-6;
+  }
+  .ev-shortcut__arrow {
+    @apply opacity-40;
+  }
+  .ev-shortcut__count {
+    @apply text-3xl font-bold;
+  }
+  .ev-shortcut__label {
+    @apply text-sm text-base-content/60;
+  }
+
+  .ev-status {
+    @apply flex flex-wrap items-center justify-between gap-3;
+  }
+  .ev-status__lead {
+    @apply flex items-center gap-3;
+  }
+  .ev-status__badge {
+    @apply flex size-10 items-center justify-center rounded-2xl bg-success/15 text-success;
+  }
+  .ev-status__title {
+    @apply font-semibold;
+  }
+  .ev-status__text {
+    @apply text-sm text-base-content/60;
+  }
+  .ev-status__actions {
+    @apply flex flex-wrap items-center gap-2;
+  }
+
+  /* ---------- Data master ---------- */
+  .ev-master {
+    @apply grid gap-4;
+  }
+  .ev-master__grid {
+    @apply grid gap-4 lg:grid-cols-2;
+  }
+
+  /* ---------- Aset & penerimaan stok ---------- */
+  .ev-stats {
+    @apply grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5;
+  }
+  .ev-stat {
+    @apply rounded-2xl border border-base-300/60 bg-base-100;
+  }
+  .ev-stat[data-alert='true'] {
+    @apply border-warning/60 bg-warning/10;
+  }
+  .ev-stat__body {
+    @apply px-4 py-3;
+  }
+  .ev-stat__value {
+    @apply text-2xl;
+  }
+  .ev-filters {
+    @apply flex flex-wrap items-center gap-2;
+  }
+  .ev-filters .ev-control {
+    @apply w-full sm:w-auto;
+  }
+  .ev-select--auto {
+    @apply sm:w-auto;
+  }
+  .ev-link {
+    @apply font-medium;
+  }
+  .ev-icon--warning {
+    @apply ml-1 inline text-warning;
+  }
+
+  .ev-detail {
+    @apply grid gap-4;
+  }
+  .ev-detail__badges {
+    @apply flex flex-wrap items-center gap-2;
+  }
+  .ev-detail__grid {
+    @apply grid gap-6 md:grid-cols-[1fr_auto];
+  }
+  .ev-detail__actions {
+    @apply flex flex-wrap items-center gap-2;
+  }
+  .ev-dl {
+    @apply grid gap-2;
+  }
+  .ev-dl__row {
+    @apply grid gap-0.5 sm:grid-cols-[10rem_1fr] sm:gap-3;
+  }
+  .ev-dl__term {
+    @apply text-sm text-base-content/60;
+  }
+  .ev-dl__desc {
+    @apply break-words;
+  }
+  .ev-qr {
+    @apply grid content-start justify-items-center gap-2 md:justify-items-start;
+  }
+  .ev-qr__image {
+    @apply size-48 rounded-xl border border-base-300 bg-white p-2;
+  }
+
+  .ev-timeline {
+    @apply grid gap-4 border-l-2 border-base-300 pl-4;
+  }
+  .ev-timeline__item {
+    @apply relative;
+  }
+  .ev-timeline__title {
+    @apply font-semibold;
+  }
+  .ev-timeline__text {
+    @apply text-sm;
+  }
+
+  .ev-receipt-items {
+    @apply mb-3 grid gap-3;
+  }
+  .ev-receipt-item {
+    @apply grid gap-2 rounded-2xl border border-base-300 p-3;
+  }
+
+  /* ---------- Dropdown dengan pencarian ---------- */
+  .ev-select {
+    @apply relative w-full;
+  }
+  .ev-select__menu {
+    @apply absolute z-30 mt-1 max-h-56 w-full flex-nowrap overflow-y-auto rounded-box border border-base-300 bg-base-100 p-1 shadow-lg;
+  }
+  .ev-select__empty {
+    @apply px-3 py-2 text-sm opacity-60;
+  }
+
+  /* ---------- Input nominal ---------- */
+  .ev-currency {
+    @apply flex items-center gap-2;
+  }
+  .ev-currency__prefix {
+    @apply text-sm font-medium opacity-60;
+  }
+  .ev-currency input {
+    @apply grow;
+  }
+}

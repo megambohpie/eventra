@@ -3,7 +3,7 @@ import type { Prisma, PrismaClient } from '@prisma/client';
 
 type Db = PrismaClient | Prisma.TransactionClient;
 
-const SENSITIVE_KEYS = new Set(['passwordHash', 'password', 'token', 'tokenHash']);
+const SENSITIVE_KEYS = new Set(['passwordHash', 'password', 'token', 'tokenHash', 'qrToken']);
 
 /** Buang field rahasia dari snapshot sebelum masuk audit log. */
 export function redact(value: unknown): Prisma.InputJsonValue | undefined {

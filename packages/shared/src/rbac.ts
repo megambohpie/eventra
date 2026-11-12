@@ -18,16 +18,44 @@ export const CAPABILITIES = [
   'product.write',
   'master.read',
   'master.write',
+  'asset.read',
+  'asset.write',
+  'asset.cost.read',
+  'asset.status',
+  'receipt.read',
+  'receipt.write',
 ] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 
-const READ_ALL: Capability[] = ['user.read', 'customer.read', 'product.read', 'master.read'];
+const READ_ALL: Capability[] = [
+  'user.read',
+  'customer.read',
+  'product.read',
+  'master.read',
+  'asset.read',
+  'asset.cost.read',
+  'receipt.read',
+];
 
 export const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
   OWNER: READ_ALL,
   ADMIN: [...CAPABILITIES],
-  OPS_COORDINATOR: ['customer.read', 'product.read', 'master.read'],
-  WAREHOUSE: ['product.read', 'master.read'],
+  OPS_COORDINATOR: [
+    'customer.read',
+    'product.read',
+    'master.read',
+    'asset.read',
+    'asset.status',
+    'receipt.read',
+  ],
+  WAREHOUSE: [
+    'product.read',
+    'master.read',
+    'asset.read',
+    'asset.status',
+    'receipt.read',
+    'receipt.write',
+  ],
   FIELD_PIC: [],
   CUSTOMER: [],
 };

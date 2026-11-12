@@ -25,9 +25,9 @@ export function NotificationHost() {
 
   if (notifications.length === 0) return null;
   return (
-    <div className="toast toast-top toast-end z-50 print:hidden">
+    <div className="toast toast-top toast-end ev-toast">
       {notifications.map((n) => (
-        <div key={n.id} role="alert" className={`alert ${ALERT[n.type].cls} shadow-lg`}>
+        <div key={n.id} role="alert" className={`alert ${ALERT[n.type].cls} ev-toast__item`}>
           <Icon path={ALERT[n.type].icon} />
           <span>{n.message}</span>
           <Button

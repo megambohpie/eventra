@@ -18,9 +18,9 @@ export function Modal({ open, title, onClose, wide = false, children }: ModalPro
   if (!open) return null;
   return (
     <dialog className="modal modal-open" aria-label={title} onCancel={onClose}>
-      <div className={`modal-box ${wide ? 'max-w-3xl' : ''}`.trim()}>
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold">{title}</h2>
+      <div className={`modal-box ${wide ? 'ev-modal__box--wide' : ''}`.trim()}>
+        <div className="ev-modal__head">
+          <h2 className="ev-modal__title">{title}</h2>
           <Button
             variant="ghost"
             size="sm"

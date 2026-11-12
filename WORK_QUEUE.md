@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | 00 | Done | Foundation dan standar proyek |
 | 01 | Done | Auth, RBAC, master data |
-| 02 | Todo | Aset dan QR lifecycle |
+| 02 | Done | Aset dan QR lifecycle |
 | 03 | Todo | Ketersediaan, paket, pesanan |
 | 04 | Todo | Gudang, scan, dan PDF |
 | 05 | Todo | Insiden, servis, penggantian |
@@ -38,23 +38,24 @@
 
 ## Fase 01 — Identity, RBAC, dan Master Data
 
-- [x] Schema user, role, permission, customer, PIC penyewa, kategori, produk, dan lokasi.
+- [x] Schema user, role, permission, customer, kategori, produk, dan lokasi.
 - [x] Login, refresh/logout, reset password, route guard, dan capability middleware.
-- [x] CRUD pelanggan dan minimal satu PIC penyewa wajib sebelum membuat pesanan.
+- [x] CRUD pelanggan. Keputusan owner: PIC tidak disimpan di pelanggan; PIC penyewa ditunjuk per pesanan (pihak rental atau customer) pada Fase 03 (`order_pics`), dan wajib ada sebelum pesanan diajukan.
 - [x] CRUD produk dengan harga per pcs/paket dan deposit.
 - [x] UI web seluruhnya menggunakan DaisyUI; Axios central client termasuk error/auth interceptor.
-- [x] Tambahan di luar daftar: `GET/POST /users` (capability `user.read`/`user.manage`), seed admin pertama (`pnpm db:seed`), halaman web login/lupa-reset password, pelanggan+PIC, produk, dan kategori/lokasi.
+- [x] Tambahan di luar daftar: `GET/POST /users` (capability `user.read`/`user.manage`), seed admin pertama (`pnpm db:seed`), halaman web login/lupa-reset password, pelanggan, produk, dan kategori/lokasi.
 
-**Selesai bila:** user tak berizin ditolak API dan UI; admin dapat membuat pelanggan, PIC, dan produk; test izin serta validasi lulus.
+**Selesai bila:** user tak berizin ditolak API dan UI; admin dapat membuat pelanggan dan produk; test izin serta validasi lulus.
 
 ## Fase 02 — Aset, QR, dan Riwayat Kondisi
 
-- [ ] Schema aset, pembelian, kondisi, lokasi, status event, dan audit log.
-- [ ] CRUD aset beserta tanggal beli, harga beli, serial, pemasok, kondisi awal, dan QR token.
-- [ ] Penerimaan stok/aset dari pembelian, transfer, hibah, titipan, produksi, atau sumber lain; rekam asal, dokumen, penerima, jumlah, dan biaya perolehan opsional.
-- [ ] Generate/cetak QR PDF/label dan halaman detail riwayat aset.
-- [ ] API pemindaian QR aman serta status aset; data sensitif harga beli dibatasi.
-- [ ] Dashboard/list aset dengan filter status, kondisi, lokasi, dan aset perlu perhatian.
+- [x] Schema aset, pembelian, kondisi, lokasi, status event, dan audit log.
+- [x] CRUD aset beserta tanggal beli, harga beli, serial, pemasok, kondisi awal, dan QR token.
+- [x] Penerimaan stok/aset dari pembelian, transfer, hibah, titipan, produksi, atau sumber lain; rekam asal, dokumen, penerima, jumlah, dan biaya perolehan opsional.
+- [x] Generate/cetak QR PDF/label dan halaman detail riwayat aset.
+- [x] API pemindaian QR aman serta status aset; data sensitif harga beli dibatasi.
+- [x] Dashboard/list aset dengan filter status, kondisi, lokasi, dan aset perlu perhatian.
+- [x] Tambahan di luar daftar: keputusan desain Fase 02 — tidak ada hapus aset (pensiun = status `RETIRED`, final); aset rusak yang tersedia otomatis masuk karantina; transisi status operasional (RESERVED…RETURN_PENDING) baru terjadi lewat alur pesanan/scan Fase 03–04; penomoran `AST-######` dan `RCV-YYYY-######` dari sequence Postgres; capability baru `asset.read/write/cost.read/status` dan `receipt.read/write`.
 
 **Selesai bila:** stok/aset dapat diterima dari sumber yang dipilih, aset per-unit memperoleh QR unik, dan riwayatnya memperlihatkan asal serta perubahan kondisi/status tanpa data sensitif bocor.
 

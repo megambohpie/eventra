@@ -1,0 +1,178 @@
+/*
+ * Lapisan styling terpisah dari logika (komponen React hanya memakai nama kelas semantik `ev-*`).
+ * Untuk mengubah tampilan/tema: ubah berkas di folder `styles/` dan token di `assets/brand/eventra-theme.css`.
+ * Komponen DaisyUI (btn, input, card, dll.) tetap ditulis di JSX sebagai API komponen; semua
+ * tata letak, spasi, warna, dan tipografi tambahan hidup di sini lewat `@apply`.
+ */
+@layer utilities {
+  /* ---------- Primitif ---------- */
+  .ev-icon {
+    @apply size-5 shrink-0;
+  }
+  .ev-loading {
+    @apply flex justify-center p-4;
+  }
+  .ev-loading__mark {
+    @apply size-10 animate-pulse;
+  }
+  .ev-dots {
+    @apply loading loading-dots loading-sm;
+  }
+
+  /* ---------- Logo ---------- */
+  /* Dark mode: wordmark navy tidak terbaca di latar gelap, jadi logo diberi inversi terang. */
+  .ev-logo,
+  .ev-logo-mark {
+    @apply in-data-[theme=eventra-dark]:hue-rotate-180 in-data-[theme=eventra-dark]:invert;
+  }
+  .ev-logo {
+    @apply h-10;
+  }
+  .ev-logo--sidebar {
+    @apply h-[4.5rem];
+  }
+  .ev-logo-mark {
+    @apply size-12 object-cover object-left;
+  }
+  .ev-logo-icon {
+    @apply size-8;
+  }
+
+  /* ---------- Tombol & badge ---------- */
+  .ev-btn--block {
+    @apply w-full;
+  }
+  .ev-btn--mobile-only {
+    @apply lg:hidden;
+  }
+  .ev-btn--desktop-only {
+    @apply hidden lg:inline-flex;
+  }
+  .ev-btn__label--wide {
+    @apply hidden sm:inline;
+  }
+
+  /* ---------- Notifikasi ---------- */
+  .ev-toast {
+    @apply z-50 print:hidden;
+  }
+  .ev-toast__item {
+    @apply shadow-lg;
+  }
+  .ev-notice {
+    @apply items-start;
+  }
+
+  /* ---------- Modal ---------- */
+  .ev-modal__box--wide {
+    @apply max-w-3xl;
+  }
+  .ev-modal__head {
+    @apply mb-4 flex items-center justify-between;
+  }
+  .ev-modal__title {
+    @apply text-lg font-bold;
+  }
+
+  /* ---------- Form ---------- */
+  .ev-form-grid {
+    @apply grid gap-2 sm:grid-cols-2;
+  }
+  .ev-form-grid__full {
+    @apply sm:col-span-2;
+  }
+  .ev-control {
+    @apply w-full;
+  }
+  .ev-search {
+    @apply w-full rounded-full sm:w-64;
+  }
+  .ev-input-icon {
+    @apply opacity-60;
+  }
+  .ev-toggle-row {
+    @apply cursor-pointer justify-start gap-2;
+  }
+
+  /* ---------- Kartu halaman ---------- */
+  .ev-card {
+    @apply rounded-3xl border border-base-300/40 bg-base-100 shadow-sm;
+  }
+  .ev-card__body {
+    @apply gap-5 p-5 sm:p-7;
+  }
+  .ev-page-header {
+    @apply flex flex-wrap items-center justify-between gap-3;
+  }
+  .ev-page-header__title {
+    @apply text-2xl font-bold tracking-tight;
+  }
+  .ev-page-header__subtitle {
+    @apply text-sm text-base-content/60;
+  }
+  .ev-page-header__actions {
+    @apply flex flex-wrap items-center gap-2;
+  }
+  .ev-section-title {
+    @apply text-lg font-semibold;
+  }
+
+  /* ---------- Tabel ---------- */
+  .ev-table-wrap {
+    @apply overflow-x-auto;
+  }
+  .ev-table__head {
+    @apply text-xs tracking-wide text-base-content/60 uppercase;
+  }
+  .ev-table__row {
+    @apply hover:bg-base-200/50;
+  }
+  .ev-table__actions {
+    @apply text-right;
+  }
+  .ev-table__empty {
+    @apply text-center;
+  }
+  .ev-table__hint {
+    @apply ml-1 text-xs opacity-70;
+  }
+
+  /* ---------- Paginasi ---------- */
+  .ev-pagination {
+    @apply flex items-center justify-between;
+  }
+  .ev-pagination__info {
+    @apply text-sm;
+  }
+  .ev-pagination__controls {
+    @apply flex items-center;
+  }
+  .ev-pagination__page {
+    @apply px-3 text-sm;
+  }
+
+  /* ---------- Daftar ringkas ---------- */
+  .ev-list {
+    @apply grid gap-2;
+  }
+  .ev-list__row {
+    @apply flex items-center gap-2;
+  }
+  .ev-list__grow {
+    @apply flex-1;
+  }
+  .ev-list__hint {
+    @apply ml-2 text-sm opacity-70;
+  }
+  .ev-inline-form {
+    @apply flex flex-wrap gap-2;
+  }
+  .ev-inline-form__input {
+    @apply flex-1;
+  }
+
+  /* ---------- Bahasa ---------- */
+  .ev-lang {
+    @apply flex items-center gap-1;
+  }
+}

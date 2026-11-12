@@ -2,20 +2,14 @@ import type { ComponentType } from 'react';
 import * as Mdi from '@mdi/react';
 
 interface IconProps {
-  /** Path SVG dari `@mdi/js`, mis. `mdiHome`. */
+  /** Path SVG dari `@mdi/js`, mis. `mdiHome`. Ukuran diatur CSS (`.ev-icon`, bisa ditimpa per konteks). */
   path: string;
+  /** Kelas semantik tambahan (mis. `ev-hero__art`). */
   className?: string;
-  /** Ukuran dalam rem; default 1.25. */
-  size?: number;
   title?: string;
 }
 
-type MdiComponent = ComponentType<{
-  path: string;
-  size?: string;
-  className?: string;
-  title?: string;
-}>;
+type MdiComponent = ComponentType<{ path: string; className?: string; title?: string }>;
 
 // @mdi/react adalah bundle CJS (exports.default + exports.Icon). Bergantung pada bundler (Vite dev vs
 // build vs Vitest), impor default bisa berupa komponen atau objek namespace, jadi pilih komponen valid.
@@ -34,6 +28,6 @@ function resolveMdiIcon(): MdiComponent {
 const MdiIcon = resolveMdiIcon();
 
 /** Satu-satunya pintu masuk ikon (Material Design Icons). */
-export function Icon({ path, className, size = 1.25, title }: IconProps) {
-  return <MdiIcon path={path} size={`${size}rem`} className={className} title={title} />;
+export function Icon({ path, className = '', title }: IconProps) {
+  return <MdiIcon path={path} className={`ev-icon ${className}`.trim()} title={title} />;
 }

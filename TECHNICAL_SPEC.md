@@ -19,7 +19,7 @@ packages/
 docs/          dokumentasi tambahan bila diperlukan
 ```
 
-- **Web:** dashboard owner, admin, gudang, dan laporan. Semua tampilan memakai DaisyUI/Tailwind; tidak membuat CSS kustom kecuali token/global reset yang disetujui.
+- **Web:** dashboard owner, admin, gudang, dan laporan. Semua tampilan memakai DaisyUI/Tailwind; styling dipisah dari logika di `apps/web/src/styles/` (kelas semantik `ev-*` memakai `@apply`), sehingga tema/tampilan dapat diganti tanpa mengubah komponen.
 - **Branding web:** gunakan `eventra-logo-v5.svg` lewat komponen `Logo`: warna asli tanpa kotak pada light mode, dan inversi terang tanpa kotak putih pada dark mode agar wordmark terbaca. Gunakan `eventra-icon.svg` pada favicon/loading dan `eventra-theme.css` sebagai satu-satunya sumber token warna DaisyUI.
 - **Mobile:** aplikasi operasional untuk gudang dan PIC lapangan. DaisyUI tidak mendukung React Native; gunakan komponen native dengan token desain yang sama.
 - **API:** Node.js + Express.js + TypeScript, REST, validasi request, RBAC, audit log.
@@ -58,7 +58,6 @@ Tabel memakai `id` UUID, `created_at`, `updated_at`; entitas operasional juga me
 | --- | --- |
 | `users` | nama, email/telepon, password hash, status, role. |
 | `customers` | individu/perusahaan, alamat, data verifikasi. |
-| `customer_contacts` | PIC penyewa, nama, telepon, jabatan. |
 | `products` | produk yang disewa, kategori, satuan sewa, harga, deposit. |
 | `product_bundles` | aturan konversi satuan sewa ke komponen/aset fisik. |
 | `assets` | kode aset, QR token, produk, serial, tanggal/biaya perolehan, sumber penerimaan, kondisi, status, lokasi terakhir. |
@@ -67,7 +66,7 @@ Tabel memakai `id` UUID, `created_at`, `updated_at`; entitas operasional juga me
 | `orders` | penyewa, periode, lokasi, status, nilai total, status pembayaran. |
 | `order_items` | produk, qty satuan sewa, harga, total. |
 | `stock_allocations` | pesanan, produk/aset, tanggal, qty, status hold/confirmed/released. |
-| `order_pics` | peran PIC, kontak, sumber PIC, penyetuju. |
+| `order_pics` | PIC per pesanan (rental atau customer): peran, kontak, sumber PIC, penyetuju. PIC tidak disimpan di `customers`. |
 | `pick_lists` / `pick_list_items` | kebutuhan fisik, aset terpilih, hasil persiapan. |
 | `scan_events` | QR, aksi, aset, pesanan, pelaksana, waktu, lokasi, kondisi. |
 | `handover_documents` | dokumen keluar/kembali, nomor, payload snapshot, file PDF, penandatangan, versi. |
