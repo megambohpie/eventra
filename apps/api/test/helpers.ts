@@ -2,8 +2,9 @@ import { PrismaClient } from '@prisma/client';
 import request from 'supertest';
 import type { Express } from 'express';
 import type { Role } from '@eventra/shared';
-import { createApp } from '../src/app';
+import { createApp, type AppDeps } from '../src/app';
 import { hashPassword } from '../src/auth/password';
+import { silentLogger } from '../src/ops/logger';
 import type { Mailer } from '../src/routes/auth';
 import { TEST_DATABASE_URL } from './testDb';
 
@@ -17,14 +18,26 @@ export interface TestApp {
   sentResets: { email: string; token: string }[];
 }
 
-export function createTestApp(checkDb: () => Promise<boolean> = async () => true): TestApp {
+export function createTestApp(
+  checkDb: () => Promise<boolean> = async () => true,
+  extra: Partial<AppDeps> = {},
+): TestApp {
   const sentResets: TestApp['sentResets'] = [];
   const mailer: Mailer = {
     sendPasswordReset: async (to, token) => {
       sentResets.push({ email: to.email, token });
     },
   };
-  return { app: createApp({ checkDb, db, jwtSecret: JWT_SECRET, mailer }), sentResets };
+  const deps: AppDeps = {
+    checkDb,
+    db,
+    jwtSecret: JWT_SECRET,
+    mailer,
+    logger: silentLogger,
+    rateLimits: false,
+    ...extra,
+  };
+  return { app: createApp(deps), sentResets };
 }
 
 /** Kosongkan semua tabel (kecuali _prisma_migrations) antar test. */

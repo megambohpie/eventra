@@ -3,7 +3,7 @@
 Dokumen ini adalah sumber ringkas keadaan proyek untuk manusia, Codex, Claude Code, atau agen lain. Baca sebelum implementasi agar pekerjaan tidak diulang.
 
 **Terakhir diperbarui:** 12 November 2026  
-**Status:** Fase 00–07 selesai dan terverifikasi otomatis (Fase 07 = aplikasi mobile operasional). Aplikasi mobile belum dicoba di perangkat/emulator (hanya typecheck, test logika, dan bundling Android). Fase 08 (hardening dan rilis) belum dimulai dan menunggu persetujuan owner.
+**Status:** Fase 00–08 selesai dan terverifikasi otomatis (Fase 08 = hardening dan rilis). Yang tersisa adalah langkah manusia: UAT owner (`RELEASE_PLAN.md` §3), uji mobile di perangkat nyata, pemeriksaan visual web 360 px/desktop, dan uji restore di server target. Keputusan terbuka (penyedia email, gateway pembayaran, cookie httpOnly) ada di `RUNBOOK.md` §8.
 
 ## Urutan baca
 
@@ -31,7 +31,7 @@ Dokumen ini adalah sumber ringkas keadaan proyek untuk manusia, Codex, Claude Co
 | Schema | Migrasi `20261111111805_identity_master_data` (aditif): `users`, `refresh_tokens`, `password_reset_tokens`, `customers`, `categories`, `locations`, `products`. Rollback = drop tabel tersebut (migrasi lanjutan `drop_customer_contacts` menghapus `customer_contacts`) + hapus enum `Role`, `CustomerType`, `PricingUnit`. |
 | RBAC | Role = enum DB; capability dipetakan di `packages/shared/src/rbac.ts` (Owner baca-saja, Admin penuh, Koordinator/Gudang baca sebagian). API memakai `requireCapability`, web memakai `RequireCapability` + `useAuth().can`. |
 | Auth | Login JWT akses 15 menit; refresh token acak (hash saja di DB, 7 hari) dirotasi, pemakaian ulang token lama mencabut semua sesi. Status/role user dibaca dari DB tiap request. Reset password: token sekali pakai 1 jam, mencabut semua sesi. |
-| Reset password | Belum ada pengiriman email: antarmuka `Mailer` di `routes/auth.ts`; di dev token dicetak ke log API, di production tidak dicetak. Implementasi nyata ditunda ke Fase 08. |
+| Reset password | Belum ada pengiriman email: antarmuka `Mailer` di `routes/auth.ts`; di dev token dicetak ke log API, di production tidak dicetak. Implementasi nyata menunggu keputusan penyedia (lihat Fase 08 / RUNBOOK §8). |
 | Pelanggan | Data pelanggan saja. Keputusan owner: PIC tidak disimpan di pelanggan, melainkan ditunjuk per pesanan (Fase 03, `order_pics`). Migrasi `drop_customer_contacts` menghapus tabel `customer_contacts`. |
 | Produk | Harga/deposit integer rupiah (kolom `BigInt`, DTO `number`); satuan `PCS`/`PACKAGE` + label. Kategori dengan produk tidak bisa dihapus. |
 | Audit | Semua operasi tulis dan login/reset menulis `audit_logs` (password/token disaring). |
@@ -121,6 +121,27 @@ Dokumen ini adalah sumber ringkas keadaan proyek untuk manusia, Codex, Claude Co
 | RBAC       | Tombol mengikuti capability (`mobileAccess`): Gudang = scan/checkout/kembali/dokumen; PIC lapangan = lapor insiden + terima pengganti; Owner = lihat saja. API tetap sumber kebenaran.                                                                                                                                                                                                                 |
 | Dokumen    | Layar baca-saja snapshot (`/handover-documents/:id`) bagi pemegang `warehouse.read`. PDF, tanda tangan, dan revisi tetap di web.                                                                                                                                                                                                                                                                       |
 
+## Fase 08 — yang ada sekarang
+
+| Area | Fakta |
+| --- | --- |
+| Schema | Migrasi `20261112080000_hardening_append_only` (aditif): trigger `forbid_mutation` pada `audit_logs`, `asset_status_events`, `order_status_events`. Rollback = 3 `DROP TRIGGER` (tercatat di akhir file migrasi). Sudah diterapkan ke DB dev. |
+| Batas laju | `apps/api/src/ops/rateLimit.ts` (memori, tanpa dependensi): login 10/15 mnt per IP+email dan 50 per IP, refresh 100/15 mnt, reset password 10/jam, global 600/mnt; 429 `RATE_LIMITED` + `Retry-After`. Nilai di `DEFAULT_RATE_LIMITS`. Test helper mematikannya (`rateLimits: false`). Hanya cocok untuk satu instance. |
+| Env/CORS | `apiEnvSchema` menambah `CORS_ORIGINS` (wajib di production, tanpa `*`), `TRUST_PROXY`, `LOG_LEVEL`; production menolak `JWT_SECRET` contoh. `Cache-Control: no-store` di semua respons API. |
+| Observability | `ops/logger.ts` (JSON per baris; access log memakai template rute sehingga token QR/reset tidak masuk log; `x-request-id`), `ops/errorReporter.ts` (satu titik: 500, job gagal, unhandledRejection/uncaughtException), `ops/jobs.ts` (`JobMonitor`: anti-tumpang-tindih, status per job). `/health/live`, `/health/ready` (503 bila DB mati atau job basi). `server.ts`: job `hold-expiry` dan `invoice-reminders` lewat `JobMonitor`, shutdown rapi. `console.*` tidak lagi dipakai di API. |
+| Backup | `ops/backup.sh` (pg_dump format custom + sha256 + rotasi) dan `ops/restore-verify.sh` (restore ke DB sementara, bandingkan baris 36 tabel, trigger, migrasi); `pnpm ops:backup`, `pnpm ops:restore-verify`. Diuji nyata terhadap DB dev (Docker): "RESTORE OK". Folder `backups/` di-gitignore. |
+| Test baru | `hardening.test.ts` (25: 401 pada SEMUA rute non-publik dibaca dari sumber rute, OWNER 403 pada semua rute tulis, JWT palsu/kadaluarsa/alg none, peran dari DB, rate limit, unggah: tipe/magic bytes/ukuran, token QR tidak bocor di DTO/audit/log, audit & append-only, header/CORS/health/error reporter, hold expiry + JobMonitor), `load.test.ts` (30 konfirmasi serentak stok 20 → tepat 10 menang; 108 request campuran; multi-produk urutan berlawanan tanpa deadlock; `LOAD_FACTOR=n` menaikkan skala; p95 ≈ 1 dtk lokal), `e2e.test.ts` (terima stok → pesan → bayar → scan keluar → tanda tangan → insiden → scan kembali → pendapatan/piutang). |
+| Dokumen | `RUNBOOK.md` (komponen, checklist env, deploy, observability, backup/restore, rollback migrasi, prosedur insiden, batasan), `RELEASE_PLAN.md` (gerbang rilis, urutan peluncuran, lembar UAT owner). |
+
+## Asumsi Fase 08
+
+- Satu instance API (rate limit dan job di memori); job idempoten sehingga aman bila ganda, tetapi rate limit tidak dibagi antar instance.
+- `ErrorReporter` default menulis log JSON; belum ada Sentry/webhook (menunggu keputusan penyedia).
+- Pengiriman email reset password dan gateway pembayaran tetap belum ada (butuh keputusan owner); refresh token web masih di `localStorage`.
+- Uji beban dijalankan in-process terhadap DB lokal (bukan load generator terpisah di server target); angka latensi hanya indikatif.
+- Hold expiry: stok sudah diabaikan oleh perhitungan ketersediaan walau job mati, sehingga kegagalan job tidak menyebabkan overbooking.
+- Pendapatan memakai tanggal UTC (tidak berubah).
+
 ## Asumsi Fase 07
 
 - Mobile hanya berbahasa Indonesia (label di `src/lib/labels.ts`); i18n EN/ID belum diterapkan di mobile.
@@ -185,20 +206,22 @@ pnpm.cmd dev:web -- --host 127.0.0.1 --port 5173 --strictPort
 - Jika PowerShell menolak `pnpm.ps1`, gunakan `pnpm.cmd`.
 - Backend TSX pernah gagal dalam sandbox karena akses profil OS; menjalankan development server di luar sandbox berhasil.
 
-## Verifikasi terakhir (Fase 07, 12 November 2026)
+## Verifikasi terakhir (Fase 08, 12 November 2026)
 
 | Perintah | Hasil |
 | --- | --- |
 | `eslint .` / `prettier --check .` | Lulus |
-| `tsc` di api, web, shared, api-client | Lulus |
-| Test shared / api / api-client / web / mobile | Lulus: 22 / 74 / 8 / 13 / 16 (mobile: sesi, tugas per peran, navigasi, QR, validasi foto; api-client: unggah byte RN) |
-| `vite build` web, `tsup` api, `expo export --platform android` mobile | Lulus; peringatan bundle web >500 kB belum blocker |
+| `tsc` di api, web, shared, api-client, mobile | Lulus |
+| Test shared / api / api-client / web / mobile | Lulus: 25 / 105 / 8 / 13 / 16 (api 11 file termasuk hardening, load, e2e) |
+| `tsup` api, `vite build` web | Lulus; peringatan bundle web >500 kB belum blocker |
+| `ops/backup.sh` + `ops/restore-verify.sh` (DB dev, Docker) | "RESTORE OK": 36 tabel, trigger, migrasi identik |
+| Server API dijalankan (NODE_ENV=production) | `/health/ready` 200, header keamanan + request id, log JSON bersih dari token |
 
-**Belum terverifikasi penuh:** (1) `pnpm check` utuh belum dijalankan; tiap tahap dijalankan terpisah dan hijau. `prisma generate` gagal EPERM selama dev API berjalan (DLL engine terkunci) — client Prisma sudah ter-generate untuk tipe; hentikan dev API lalu `pnpm db:generate` bila engine perlu disegarkan. (2) Tampilan halaman web Fase 02–06 dan PDF belum diperiksa visual di browser pada lebar ponsel ≈360 px dan desktop; aplikasi mobile Fase 07 belum dijalankan di perangkat/emulator (kamera QR, izin, unggah foto, tombol Back, banner offline belum diuji nyata — jalankan `pnpm dev:mobile` dengan `EXPO_PUBLIC_API_URL` menunjuk API yang dapat dijangkau perangkat). (3) Jalankan `pnpm db:migrate` pada database dev bila belum (migrasi Fase 06 sudah diterapkan ke `eventra` dev).
+**Belum terverifikasi penuh:** (1) `pnpm check` utuh berhenti di `prisma generate` (EPERM) karena dev API (tsx watch, port 3000) mengunci DLL engine; lint dan format:check lulus lewat `pnpm check`, sisa tahap dijalankan terpisah dan hijau. Hentikan dev API lalu `pnpm check` bila ingin satu perintah utuh. (2) Tampilan halaman web Fase 02–06 dan PDF belum diperiksa visual di browser (≈360 px dan desktop); aplikasi mobile belum dijalankan di perangkat/emulator (kamera QR, izin, foto, tombol Back, offline). (3) UAT owner, uji restore di server target, dan pilot belum dilakukan (lihat `RELEASE_PLAN.md`). (4) Uji beban belum dijalankan terhadap server produksi/staging.
 
 ## Pekerjaan berikutnya
 
-Ikuti `WORK_QUEUE.md`. Fase 08 dimulai hanya setelah owner menyetujui Fase 07 (disarankan UAT mobile di perangkat nyata lebih dulu). Fase 08 perlu memutuskan gateway pembayaran nyata (panggil `settlePayment`), pengiriman pengingat ke pelanggan, dan zona waktu laporan.
+MVP selesai sesuai `WORK_QUEUE.md`. Langkah berikutnya bukan kode: jalankan UAT owner di staging (`RELEASE_PLAN.md` §3), putuskan item terbuka `RUNBOOK.md` §8 (penyedia email, gateway pembayaran, cookie httpOnly, object storage), lalu peluncuran bertahap. Backlog pasca-MVP ada di `WORK_QUEUE.md`.
 
 ## Catatan terbuka
 

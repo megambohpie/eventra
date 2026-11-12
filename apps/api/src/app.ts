@@ -4,7 +4,11 @@ import helmet from 'helmet';
 import type { PrismaClient } from '@prisma/client';
 import type { HealthResponse } from '@eventra/shared';
 import { authenticate } from './auth/middleware';
-import { errorHandler, notFoundHandler } from './errors';
+import { createErrorHandler, notFoundHandler } from './errors';
+import { logErrorReporter, type ErrorReporter } from './ops/errorReporter';
+import type { JobMonitor } from './ops/jobs';
+import { accessLog, createLogger, requestId, type Logger } from './ops/logger';
+import { DEFAULT_RATE_LIMITS, emailKey, rateLimit, type RateLimitConfig } from './ops/rateLimit';
 import { assetsRouter } from './routes/assets';
 import { availabilityRouter } from './routes/availability';
 import { bundlesRouter } from './routes/bundles';
@@ -29,16 +33,60 @@ export interface AppDeps {
   db: PrismaClient;
   jwtSecret: string;
   mailer: Mailer;
+  logger?: Logger;
+  reporter?: ErrorReporter;
+  /** Monitor job berkala; ditampilkan di /health/ready. */
+  jobs?: JobMonitor;
+  /** Origin web yang diizinkan; kosong = semua origin (hanya untuk development). */
+  corsOrigins?: string[];
+  /** Hop reverse proxy tepercaya. */
+  trustProxy?: number;
+  /** Batas laju; false untuk mematikan (hanya test). */
+  rateLimits?: RateLimitConfig | false;
 }
 
-export function createApp({ checkDb, db, jwtSecret, mailer }: AppDeps): Express {
+export function createApp({
+  checkDb,
+  db,
+  jwtSecret,
+  mailer,
+  logger = createLogger(),
+  reporter = logErrorReporter(logger),
+  jobs,
+  corsOrigins = [],
+  trustProxy = 0,
+  rateLimits = DEFAULT_RATE_LIMITS,
+}: AppDeps): Express {
   const app = express();
   app.disable('x-powered-by');
+  app.set('trust proxy', trustProxy);
+  app.use(requestId);
+  app.use(accessLog(logger));
   app.use(helmet());
-  app.use(cors());
+  app.use(
+    cors({
+      origin: corsOrigins.length > 0 ? corsOrigins : true,
+      maxAge: 600,
+      exposedHeaders: ['x-request-id', 'Retry-After'],
+    }),
+  );
+  // Respons API berisi data bisnis/QR; jangan disimpan cache bersama atau browser.
+  app.use((_req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store');
+    next();
+  });
   app.use(express.json({ limit: '1mb' }));
 
   const v1 = express.Router();
+  if (rateLimits) {
+    v1.use(rateLimit(rateLimits.global));
+    const { login, refresh, reset } = rateLimits;
+    v1.post('/auth/login', rateLimit({ ...login, key: emailKey }));
+    v1.post('/auth/login', rateLimit({ windowMs: login.windowMs, max: login.maxPerIp }));
+    v1.post('/auth/refresh', rateLimit(refresh));
+    v1.post('/auth/password-reset/request', rateLimit(reset));
+    v1.post('/auth/password-reset/confirm', rateLimit(reset));
+  }
   v1.get('/health', async (_req, res) => {
     const dbUp = await checkDb().catch(() => false);
     const data: HealthResponse = {
@@ -47,6 +95,23 @@ export function createApp({ checkDb, db, jwtSecret, mailer }: AppDeps): Express 
       time: new Date().toISOString(),
     };
     res.status(dbUp ? 200 : 503).json({ data });
+  });
+  // Liveness: proses hidup. Readiness: DB dapat dijangkau dan job berkala sehat.
+  v1.get('/health/live', (_req, res) => {
+    res.json({ data: { status: 'ok' } });
+  });
+  v1.get('/health/ready', async (_req, res) => {
+    const dbUp = await checkDb().catch(() => false);
+    const jobStatus = jobs?.status() ?? [];
+    const healthy = dbUp && jobStatus.every((j) => !j.stale);
+    res.status(healthy ? 200 : 503).json({
+      data: {
+        status: healthy ? 'ok' : 'degraded',
+        db: dbUp ? 'up' : 'down',
+        jobs: jobStatus,
+        time: new Date().toISOString(),
+      },
+    });
   });
 
   // Publik: login, refresh, logout, reset password. /me diautentikasi di dalam router-nya.
@@ -76,6 +141,6 @@ export function createApp({ checkDb, db, jwtSecret, mailer }: AppDeps): Express 
   app.use('/api/v1', v1);
 
   app.use(notFoundHandler);
-  app.use(errorHandler);
+  app.use(createErrorHandler(reporter));
   return app;
 }

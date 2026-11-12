@@ -14,7 +14,7 @@
 | 05 | Done | Insiden, servis, penggantian |
 | 06 | Done | Dashboard owner dan keuangan |
 | 07 | Done | Mobile operasional |
-| 08 | Todo | Hardening dan rilis |
+| 08 | Done | Hardening dan rilis |
 
 ## Definition of Ready untuk Setiap Item
 
@@ -121,11 +121,13 @@
 
 ## Fase 08 — Hardening dan Rilis
 
-- [ ] Uji keamanan akses, upload, QR token, rate limit, dan audit log.
-- [ ] Uji backup/restore, observability, error monitoring, dan job hold expiry.
-- [ ] Uji beban untuk cek ketersediaan/konfirmasi pesanan serentak.
-- [ ] E2E smoke test seluruh alur kritis serta UAT owner.
-- [ ] Runbook produksi, env checklist, rollback migration, dan rencana peluncuran.
+- [x] Uji keamanan akses, upload, QR token, rate limit, dan audit log.
+- [x] Uji backup/restore, observability, error monitoring, dan job hold expiry.
+- [x] Uji beban untuk cek ketersediaan/konfirmasi pesanan serentak.
+- [x] E2E smoke test seluruh alur kritis serta UAT owner (smoke test otomatis selesai; lembar UAT owner siap di `RELEASE_PLAN.md` §3 — persetujuan UAT dilakukan owner secara manual).
+- [x] Runbook produksi, env checklist, rollback migration, dan rencana peluncuran (`RUNBOOK.md`, `RELEASE_PLAN.md`).
+
+- [x] Tambahan di luar daftar: batas laju di memori (login per IP+email dan per IP, refresh, reset password, global) dengan 429 + `Retry-After`; CORS allowlist (`CORS_ORIGINS`, wajib di production), `TRUST_PROXY`, validasi env production (tolak wildcard/secret contoh); header `Cache-Control: no-store`; request id (`x-request-id`) + access log JSON yang memakai template rute (token QR/reset tidak pernah masuk log); `ErrorReporter` tunggal untuk 500, job gagal, dan error proses; `JobMonitor` (guard anti-tumpang-tindih, status per job) + endpoint `/health/live` dan `/health/ready`; graceful shutdown; migrasi `hardening_append_only` (trigger append-only untuk `audit_logs`, `asset_status_events`, `order_status_events`); skrip `ops/backup.sh` + `ops/restore-verify.sh` (diuji nyata: dump → restore ke DB sementara → bandingkan 36 tabel, trigger, migrasi); test: `hardening.test.ts`, `load.test.ts`, `e2e.test.ts`.
 
 **Selesai bila:** semua test wajib hijau, UAT owner disetujui, backup restore berhasil, dan runbook tersedia.
 

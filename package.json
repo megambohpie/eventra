@@ -18,7 +18,9 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "build": "turbo run build",
-    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build"
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build",
+    "ops:backup": "bash ops/backup.sh",
+    "ops:restore-verify": "bash ops/restore-verify.sh"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
