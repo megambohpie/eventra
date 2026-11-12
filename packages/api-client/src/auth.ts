@@ -31,8 +31,11 @@ export const confirmPasswordReset = async (
 export const getMe = async (client: AxiosInstance): Promise<UserDto> =>
   (await client.get<Envelope<UserDto>>('/me')).data.data;
 
-export const listUsers = async (client: AxiosInstance): Promise<Page<UserDto>> =>
-  (await client.get<Envelope<Page<UserDto>>>('/users')).data.data;
+export const listUsers = async (
+  client: AxiosInstance,
+  params: { q?: string; page?: number; pageSize?: number } = {},
+): Promise<Page<UserDto>> =>
+  (await client.get<Envelope<Page<UserDto>>>('/users', { params })).data.data;
 
 export const createUser = async (client: AxiosInstance, input: CreateUserInput): Promise<UserDto> =>
   (await client.post<Envelope<UserDto>>('/users', input)).data.data;

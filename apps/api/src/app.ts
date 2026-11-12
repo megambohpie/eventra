@@ -6,6 +6,9 @@ import type { HealthResponse } from '@eventra/shared';
 import { authenticate } from './auth/middleware';
 import { errorHandler, notFoundHandler } from './errors';
 import { assetsRouter } from './routes/assets';
+import { availabilityRouter } from './routes/availability';
+import { bundlesRouter } from './routes/bundles';
+import { ordersRouter } from './routes/orders';
 import { authRouter, type Mailer } from './routes/auth';
 import { receiptsRouter } from './routes/receipts';
 import { customersRouter } from './routes/customers';
@@ -51,6 +54,9 @@ export function createApp({ checkDb, db, jwtSecret, mailer }: AppDeps): Express 
   protectedRouter.use(masterRouter(db));
   protectedRouter.use(assetsRouter(db));
   protectedRouter.use(receiptsRouter(db));
+  protectedRouter.use(bundlesRouter(db));
+  protectedRouter.use(availabilityRouter(db));
+  protectedRouter.use(ordersRouter(db));
   v1.use(protectedRouter);
 
   app.use('/api/v1', v1);

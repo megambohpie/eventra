@@ -9,6 +9,14 @@ const optionalText = (max: number) =>
     .optional()
     .transform((v) => (v ? v : undefined));
 
+/** Nomor telepon: hanya angka, boleh diawali + (3–20 digit); kosong dianggap tidak diisi. */
+export const phoneSchema = z
+  .string()
+  .trim()
+  .regex(/^\+?\d{3,20}$/, 'Nomor telepon hanya boleh berisi angka')
+  .optional()
+  .or(z.literal('').transform(() => undefined));
+
 export const CUSTOMER_TYPES = ['INDIVIDUAL', 'COMPANY'] as const;
 export type CustomerType = (typeof CUSTOMER_TYPES)[number];
 
@@ -16,7 +24,7 @@ const customerBase = z.object({
   type: z.enum(CUSTOMER_TYPES),
   name: z.string().trim().min(1).max(160),
   email: emailSchema.optional(),
-  phone: optionalText(30),
+  phone: phoneSchema,
   address: optionalText(500),
   verificationNote: optionalText(500),
 });

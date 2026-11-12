@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import {
   mdiAccountGroup,
+  mdiCalendarMonth,
+  mdiClipboardText,
   mdiCube,
   mdiHome,
   mdiLogout,
@@ -41,6 +43,8 @@ const NAV_ITEMS: { to: string; labelKey: string; icon: string; capability?: Capa
     icon: mdiPackageDown,
     capability: 'receipt.read',
   },
+  { to: '/orders', labelKey: 'nav.orders', icon: mdiClipboardText, capability: 'order.read' },
+  { to: '/calendar', labelKey: 'nav.calendar', icon: mdiCalendarMonth, capability: 'order.read' },
   { to: '/master', labelKey: 'nav.master', icon: mdiMapMarker, capability: 'master.read' },
 ];
 

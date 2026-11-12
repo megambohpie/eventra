@@ -5,7 +5,10 @@ import { AssetDetailPage } from './pages/AssetDetailPage';
 import { AssetsPage } from './pages/AssetsPage';
 import { CustomersPage } from './pages/CustomersPage';
 import { HomePage } from './pages/HomePage';
+import { CalendarPage } from './pages/CalendarPage';
 import { MasterPage } from './pages/MasterPage';
+import { OrderDetailPage } from './pages/OrderDetailPage';
+import { OrdersPage } from './pages/OrdersPage';
 import { ProductsPage } from './pages/ProductsPage';
 import { ReceiptsPage } from './pages/ReceiptsPage';
 import { ForgotPasswordPage } from './pages/auth/ForgotPasswordPage';
@@ -33,6 +36,11 @@ export function App() {
           </Route>
           <Route element={<RequireCapability capability="receipt.read" />}>
             <Route path="receipts" element={<ReceiptsPage />} />
+          </Route>
+          <Route element={<RequireCapability capability="order.read" />}>
+            <Route path="orders" element={<OrdersPage />} />
+            <Route path="orders/:id" element={<OrderDetailPage />} />
+            <Route path="calendar" element={<CalendarPage />} />
           </Route>
           <Route element={<RequireCapability capability="master.read" />}>
             <Route path="master" element={<MasterPage />} />

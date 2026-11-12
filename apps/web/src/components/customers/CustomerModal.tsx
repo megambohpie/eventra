@@ -7,6 +7,7 @@ import { api } from '@/api';
 import { Button } from '@/components/ui/Button';
 import { FormField } from '@/components/ui/FormField';
 import { Modal } from '@/components/ui/Modal';
+import { sanitizePhone } from '@/lib/format';
 import { notify } from '@/lib/notifications';
 
 interface CustomerModalProps {
@@ -91,7 +92,9 @@ export function CustomerModal({ customer, readOnly, onClose, onChanged }: Custom
             <input
               className="input ev-control"
               value={phone}
-              onChange={(e) => setPhone(e.target.value)}
+              inputMode="tel"
+              maxLength={20}
+              onChange={(e) => setPhone(sanitizePhone(e.target.value))}
             />
           </FormField>
           <div className="ev-form-grid__full">

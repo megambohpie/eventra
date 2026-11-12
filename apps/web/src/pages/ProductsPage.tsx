@@ -5,6 +5,7 @@ import { listCategories, listProducts } from '@eventra/api-client';
 import type { ProductDto } from '@eventra/shared';
 import { api } from '@/api';
 import { useAuth } from '@/auth/AuthProvider';
+import { BundleModal } from '@/components/products/BundleModal';
 import { ProductModal } from '@/components/products/ProductModal';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -24,12 +25,14 @@ export function ProductsPage() {
   const [q, setQ] = useState('');
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<ProductDto | 'new' | null>(null);
+  const [bundleOf, setBundleOf] = useState<ProductDto | null>(null);
 
   const { data, loading, reload } = useResource(
     () => listProducts(api, { q: q || undefined, page, pageSize: PAGE_SIZE }),
     `${q}|${page}`,
   );
   const categories = useResource(() => listCategories(api), 'categories');
+  const allProducts = useResource(() => listProducts(api, { pageSize: 100 }), 'all-products');
 
   return (
     <>
@@ -95,6 +98,9 @@ export function ProductsPage() {
                       </Badge>
                     </td>
                     <td className="ev-table__actions">
+                      <Button size="sm" variant="ghost" onClick={() => setBundleOf(product)}>
+                        {t('products.bundle.action')}
+                      </Button>
                       <Button size="sm" variant="ghost" onClick={() => setSelected(product)}>
                         {canWrite ? t('common.edit') : t('common.view')}
                       </Button>
@@ -117,6 +123,15 @@ export function ProductsPage() {
         )}
       </PageCard>
 
+      {bundleOf && (
+        <BundleModal
+          key={bundleOf.id}
+          product={bundleOf}
+          candidates={(allProducts.data?.items ?? []).filter((p) => p.active)}
+          readOnly={!canWrite}
+          onClose={() => setBundleOf(null)}
+        />
+      )}
       {selected && categories.data && (
         <ProductModal
           key={selected === 'new' ? 'new' : selected.id}

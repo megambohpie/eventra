@@ -24,6 +24,10 @@ export const CAPABILITIES = [
   'asset.status',
   'receipt.read',
   'receipt.write',
+  'order.read',
+  'order.write',
+  'order.approve',
+  'availability.read',
 ] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 
@@ -35,18 +39,25 @@ const READ_ALL: Capability[] = [
   'asset.read',
   'asset.cost.read',
   'receipt.read',
+  'order.read',
+  'availability.read',
 ];
 
 export const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
   OWNER: READ_ALL,
   ADMIN: [...CAPABILITIES],
   OPS_COORDINATOR: [
+    // user.read: koordinator menunjuk PIC internal pada pesanan.
+    'user.read',
     'customer.read',
     'product.read',
     'master.read',
     'asset.read',
     'asset.status',
     'receipt.read',
+    'order.read',
+    'order.write',
+    'availability.read',
   ],
   WAREHOUSE: [
     'product.read',
@@ -55,6 +66,8 @@ export const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
     'asset.status',
     'receipt.read',
     'receipt.write',
+    'order.read',
+    'availability.read',
   ],
   FIELD_PIC: [],
   CUSTOMER: [],

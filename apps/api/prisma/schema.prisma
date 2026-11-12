@@ -61,6 +61,9 @@ model User {
   passwordResetTokens PasswordResetToken[]
   assetEvents         AssetStatusEvent[]
   receipts            StockReceipt[]
+  picUsers            OrderPic[]         @relation("PicUser")
+  picApprovals        OrderPic[]         @relation("PicApprover")
+  orderEvents         OrderStatusEvent[]
 
   @@map("users")
 }
@@ -104,6 +107,7 @@ model Customer {
   createdBy        String?      @map("created_by") @db.Uuid
   createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt        DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+  orders           Order[]
 
   @@index([name])
   @@map("customers")
@@ -152,6 +156,10 @@ model Product {
   category     Category           @relation(fields: [categoryId], references: [id])
   assets       Asset[]
   receiptItems StockReceiptItem[]
+  bundleOf     ProductBundle[]    @relation("BundleProduct")
+  usedIn       ProductBundle[]    @relation("BundleComponent")
+  orderItems   OrderItem[]
+  allocations  StockAllocation[]
 
   @@index([categoryId])
   @@map("products")
@@ -303,4 +311,182 @@ model StockReceiptItem {
 
   @@index([receiptId])
   @@map("stock_receipt_items")
+}
+
+// ---------- Fase 03: paket, ketersediaan, pesanan ----------
+
+enum OrderStatus {
+  DRAFT
+  PENDING_REVIEW
+  QUOTED
+  AWAITING_PAYMENT
+  CONFIRMED
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  REJECTED
+  CANCELLED
+  EXPIRED
+  ISSUE
+}
+
+enum AllocationStatus {
+  HOLD
+  CONFIRMED
+  RELEASED
+}
+
+enum PicRole {
+  CUSTOMER_PIC
+  WAREHOUSE_OUT
+  WAREHOUSE_IN
+  FIELD
+}
+
+enum PicSource {
+  OWNER
+  CUSTOMER
+  THIRD_PARTY
+}
+
+// 1 satuan sewa `product` membutuhkan `quantity` aset fisik `component` (mis. 1 meter LED → 4 panel).
+// Produk tanpa baris di tabel ini dipenuhi oleh asetnya sendiri (rasio 1).
+model ProductBundle {
+  id                 String   @id @default(uuid()) @db.Uuid
+  productId          String   @map("product_id") @db.Uuid
+  componentProductId String   @map("component_product_id") @db.Uuid
+  quantity           Int
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  product   Product @relation("BundleProduct", fields: [productId], references: [id])
+  component Product @relation("BundleComponent", fields: [componentProductId], references: [id])
+
+  @@unique([productId, componentProductId])
+  @@index([componentProductId])
+  @@map("product_bundles")
+}
+
+model Order {
+  id            String      @id @default(uuid()) @db.Uuid
+  number        String      @unique
+  customerId    String      @map("customer_id") @db.Uuid
+  status        OrderStatus @default(DRAFT)
+  startDate     DateTime    @map("start_date") @db.Date
+  endDate       DateTime    @map("end_date") @db.Date
+  eventLocation String      @map("event_location")
+  note          String?
+  subtotal      BigInt      @default(0)
+  depositTotal  BigInt      @default(0) @map("deposit_total")
+  holdExpiresAt DateTime?   @map("hold_expires_at") @db.Timestamptz(3)
+  confirmedAt   DateTime?   @map("confirmed_at") @db.Timestamptz(3)
+  createdBy     String?     @map("created_by") @db.Uuid
+  createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  customer    Customer           @relation(fields: [customerId], references: [id])
+  items       OrderItem[]
+  quotes      OrderQuote[]
+  allocations StockAllocation[]
+  pics        OrderPic[]
+  events      OrderStatusEvent[]
+
+  @@index([customerId])
+  @@index([status])
+  @@index([startDate, endDate])
+  @@map("orders")
+}
+
+model OrderItem {
+  id          String @id @default(uuid()) @db.Uuid
+  orderId     String @map("order_id") @db.Uuid
+  productId   String @map("product_id") @db.Uuid
+  quantity    Int
+  unitPrice   BigInt @map("unit_price")
+  unitDeposit BigInt @default(0) @map("unit_deposit")
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@unique([orderId, productId])
+  @@map("order_items")
+}
+
+// Append-only: setiap penawaran adalah versi baru.
+model OrderQuote {
+  id           String   @id @default(uuid()) @db.Uuid
+  orderId      String   @map("order_id") @db.Uuid
+  version      Int
+  subtotal     BigInt
+  depositTotal BigInt   @map("deposit_total")
+  note         String?
+  snapshot     Json
+  createdBy    String?  @map("created_by") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@unique([orderId, version])
+  @@map("order_quotes")
+}
+
+// Append-only: alokasi tidak dihapus; pelepasan = status RELEASED. `productId` adalah produk pemenuhan
+// (komponen fisik). Unik per (order, produk, tanggal) selama belum RELEASED (indeks parsial di migrasi).
+model StockAllocation {
+  id         String           @id @default(uuid()) @db.Uuid
+  orderId    String           @map("order_id") @db.Uuid
+  productId  String           @map("product_id") @db.Uuid
+  date       DateTime         @db.Date
+  quantity   Int
+  status     AllocationStatus
+  expiresAt  DateTime?        @map("expires_at") @db.Timestamptz(3)
+  releasedAt DateTime?        @map("released_at") @db.Timestamptz(3)
+  createdAt  DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  order   Order   @relation(fields: [orderId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([productId, date, status])
+  @@index([orderId])
+  @@map("stock_allocations")
+}
+
+model OrderPic {
+  id            String    @id @default(uuid()) @db.Uuid
+  orderId       String    @map("order_id") @db.Uuid
+  role          PicRole
+  source        PicSource
+  userId        String?   @map("user_id") @db.Uuid
+  name          String
+  phone         String?
+  organization  String?
+  authorization String?
+  approvedById  String?   @map("approved_by_id") @db.Uuid
+  approvedAt    DateTime? @map("approved_at") @db.Timestamptz(3)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  order      Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  user       User? @relation("PicUser", fields: [userId], references: [id])
+  approvedBy User? @relation("PicApprover", fields: [approvedById], references: [id])
+
+  @@index([orderId])
+  @@map("order_pics")
+}
+
+// Append-only: riwayat status pesanan beserta pelaku (FR-04).
+model OrderStatusEvent {
+  id         String       @id @default(uuid()) @db.Uuid
+  orderId    String       @map("order_id") @db.Uuid
+  fromStatus OrderStatus? @map("from_status")
+  toStatus   OrderStatus  @map("to_status")
+  note       String?
+  actorId    String?      @map("actor_id") @db.Uuid
+  createdAt  DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  order Order @relation(fields: [orderId], references: [id])
+  actor User? @relation(fields: [actorId], references: [id])
+
+  @@index([orderId, createdAt])
+  @@map("order_status_events")
 }

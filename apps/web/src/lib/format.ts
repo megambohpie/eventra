@@ -14,3 +14,7 @@ const dateTime = new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeSty
 export const formatDate = (value: string): string => dateOnly.format(new Date(value));
 /** Waktu kejadian (ISO timestamp) pada zona waktu perangkat. */
 export const formatDateTime = (value: string): string => dateTime.format(new Date(value));
+
+/** Sisakan angka saja untuk input telepon; tanda + hanya boleh di awal. */
+export const sanitizePhone = (value: string): string =>
+  value.replace(/[^\d+]/g, '').replace(/(?!^)\+/g, '');
