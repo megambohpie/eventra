@@ -61,9 +61,10 @@ model User {
   passwordResetTokens PasswordResetToken[]
   assetEvents         AssetStatusEvent[]
   receipts            StockReceipt[]
-  picUsers            OrderPic[]         @relation("PicUser")
-  picApprovals        OrderPic[]         @relation("PicApprover")
+  picUsers            OrderPic[]           @relation("PicUser")
+  picApprovals        OrderPic[]           @relation("PicApprover")
   orderEvents         OrderStatusEvent[]
+  scanEvents          ScanEvent[]
 
   @@map("users")
 }
@@ -141,25 +142,27 @@ model Location {
 
 // Nominal rupiah disimpan sebagai integer.
 model Product {
-  id           String             @id @default(uuid()) @db.Uuid
-  name         String
-  sku          String?            @unique
-  categoryId   String             @map("category_id") @db.Uuid
-  pricingUnit  PricingUnit        @map("pricing_unit")
-  unitLabel    String             @map("unit_label")
-  price        BigInt
-  deposit      BigInt             @default(0)
-  active       Boolean            @default(true)
-  createdBy    String?            @map("created_by") @db.Uuid
-  createdAt    DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt    DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
-  category     Category           @relation(fields: [categoryId], references: [id])
-  assets       Asset[]
-  receiptItems StockReceiptItem[]
-  bundleOf     ProductBundle[]    @relation("BundleProduct")
-  usedIn       ProductBundle[]    @relation("BundleComponent")
-  orderItems   OrderItem[]
-  allocations  StockAllocation[]
+  id            String             @id @default(uuid()) @db.Uuid
+  name          String
+  sku           String?            @unique
+  categoryId    String             @map("category_id") @db.Uuid
+  pricingUnit   PricingUnit        @map("pricing_unit")
+  unitLabel     String             @map("unit_label")
+  price         BigInt
+  deposit       BigInt             @default(0)
+  active        Boolean            @default(true)
+  createdBy     String?            @map("created_by") @db.Uuid
+  createdAt     DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+  category      Category           @relation(fields: [categoryId], references: [id])
+  assets        Asset[]
+  receiptItems  StockReceiptItem[]
+  bundleOf      ProductBundle[]    @relation("BundleProduct")
+  usedIn        ProductBundle[]    @relation("BundleComponent")
+  orderItems    OrderItem[]
+  allocations   StockAllocation[]
+  pickListLines PickListLine[]
+  pickListItems PickListItem[]
 
   @@index([categoryId])
   @@map("products")
@@ -233,10 +236,12 @@ model Asset {
   createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt     DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  product  Product            @relation(fields: [productId], references: [id])
-  location Location?          @relation(fields: [locationId], references: [id])
-  receipt  StockReceipt?      @relation(fields: [receiptId], references: [id])
-  events   AssetStatusEvent[]
+  product       Product            @relation(fields: [productId], references: [id])
+  location      Location?          @relation(fields: [locationId], references: [id])
+  receipt       StockReceipt?      @relation(fields: [receiptId], references: [id])
+  events        AssetStatusEvent[]
+  pickListItems PickListItem[]
+  scanEvents    ScanEvent[]
 
   @@unique([productId, serial])
   @@index([productId])
@@ -384,12 +389,14 @@ model Order {
   createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt     DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  customer    Customer           @relation(fields: [customerId], references: [id])
-  items       OrderItem[]
-  quotes      OrderQuote[]
-  allocations StockAllocation[]
-  pics        OrderPic[]
-  events      OrderStatusEvent[]
+  customer          Customer           @relation(fields: [customerId], references: [id])
+  items             OrderItem[]
+  quotes            OrderQuote[]
+  allocations       StockAllocation[]
+  pics              OrderPic[]
+  events            OrderStatusEvent[]
+  pickLists         PickList[]
+  handoverDocuments HandoverDocument[]
 
   @@index([customerId])
   @@index([status])
@@ -489,4 +496,195 @@ model OrderStatusEvent {
 
   @@index([orderId, createdAt])
   @@map("order_status_events")
+}
+
+// ---------- Fase 04: gudang, scan, dokumen serah-terima ----------
+
+enum PickListStatus {
+  OPEN
+  VERIFIED
+  DISPATCHED
+  RETURNED
+  RETURN_ISSUE
+  CANCELLED
+}
+
+enum PickItemStatus {
+  PICKED
+  VERIFIED
+  DISPATCHED
+  RETURNED
+  MISSING
+  REMOVED
+}
+
+enum ScanAction {
+  PICK
+  UNPICK
+  VERIFY
+  CHECKOUT
+  RETURN
+  RETURN_MISSING
+}
+
+enum ScanResult {
+  OK
+  REJECTED
+}
+
+enum ScanMethod {
+  QR
+  MANUAL
+}
+
+enum HandoverType {
+  OUT
+  RETURN
+}
+
+enum SignerRole {
+  WAREHOUSE
+  COUNTERPART
+}
+
+// Satu pick list aktif per pesanan (indeks parsial di migrasi). Kebutuhan fisik = `lines`.
+model PickList {
+  id           String         @id @default(uuid()) @db.Uuid
+  number       String         @unique
+  orderId      String         @map("order_id") @db.Uuid
+  status       PickListStatus @default(OPEN)
+  dispatchedAt DateTime?      @map("dispatched_at") @db.Timestamptz(3)
+  returnedAt   DateTime?      @map("returned_at") @db.Timestamptz(3)
+  createdBy    String?        @map("created_by") @db.Uuid
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  order     Order              @relation(fields: [orderId], references: [id])
+  lines     PickListLine[]
+  items     PickListItem[]
+  scans     ScanEvent[]
+  documents HandoverDocument[]
+
+  @@index([orderId])
+  @@index([status])
+  @@map("pick_lists")
+}
+
+// Kebutuhan fisik per produk pemenuhan (hasil konversi paket saat pick list dibuat).
+model PickListLine {
+  id         String @id @default(uuid()) @db.Uuid
+  pickListId String @map("pick_list_id") @db.Uuid
+  productId  String @map("product_id") @db.Uuid
+  quantity   Int
+
+  pickList PickList @relation(fields: [pickListId], references: [id], onDelete: Cascade)
+  product  Product  @relation(fields: [productId], references: [id])
+
+  @@unique([pickListId, productId])
+  @@map("pick_list_lines")
+}
+
+// Aset terpilih. Baris tidak dihapus: pelepasan = status REMOVED.
+model PickListItem {
+  id                String          @id @default(uuid()) @db.Uuid
+  pickListId        String          @map("pick_list_id") @db.Uuid
+  assetId           String          @map("asset_id") @db.Uuid
+  productId         String          @map("product_id") @db.Uuid
+  status            PickItemStatus  @default(PICKED)
+  pickedAt          DateTime        @default(now()) @map("picked_at") @db.Timestamptz(3)
+  verifiedAt        DateTime?       @map("verified_at") @db.Timestamptz(3)
+  dispatchedAt      DateTime?       @map("dispatched_at") @db.Timestamptz(3)
+  dispatchCondition AssetCondition? @map("dispatch_condition")
+  returnedAt        DateTime?       @map("returned_at") @db.Timestamptz(3)
+  returnCondition   AssetCondition? @map("return_condition")
+  returnNote        String?         @map("return_note")
+
+  pickList PickList    @relation(fields: [pickListId], references: [id], onDelete: Cascade)
+  asset    Asset       @relation(fields: [assetId], references: [id])
+  product  Product     @relation(fields: [productId], references: [id])
+  photos   ScanPhoto[]
+
+  @@index([pickListId])
+  @@index([assetId])
+  @@map("pick_list_items")
+}
+
+// Append-only: setiap scan (berhasil maupun ditolak) tercatat beserta pelaksananya.
+model ScanEvent {
+  id         String          @id @default(uuid()) @db.Uuid
+  action     ScanAction
+  result     ScanResult
+  method     ScanMethod
+  reason     String?
+  pickListId String?         @map("pick_list_id") @db.Uuid
+  orderId    String?         @map("order_id") @db.Uuid
+  assetId    String?         @map("asset_id") @db.Uuid
+  condition  AssetCondition?
+  note       String?
+  actorId    String?         @map("actor_id") @db.Uuid
+  createdAt  DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  pickList PickList? @relation(fields: [pickListId], references: [id])
+  asset    Asset?    @relation(fields: [assetId], references: [id])
+  actor    User?     @relation(fields: [actorId], references: [id])
+
+  @@index([pickListId, createdAt])
+  @@index([assetId, createdAt])
+  @@map("scan_events")
+}
+
+// Foto bukti kondisi saat pengembalian (maks. 5 per item, ditegakkan backend).
+model ScanPhoto {
+  id        String   @id @default(uuid()) @db.Uuid
+  itemId    String   @map("item_id") @db.Uuid
+  mimeType  String   @map("mime_type")
+  data      Bytes
+  createdBy String?  @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  item PickListItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([itemId])
+  @@map("scan_photos")
+}
+
+// Immutable: tidak pernah diubah setelah dibuat. Revisi = baris baru (version+1, nomor sama).
+model HandoverDocument {
+  id             String       @id @default(uuid()) @db.Uuid
+  number         String
+  version        Int          @default(1)
+  type           HandoverType
+  orderId        String       @map("order_id") @db.Uuid
+  pickListId     String       @map("pick_list_id") @db.Uuid
+  payload        Json
+  revisionReason String?      @map("revision_reason")
+  createdBy      String?      @map("created_by") @db.Uuid
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  order      Order               @relation(fields: [orderId], references: [id])
+  pickList   PickList            @relation(fields: [pickListId], references: [id])
+  signatures DocumentSignature[]
+
+  @@unique([number, version])
+  @@index([orderId, type])
+  @@index([pickListId])
+  @@map("handover_documents")
+}
+
+// Append-only: satu tanda tangan per peran per dokumen.
+model DocumentSignature {
+  id         String     @id @default(uuid()) @db.Uuid
+  documentId String     @map("document_id") @db.Uuid
+  role       SignerRole
+  picId      String?    @map("pic_id") @db.Uuid
+  signerName String     @map("signer_name")
+  signerRole String     @map("signer_role")
+  image      Bytes
+  signedBy   String?    @map("signed_by") @db.Uuid
+  signedAt   DateTime   @default(now()) @map("signed_at") @db.Timestamptz(3)
+
+  document HandoverDocument @relation(fields: [documentId], references: [id])
+
+  @@unique([documentId, role])
+  @@map("document_signatures")
 }

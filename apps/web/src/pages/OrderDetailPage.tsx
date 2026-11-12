@@ -186,6 +186,12 @@ export function OrderDetailPage() {
               {t('orders.actions.confirm')}
             </Button>
           )}
+          {can('warehouse.read') &&
+            ['CONFIRMED', 'SCHEDULED', 'IN_PROGRESS', 'ISSUE', 'COMPLETED'].includes(s) && (
+              <Link className="btn btn-secondary btn-sm" to={`/warehouse?q=${order.number}`}>
+                {t('orders.actions.warehouse')}
+              </Link>
+            )}
           {canWrite && s === 'CONFIRMED' && (
             <Button
               size="sm"

@@ -9,8 +9,10 @@ import { CalendarPage } from './pages/CalendarPage';
 import { MasterPage } from './pages/MasterPage';
 import { OrderDetailPage } from './pages/OrderDetailPage';
 import { OrdersPage } from './pages/OrdersPage';
+import { PickListDetailPage } from './pages/PickListDetailPage';
 import { ProductsPage } from './pages/ProductsPage';
 import { ReceiptsPage } from './pages/ReceiptsPage';
+import { WarehousePage } from './pages/WarehousePage';
 import { ForgotPasswordPage } from './pages/auth/ForgotPasswordPage';
 import { LoginPage } from './pages/auth/LoginPage';
 import { ResetPasswordPage } from './pages/auth/ResetPasswordPage';
@@ -41,6 +43,10 @@ export function App() {
             <Route path="orders" element={<OrdersPage />} />
             <Route path="orders/:id" element={<OrderDetailPage />} />
             <Route path="calendar" element={<CalendarPage />} />
+          </Route>
+          <Route element={<RequireCapability capability="warehouse.read" />}>
+            <Route path="warehouse" element={<WarehousePage />} />
+            <Route path="warehouse/pick-lists/:id" element={<PickListDetailPage />} />
           </Route>
           <Route element={<RequireCapability capability="master.read" />}>
             <Route path="master" element={<MasterPage />} />

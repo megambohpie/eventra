@@ -55,6 +55,14 @@ export const errorHandler: ErrorRequestHandler = (err: unknown, _req, res, _next
     typeof err === 'object' &&
     err !== null &&
     'type' in err &&
+    (err as { type: unknown }).type === 'entity.too.large'
+  ) {
+    status = 413;
+    body = { error: { code: 'PAYLOAD_TOO_LARGE', message: 'Ukuran berkas terlalu besar' } };
+  } else if (
+    typeof err === 'object' &&
+    err !== null &&
+    'type' in err &&
     (err as { type: unknown }).type === 'entity.parse.failed'
   ) {
     status = 400;

@@ -263,4 +263,41 @@
   .ev-calendar__list {
     @apply list-disc pl-5 text-sm;
   }
+  /* ---------- Gudang, scan, dokumen serah-terima ---------- */
+  .ev-badges {
+    @apply flex flex-wrap items-center gap-1;
+  }
+  .ev-actions {
+    @apply flex flex-wrap items-center justify-end gap-1;
+  }
+  .ev-table__hint--block {
+    @apply ml-0 block;
+  }
+  .ev-progress-cell {
+    @apply min-w-24;
+  }
+  .ev-scan__mode {
+    @apply w-full sm:w-auto;
+  }
+  .ev-scan__mode .join-item {
+    @apply flex-1 sm:flex-none;
+  }
+  .ev-scan__form {
+    @apply grid items-end gap-2 sm:grid-cols-[1fr_auto];
+  }
+  .ev-table__row[data-rejected='true'] {
+    @apply bg-error/10;
+  }
+  .ev-thumbs {
+    @apply flex flex-wrap items-center justify-end gap-1;
+  }
+  .ev-thumb {
+    @apply size-10 rounded-lg border border-base-300 object-cover;
+  }
+  .ev-signature {
+    @apply grid gap-2;
+  }
+  .ev-signature__canvas {
+    @apply aspect-[600/220] w-full touch-none rounded-xl border border-base-300 bg-white;
+  }
 }

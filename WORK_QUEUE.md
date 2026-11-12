@@ -10,7 +10,7 @@
 | 01 | Done | Auth, RBAC, master data |
 | 02 | Done | Aset dan QR lifecycle |
 | 03 | Done | Ketersediaan, paket, pesanan |
-| 04 | Todo | Gudang, scan, dan PDF |
+| 04 | Done | Gudang, scan, dan PDF |
 | 05 | Todo | Insiden, servis, penggantian |
 | 06 | Todo | Dashboard owner dan keuangan |
 | 07 | Todo | Mobile operasional |
@@ -73,12 +73,14 @@
 
 ## Fase 04 — Gudang, Scan, dan Dokumen Serah-Terima
 
-- [ ] Schema pick list, item aset, scan event, handover document, dan signature.
-- [ ] Gudang memilih aset spesifik untuk pesanan dan scan saat persiapan.
-- [ ] Verifikasi scan akhir sebelum keluar; blokir bila tidak sesuai pick list.
-- [ ] Scan pengembalian, kondisi/foto, selisih, serta transisi aset.
-- [ ] Buat PDF surat jalan/berita acara keluar dan kembali, nomor unik, cetak, dan tanda tangan PIC.
-- [ ] Dokumen immutable setelah ditandatangani; revisi memakai berita acara/versi baru.
+- [x] Schema pick list, item aset, scan event, handover document, dan signature.
+- [x] Gudang memilih aset spesifik untuk pesanan dan scan saat persiapan.
+- [x] Verifikasi scan akhir sebelum keluar; blokir bila tidak sesuai pick list.
+- [x] Scan pengembalian, kondisi/foto, selisih, serta transisi aset.
+- [x] Buat PDF surat jalan/berita acara keluar dan kembali, nomor unik, cetak, dan tanda tangan PIC.
+- [x] Dokumen immutable setelah ditandatangani; revisi memakai berita acara/versi baru.
+
+- [x] Tambahan di luar daftar: pick list per pesanan (kebutuhan fisik dari konversi paket), scan pilih (QR/kode aset manual) lalu verifikasi akhir wajib QR; checkout memblokir bila tidak sesuai pick list dan hanya dari pesanan SCHEDULED; scan pengembalian dengan kondisi, catatan, lokasi, dan 1–5 foto; selisih ditandai MISSING (aset ISSUE_ON_SITE, tidak bisa dialokasikan) dengan konfirmasi eksplisit; scan terlambat + revisi berita acara; tanda tangan PIC (canvas PNG) pada dokumen; revisi = versi baru bernomor sama; trigger DB melarang ubah/hapus scan event, dokumen, dan tanda tangan; pembatalan pesanan melepas aset terpilih; capability baru `warehouse.read/write` dan `handover.sign`; UI `/warehouse` dan `/warehouse/pick-lists/:id`.
 
 **Selesai bila:** scan salah/kurang memblokir serah-terima; PDF berisi asset code, kondisi, waktu, dan penandatangan; semua aktivitas memiliki audit log.
 

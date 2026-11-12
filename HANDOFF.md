@@ -3,7 +3,7 @@
 Dokumen ini adalah sumber ringkas keadaan proyek untuk manusia, Codex, Claude Code, atau agen lain. Baca sebelum implementasi agar pekerjaan tidak diulang.
 
 **Terakhir diperbarui:** 12 November 2026  
-**Status:** Fase 00–03 (termasuk paket, ketersediaan, pesanan) selesai dan terverifikasi; Fase 04 belum dimulai dan menunggu persetujuan owner.
+**Status:** Fase 00–04 (termasuk gudang, scan, dan dokumen serah-terima) selesai dan terverifikasi; Fase 05 belum dimulai dan menunggu persetujuan owner.
 
 ## Urutan baca
 
@@ -68,6 +68,27 @@ Dokumen ini adalah sumber ringkas keadaan proyek untuk manusia, Codex, Claude Co
 | RBAC | Owner baca saja; Admin penuh; Koordinator: order.read/write + availability (tanpa approve); Gudang: baca. |
 | Web | `/orders`, `/orders/:id`, `/calendar`, modal Komposisi di `/products`. |
 
+## Fase 04 — yang ada sekarang
+
+| Area | Fakta |
+| --- | --- |
+| Schema | Migrasi `20261112010820_warehouse_scan_handover` (aditif): `pick_lists`, `pick_list_lines`, `pick_list_items`, `scan_events`, `scan_photos`, `handover_documents`, `document_signatures` + enum; sequence `pick_list_number_seq`, `handover_out_number_seq`, `handover_return_number_seq`. Indeks unik parsial: satu pick list non-batal per pesanan; satu aset hanya di satu item aktif (PICKED/VERIFIED/DISPATCHED/MISSING). Trigger `forbid_mutation` melarang UPDATE/DELETE pada `scan_events`, `handover_documents`, `document_signatures`. Rollback = drop tabel/sequence/enum/fungsi tersebut. |
+| Alur keluar | Pick list (`PKL-YYYY-######`) dibuat dari pesanan CONFIRMED/SCHEDULED; kebutuhan = konversi paket. `POST /pick-lists/:id/scan`: `PICK` (QR atau kode aset manual; aset AVAILABLE→RESERVED) lalu `VERIFY` (wajib QR; RESERVED→PREPARED). Semua terverifikasi → pick list VERIFIED. `POST /pick-lists/:id/checkout` hanya bila VERIFIED, pesanan SCHEDULED, dan aset masih PREPARED/tidak rusak: aset→CHECKED_OUT, pesanan→IN_PROGRESS, dokumen `SJ-YYYY-######` v1 dibuat. |
+| Penolakan scan | Scan salah (QR tak dikenal, bukan produk dibutuhkan, kuantitas penuh, aset rusak/tidak tersedia, di luar pick list, sudah diverifikasi/dikembalikan) → 409/404 `SCAN_*`, dicatat sebagai `scan_events` REJECTED + audit `scan.rejected` di luar transaksi yang dibatalkan. |
+| Alur kembali | `POST /pick-lists/:id/return/scan` (QR, kondisi, catatan, lokasi opsional): aset→AVAILABLE, atau QUARANTINED bila DAMAGED. Foto kondisi: `POST /pick-lists/:id/items/:itemId/photos` (body mentah JPEG/PNG, maks 3 MB, maks 5 per aset, magic bytes divalidasi, disimpan sebagai bytea). `POST /pick-lists/:id/return/complete`: item belum discan wajib dikonfirmasi (`acceptMissing`) → MISSING dan aset ISSUE_ON_SITE (tidak bisa dialokasikan); pesanan COMPLETED, atau ISSUE bila ada selisih; dokumen `BAR-YYYY-######`. Scan terlambat untuk item MISSING diterima; panggil `complete` lagi → berita acara versi baru dan ISSUE→COMPLETED. |
+| Dokumen | `payload` JSON snapshot dibekukan saat dibuat; PDF (pdfkit) dirender dari snapshot + tanda tangan tersimpan (`GET /handover-documents/:id/pdf`). Tanda tangan = baris append-only (`POST .../sign`, PNG ≤200 KB, peran WAREHOUSE/COUNTERPART, PIC harus PIC pesanan dengan peran yang sesuai). Revisi (`POST .../revise` dengan alasan) = baris baru nomor sama versi+1; hanya versi terbaru yang bisa ditandatangani/direvisi. |
+| Pembatalan | Membatalkan pesanan melepas aset di pick list OPEN/VERIFIED (aset→AVAILABLE) dan membatalkan pick list; kunci urutan pick list→pesanan sama dengan scan (bebas deadlock). |
+| RBAC | Capability baru `warehouse.read` (Owner, Admin, Koordinator, Gudang), `warehouse.write` dan `handover.sign` (Admin, Gudang). FIELD_PIC belum punya akses (Fase 05/07). |
+| Web | `/warehouse` (daftar + buat pick list), `/warehouse/pick-lists/:id` (scan pilih/verifikasi, checkout, scan kembali + foto, dokumen: unduh/cetak/tanda tangan canvas/revisi, log scan), tombol Gudang di detail pesanan, `SignaturePad` di `components/ui`. |
+
+## Asumsi Fase 04
+
+- Rute `/warehouse/check-out` dan `/warehouse/returns` pada spec digabung ke `/warehouse/pick-lists/:id`; endpoint `/handover/checkout|return` menjadi `/pick-lists/:id/checkout` dan `/return/*`.
+- Tidak ada object storage: foto kondisi dan tanda tangan disimpan sebagai bytea di PostgreSQL; PDF dirender on-demand dari snapshot immutable (bukan berkas tersimpan). Pindah ke S3 bisa dilakukan di Fase 08.
+- Scan pra-pengembalian oleh PIC lapangan dan status IN_TRANSIT/ON_SITE/RETURN_PENDING belum dipakai (menunggu akses PIC lapangan Fase 05/07); scan kembali menerima aset CHECKED_OUT/IN_TRANSIT/ON_SITE/RETURN_PENDING/ISSUE_ON_SITE.
+- Alokasi stok per tanggal tidak dilepas lebih awal saat pengembalian lebih cepat dari tanggal selesai.
+- Scan lewat kamera web belum ada; web memakai input teks (pemindai hardware/keyboard-wedge). Kamera masuk Fase 07 (mobile).
+
 ## Asumsi bisnis Fase 03 (konfirmasi owner)
 
 - Harga sewa = harga × jumlah × hari (hari mulai dan selesai dihitung); deposit tidak dikali hari.
@@ -99,20 +120,20 @@ pnpm.cmd dev:web -- --host 127.0.0.1 --port 5173 --strictPort
 - Jika PowerShell menolak `pnpm.ps1`, gunakan `pnpm.cmd`.
 - Backend TSX pernah gagal dalam sandbox karena akses profil OS; menjalankan development server di luar sandbox berhasil.
 
-## Verifikasi terakhir (Fase 03, 12 November 2026)
+## Verifikasi terakhir (Fase 04, 12 November 2026)
 
 | Perintah | Hasil |
 | --- | --- |
 | `eslint .` / `prettier --check .` | Lulus |
-| `tsc` di api, web, mobile, shared, api-client | Lulus |
-| Test shared / api / api-client / web | Lulus: 12 / 52 / 6 / 13 (api termasuk 13 test Fase 03 + konkurensi) |
+| `tsc` di api, web, shared, api-client (mobile cache hit) | Lulus |
+| Test shared / api / api-client / web | Lulus: 12 / 60 / 6 / 13 (api termasuk 8 test Fase 04: RBAC, paket, scan salah/kurang, lepas & batal pesanan, konkurensi aset yang sama, keluar→dokumen→tanda tangan→revisi→immutability, kembali/selisih/foto/scan terlambat, checkout butuh SCHEDULED) |
 | `vite build` web dan `tsup` api | Lulus; peringatan bundle >500 kB belum blocker |
 
-**Belum terverifikasi penuh:** (1) `pnpm check` utuh gagal hanya di langkah `prisma generate` (EPERM) bila server dev API berjalan; Prisma client sudah ter-generate dan semua tahap lain dijalankan terpisah dan hijau. Hentikan `pnpm dev:api` sebelum menjalankan `pnpm check`. (2) Tampilan halaman Fase 02–03 belum diperiksa visual di browser (ponsel ≈360 px dan desktop). (3) Server dev API dihentikan saat verifikasi; jalankan ulang `pnpm dev:api`.
+**Belum terverifikasi penuh:** (1) `pnpm check` utuh gagal hanya di `prisma generate` (EPERM) karena server dev API berjalan; Prisma client sudah ter-generate dan semua tahap lain dijalankan terpisah dan hijau. Hentikan `pnpm dev:api` sebelum `pnpm check`. (2) Tampilan halaman Fase 02–04 dan hasil render PDF belum diperiksa visual di browser/penampil PDF (ponsel ≈360 px dan desktop); PDF hanya diperiksa struktur (header %PDF, jumlah halaman). (3) Jalankan `pnpm db:migrate` pada database dev bila belum (migrasi Fase 04 sudah diterapkan ke `eventra` dev saat pengerjaan).
 
 ## Pekerjaan berikutnya
 
-Ikuti `WORK_QUEUE.md`. Fase 04 (gudang, scan, PDF) dimulai hanya setelah owner menyetujui Fase 03; akan memakai alokasi `stock_allocations`, `order_pics` gudang, dan menggerakkan status aset RESERVED…RETURN_PENDING serta status pesanan IN_PROGRESS/COMPLETED. Mobile belum memakai login/auth (Fase 07).
+Ikuti `WORK_QUEUE.md`. Fase 05 (insiden, servis, penggantian) dimulai hanya setelah owner menyetujui Fase 04; akan memakai `scan_events`, pick list/dokumen Fase 04 untuk aset pengganti, dan status aset ISSUE_ON_SITE/IN_SERVICE. Mobile belum memakai login/auth (Fase 07).
 
 ## Catatan terbuka
 

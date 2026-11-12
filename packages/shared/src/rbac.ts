@@ -28,6 +28,9 @@ export const CAPABILITIES = [
   'order.write',
   'order.approve',
   'availability.read',
+  'warehouse.read',
+  'warehouse.write',
+  'handover.sign',
 ] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 
@@ -41,6 +44,7 @@ const READ_ALL: Capability[] = [
   'receipt.read',
   'order.read',
   'availability.read',
+  'warehouse.read',
 ];
 
 export const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
@@ -58,6 +62,7 @@ export const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
     'order.read',
     'order.write',
     'availability.read',
+    'warehouse.read',
   ],
   WAREHOUSE: [
     'product.read',
@@ -68,6 +73,9 @@ export const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
     'receipt.write',
     'order.read',
     'availability.read',
+    'warehouse.read',
+    'warehouse.write',
+    'handover.sign',
   ],
   FIELD_PIC: [],
   CUSTOMER: [],

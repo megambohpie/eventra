@@ -36,6 +36,7 @@ import {
   planItems,
   releaseAllocations,
 } from '../orders/availability';
+import { cancelPickList, lockOrderPickLists } from '../warehouse/service';
 import {
   claimTransition,
   computeTotals,
@@ -406,10 +407,19 @@ export function ordersRouter(db: PrismaClient): Router {
       ) {
         throw new HttpError(403, 'FORBIDDEN', 'Anda tidak memiliki izin untuk aksi ini');
       }
+      // Kunci pick list dulu (urutan kunci sama dengan scan) lalu lepas aset yang sudah dipilih.
+      await lockOrderPickLists(tx, id);
       const from = await claimTransition(tx, id, CANCELLABLE_ORDER_STATUSES, 'CANCELLED', {
         holdExpiresAt: null,
       });
       const released = await releaseAllocations(tx, id, new Date());
+      const activePicks = await tx.pickList.findMany({
+        where: { orderId: id, status: { in: ['OPEN', 'VERIFIED'] } },
+        select: { id: true },
+      });
+      for (const p of activePicks) {
+        await cancelPickList(tx, p.id, user.id, 'Pesanan dibatalkan');
+      }
       await recordStatus(tx, id, from, 'CANCELLED', user.id, note);
       await writeAudit(tx, req, {
         action: 'order.cancel',

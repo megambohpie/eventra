@@ -15,6 +15,7 @@ import { customersRouter } from './routes/customers';
 import { masterRouter } from './routes/master';
 import { productsRouter } from './routes/products';
 import { usersRouter } from './routes/users';
+import { warehouseRouter } from './routes/warehouse';
 
 export interface AppDeps {
   /** Mengembalikan true bila database dapat dijangkau. */
@@ -57,6 +58,7 @@ export function createApp({ checkDb, db, jwtSecret, mailer }: AppDeps): Express 
   protectedRouter.use(bundlesRouter(db));
   protectedRouter.use(availabilityRouter(db));
   protectedRouter.use(ordersRouter(db));
+  protectedRouter.use(warehouseRouter(db));
   v1.use(protectedRouter);
 
   app.use('/api/v1', v1);

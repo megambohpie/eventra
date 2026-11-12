@@ -4,3 +4,4 @@ export * from './auth';
 export * from './master';
 export * from './assets';
 export * from './orders';
+export * from './warehouse';

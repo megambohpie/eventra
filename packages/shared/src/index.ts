@@ -6,3 +6,4 @@ export * from './identity';
 export * from './master';
 export * from './assets';
 export * from './orders';
+export * from './warehouse';

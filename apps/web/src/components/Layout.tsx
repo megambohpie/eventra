@@ -9,6 +9,7 @@ import {
   mdiMapMarker,
   mdiPackageDown,
   mdiQrcode,
+  mdiWarehouse,
   mdiMenu,
   mdiMenuOpen,
 } from '@mdi/js';
@@ -45,6 +46,12 @@ const NAV_ITEMS: { to: string; labelKey: string; icon: string; capability?: Capa
   },
   { to: '/orders', labelKey: 'nav.orders', icon: mdiClipboardText, capability: 'order.read' },
   { to: '/calendar', labelKey: 'nav.calendar', icon: mdiCalendarMonth, capability: 'order.read' },
+  {
+    to: '/warehouse',
+    labelKey: 'nav.warehouse',
+    icon: mdiWarehouse,
+    capability: 'warehouse.read',
+  },
   { to: '/master', labelKey: 'nav.master', icon: mdiMapMarker, capability: 'master.read' },
 ];
 
