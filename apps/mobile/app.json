@@ -6,11 +6,29 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "android": {
-      "package": "id.eventra.mobile"
+      "package": "id.eventra.mobile",
+      "permissions": ["CAMERA"]
     },
     "ios": {
       "bundleIdentifier": "id.eventra.mobile"
     },
-    "plugins": ["expo-status-bar", "expo-image"]
+    "plugins": [
+      "expo-status-bar",
+      "expo-image",
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Eventra memakai kamera untuk memindai QR aset."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Eventra memakai kamera untuk memotret kondisi aset.",
+          "photosPermission": "Eventra mengakses foto untuk melampirkan bukti kondisi aset."
+        }
+      ]
+    ]
   }
 }

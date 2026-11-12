@@ -20,6 +20,7 @@ import type {
   ServiceTicketListQuery,
   ServiceTicketStartInput,
 } from '@eventra/shared';
+import { uploadBody, type UploadFile } from './upload';
 
 type Envelope<T> = { data: T };
 
@@ -32,9 +33,9 @@ export const getIncident = async (c: AxiosInstance, id: string) =>
 export const createIncident = async (c: AxiosInstance, input: IncidentCreateInput) =>
   (await c.post<Envelope<IncidentDto>>('/incidents', input)).data.data;
 /** Unggah foto (JPEG/PNG) sebagai body mentah; backend memvalidasi tipe, ukuran, dan batas 5. */
-export const uploadIncidentPhoto = async (c: AxiosInstance, id: string, file: Blob) =>
+export const uploadIncidentPhoto = async (c: AxiosInstance, id: string, file: UploadFile) =>
   (
-    await c.post<Envelope<IncidentDto>>(`/incidents/${id}/photos`, file, {
+    await c.post<Envelope<IncidentDto>>(`/incidents/${id}/photos`, uploadBody(file), {
       headers: { 'Content-Type': file.type },
     })
   ).data.data;

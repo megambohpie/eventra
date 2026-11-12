@@ -13,7 +13,7 @@
 | 04 | Done | Gudang, scan, dan PDF |
 | 05 | Done | Insiden, servis, penggantian |
 | 06 | Done | Dashboard owner dan keuangan |
-| 07 | Todo | Mobile operasional |
+| 07 | Done | Mobile operasional |
 | 08 | Todo | Hardening dan rilis |
 
 ## Definition of Ready untuk Setiap Item
@@ -110,10 +110,12 @@
 
 ## Fase 07 — Mobile Operasional
 
-- [ ] Login, daftar tugas, detail tugas, pemindai QR, dan offline/error state dasar.
-- [ ] Scan keluar/terima/kembali sesuai permission dan API yang sama dengan web.
-- [ ] Laporan insiden dengan foto 1–5 dan status tiket.
-- [ ] Konfirmasi penerimaan aset pengganti serta tampilan dokumen terkait.
+- [x] Login, daftar tugas, detail tugas, pemindai QR, dan offline/error state dasar.
+- [x] Scan keluar/terima/kembali sesuai permission dan API yang sama dengan web.
+- [x] Laporan insiden dengan foto 1–5 dan status tiket.
+- [x] Konfirmasi penerimaan aset pengganti serta tampilan dokumen terkait.
+
+- [x] Tambahan di luar daftar: sesi di Keychain/Keystore (`expo-secure-store`, hanya refresh token; access token di memori) dengan refresh otomatis lewat client Axios bersama; "tugas saya" diturunkan dari API yang ada (pick list aktif, tugas penggantian, insiden terbuka) menurut capability tanpa endpoint baru; pemindai kamera (`expo-camera`) dengan gerbang cooldown anti-scan ganda dan input kode aset manual hanya untuk aksi yang mengizinkan (verifikasi/pengembalian/terima wajib QR); alur gudang (pilih → verifikasi → checkout, scan kembali + kondisi + foto, selesaikan pengembalian dengan konfirmasi selisih); penyiapan/kirim aset pengganti dan terima oleh PIC lapangan; lapor insiden (scan → deskripsi → 1–5 foto via kamera/galeri → kirim; draft dapat dilanjutkan); layar dokumen serah-terima baca-saja; banner offline dan aksi tulis dinonaktifkan saat offline (scan harus tervalidasi server, tidak ada antrean offline); `api-client` menerima `UploadFile` (Blob web atau byte React Native).
 
 **Selesai bila:** skenario gudang dan PIC lapangan dapat menjalankan proses scan lengkap dari perangkat mobile uji.
 

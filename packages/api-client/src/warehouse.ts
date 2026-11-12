@@ -14,6 +14,7 @@ import type {
   ReturnScanInput,
   ScanOutcomeDto,
 } from '@eventra/shared';
+import { uploadBody, type UploadFile } from './upload';
 
 type Envelope<T> = { data: T };
 
@@ -44,11 +45,20 @@ export const completeReturn = async (
 ) => (await c.post<Envelope<PickListDto>>(`/pick-lists/${id}/return/complete`, input)).data.data;
 
 /** Unggah foto kondisi (JPEG/PNG) sebagai body mentah; backend memvalidasi tipe, ukuran, dan batas 5. */
-export const uploadReturnPhoto = async (c: AxiosInstance, id: string, itemId: string, file: Blob) =>
+export const uploadReturnPhoto = async (
+  c: AxiosInstance,
+  id: string,
+  itemId: string,
+  file: UploadFile,
+) =>
   (
-    await c.post<Envelope<ScanOutcomeDto>>(`/pick-lists/${id}/items/${itemId}/photos`, file, {
-      headers: { 'Content-Type': file.type },
-    })
+    await c.post<Envelope<ScanOutcomeDto>>(
+      `/pick-lists/${id}/items/${itemId}/photos`,
+      uploadBody(file),
+      {
+        headers: { 'Content-Type': file.type },
+      },
+    )
   ).data.data;
 export const getReturnPhoto = async (
   c: AxiosInstance,

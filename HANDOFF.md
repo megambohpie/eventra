@@ -3,7 +3,7 @@
 Dokumen ini adalah sumber ringkas keadaan proyek untuk manusia, Codex, Claude Code, atau agen lain. Baca sebelum implementasi agar pekerjaan tidak diulang.
 
 **Terakhir diperbarui:** 12 November 2026  
-**Status:** Fase 00–06 (termasuk dashboard owner, invoice/pembayaran, dan laporan keuangan) selesai dan terverifikasi otomatis; Fase 07 belum dimulai dan menunggu persetujuan owner.
+**Status:** Fase 00–07 selesai dan terverifikasi otomatis (Fase 07 = aplikasi mobile operasional). Aplikasi mobile belum dicoba di perangkat/emulator (hanya typecheck, test logika, dan bundling Android). Fase 08 (hardening dan rilis) belum dimulai dan menunggu persetujuan owner.
 
 ## Urutan baca
 
@@ -107,6 +107,28 @@ Dokumen ini adalah sumber ringkas keadaan proyek untuk manusia, Codex, Claude Co
 | RBAC | `finance.read` (Owner, Admin), `finance.write` (Admin), `dashboard.read` (Owner, Admin, Koordinator). Owner tetap baca saja. |
 | Web | `/dashboard`, `/invoices`, `/invoices/:id`, `/finance`; kartu metrik di detail aset; komponen baru `ui/StatTile`, `components/finance/*`, `orders/MovementList` (diekstrak dari Kalender). |
 
+## Fase 07 — yang ada sekarang
+
+| Area       | Fakta                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Stack      | Expo SDK 58 / React Native; tambahan `expo-camera`, `expo-image-picker`, `expo-secure-store`, `@react-native-community/netinfo`, `react-native-safe-area-context`. Tanpa react-navigation: navigasi tumpukan sederhana (`lib/navigation.ts`) + tombol Back Android. Semua HTTP lewat `@eventra/api-client` (Axios). Tidak ada perubahan backend/schema; `api-client` kini menerima `UploadFile` (Blob web atau byte RN). |
+| Struktur   | `apps/mobile/App.tsx` (root: restore sesi, tab Tugas/Insiden/Akun, tumpukan detail), `src/screens/*`, `src/ui.tsx` (komponen bersama bertoken tema), `Scanner.tsx`, `PhotoPicker.tsx`, `src/lib/*` (logika murni yang diuji: sesi, tugas, navigasi, QR, foto, label).                                                                                                                                  |
+| Sesi       | Login `/auth/login`; refresh token + profil di SecureStore, access token hanya di memori; 401 → refresh sekali-bersama → ulang; gagal → kembali ke login. Saat start profil/peran disegarkan lewat `/me` (offline: data tersimpan).                                                                                                                                                                     |
+| Tugas saya | Diturunkan di klien (`lib/tasks.ts`): pick list OPEN/VERIFIED/DISPATCHED/RETURN_ISSUE (`warehouse.read`), tugas penggantian (siapkan: `warehouse.read`; terima: `replacement.receive`), insiden DRAFT/terbuka (`incident.read`; API sudah membatasi PIC lapangan ke miliknya). Urut menurut urgensi.                                                                                                   |
+| Scan       | `Scanner` (kamera QR + cooldown 2 dtk per kode). Kode aset manual hanya untuk memilih aset/penggantian dan lapor insiden; verifikasi, pengembalian, dan terima pengganti wajib QR (sesuai API). Scan ditolak server tampil di pemindai dan tercatat `scan_events` seperti di web.                                                                                                                        |
+| Foto       | Kamera/galeri → base64 → byte (`lib/photos.ts`), divalidasi JPEG/PNG ≤ 3 MB sebelum unggah, kualitas 0.6; diunggah sebagai body mentah. Insiden 1–5 foto (draft → unggah → submit; gagal di tengah → draft dilanjutkan dari detail). Foto kondisi pengembalian per aset (maks. 5).                                                                                                                     |
+| Offline    | `OfflineBanner` (NetInfo); tombol aksi dinonaktifkan saat offline kecuali coba-lagi/keluar; tidak ada antrean offline karena scan harus divalidasi server (invarian stok/aset). Galat jaringan tampil sebagai ErrorState + coba lagi atau toast.                                                                                                                                                         |
+| RBAC       | Tombol mengikuti capability (`mobileAccess`): Gudang = scan/checkout/kembali/dokumen; PIC lapangan = lapor insiden + terima pengganti; Owner = lihat saja. API tetap sumber kebenaran.                                                                                                                                                                                                                 |
+| Dokumen    | Layar baca-saja snapshot (`/handover-documents/:id`) bagi pemegang `warehouse.read`. PDF, tanda tangan, dan revisi tetap di web.                                                                                                                                                                                                                                                                       |
+
+## Asumsi Fase 07
+
+- Mobile hanya berbahasa Indonesia (label di `src/lib/labels.ts`); i18n EN/ID belum diterapkan di mobile.
+- PIC lapangan tidak punya `warehouse.read`, sehingga tidak melihat dokumen serah-terima di mobile (RBAC tidak diperluas).
+- Foto insiden yang sudah terunggah hanya tampil sebagai jumlah (belum ada pratinjau blob).
+- Tanda tangan dokumen, notifikasi dalam aplikasi (lonceng), dan push notification belum ada di mobile.
+- Tidak ada test UI komponen React Native (tanpa test renderer); komponen diverifikasi lewat typecheck, lint, dan bundling.
+
 ## Asumsi Fase 06
 
 - Invoice satu per pesanan (bukan per termin); deposit ditagih di invoice yang sama dan dilacak terpisah (bukan pendapatan). Pengembalian deposit belum dimodelkan.
@@ -163,20 +185,20 @@ pnpm.cmd dev:web -- --host 127.0.0.1 --port 5173 --strictPort
 - Jika PowerShell menolak `pnpm.ps1`, gunakan `pnpm.cmd`.
 - Backend TSX pernah gagal dalam sandbox karena akses profil OS; menjalankan development server di luar sandbox berhasil.
 
-## Verifikasi terakhir (Fase 06, 12 November 2026)
+## Verifikasi terakhir (Fase 07, 12 November 2026)
 
 | Perintah | Hasil |
 | --- | --- |
 | `eslint .` / `prettier --check .` | Lulus |
 | `tsc` di api, web, shared, api-client | Lulus |
-| Test shared / api / api-client / web | Lulus: 22 / 74 / 6 / 13 (api termasuk 9 test Fase 06: RBAC, siklus invoice-pembayaran-void, batas bayar + konkurensi, trigger DB, pendapatan vs piutang vs terlambat, pengingat, dashboard + metrik aset) |
-| `vite build` web dan `tsup` api | Lulus; peringatan bundle >500 kB belum blocker |
+| Test shared / api / api-client / web / mobile | Lulus: 22 / 74 / 8 / 13 / 16 (mobile: sesi, tugas per peran, navigasi, QR, validasi foto; api-client: unggah byte RN) |
+| `vite build` web, `tsup` api, `expo export --platform android` mobile | Lulus; peringatan bundle web >500 kB belum blocker |
 
-**Belum terverifikasi penuh:** (1) `pnpm check` utuh belum dijalankan; tiap tahap dijalankan terpisah dan hijau. `prisma generate` gagal EPERM selama dev API berjalan (DLL engine terkunci) — client Prisma sudah ter-generate untuk tipe; hentikan dev API lalu `pnpm db:generate` bila engine perlu disegarkan. (2) Tampilan halaman Fase 02–06 dan PDF belum diperiksa visual di browser pada lebar ponsel ≈360 px dan desktop. (3) Jalankan `pnpm db:migrate` pada database dev bila belum (migrasi Fase 06 sudah diterapkan ke `eventra` dev).
+**Belum terverifikasi penuh:** (1) `pnpm check` utuh belum dijalankan; tiap tahap dijalankan terpisah dan hijau. `prisma generate` gagal EPERM selama dev API berjalan (DLL engine terkunci) — client Prisma sudah ter-generate untuk tipe; hentikan dev API lalu `pnpm db:generate` bila engine perlu disegarkan. (2) Tampilan halaman web Fase 02–06 dan PDF belum diperiksa visual di browser pada lebar ponsel ≈360 px dan desktop; aplikasi mobile Fase 07 belum dijalankan di perangkat/emulator (kamera QR, izin, unggah foto, tombol Back, banner offline belum diuji nyata — jalankan `pnpm dev:mobile` dengan `EXPO_PUBLIC_API_URL` menunjuk API yang dapat dijangkau perangkat). (3) Jalankan `pnpm db:migrate` pada database dev bila belum (migrasi Fase 06 sudah diterapkan ke `eventra` dev).
 
 ## Pekerjaan berikutnya
 
-Ikuti `WORK_QUEUE.md`. Fase 07 (mobile operasional) dimulai hanya setelah owner menyetujui Fase 06; memakai API yang sama untuk scan, lapor insiden, dan terima pengganti. Fase 08 perlu memutuskan gateway pembayaran nyata (panggil `settlePayment`), pengiriman pengingat ke pelanggan, dan zona waktu laporan.
+Ikuti `WORK_QUEUE.md`. Fase 08 dimulai hanya setelah owner menyetujui Fase 07 (disarankan UAT mobile di perangkat nyata lebih dulu). Fase 08 perlu memutuskan gateway pembayaran nyata (panggil `settlePayment`), pengiriman pengingat ke pelanggan, dan zona waktu laporan.
 
 ## Catatan terbuka
 

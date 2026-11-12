@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { AxiosError, type AxiosAdapter, type InternalAxiosRequestConfig } from 'axios';
 import { createApiClient } from './client';
+import { uploadIncidentPhoto } from './incidents';
+import { uploadBody } from './upload';
 
 const respond =
   (status: number, data: unknown): AxiosAdapter =>
@@ -102,5 +104,25 @@ describe('createApiClient', () => {
     client.defaults.adapter = respond(500, { error: { code: 'INTERNAL_ERROR', message: 'x' } });
     await expect(client.get('/a')).rejects.toMatchObject({ code: 'INTERNAL_ERROR' });
     expect(seen).toEqual(['INTERNAL_ERROR']);
+  });
+});
+
+describe('unggah berkas mentah', () => {
+  it('mengirim byte React Native dengan Content-Type dari tipe berkas', async () => {
+    let sent: { body: unknown; type: unknown } | undefined;
+    const client = createApiClient({ baseURL: 'http://x' });
+    client.defaults.adapter = (config) => {
+      sent = { body: config.data, type: config.headers.get('Content-Type') };
+      return respond(200, { data: {} })(config);
+    };
+    const data = new Uint8Array([1, 2, 3]).buffer;
+    await uploadIncidentPhoto(client, 'i1', { data, type: 'image/jpeg' });
+    expect(sent?.body).toBe(data);
+    expect(sent?.type).toBe('image/jpeg');
+  });
+
+  it('meneruskan Blob web apa adanya', () => {
+    const blob = new Blob(['x'], { type: 'image/png' });
+    expect(uploadBody(blob)).toBe(blob);
   });
 });

@@ -14,12 +14,17 @@
   "dependencies": {
     "@eventra/api-client": "workspace:*",
     "@eventra/shared": "workspace:*",
+    "@react-native-community/netinfo": "12.0.1",
     "axios": "^1.21.1",
     "expo": "^58.0.23",
+    "expo-camera": "~58.0.14",
     "expo-image": "~58.0.18",
+    "expo-image-picker": "~58.0.10",
+    "expo-secure-store": "~58.0.3",
     "expo-status-bar": "^58.0.4",
     "react": "^19.3.0",
-    "react-native": "^0.88.1"
+    "react-native": "^0.88.1",
+    "react-native-safe-area-context": "~5.11.1"
   },
   "devDependencies": {
     "@types/react": "^19.3.0",
