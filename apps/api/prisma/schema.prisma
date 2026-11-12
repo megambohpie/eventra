@@ -407,6 +407,7 @@ model Order {
   handoverDocuments HandoverDocument[]
   incidents         Incident[]
   replacementTasks  ReplacementTask[]
+  invoices          Invoice[]
 
   @@index([customerId])
   @@index([status])
@@ -914,4 +915,102 @@ model Notification {
 
   @@index([userId, readAt, createdAt])
   @@map("notifications")
+}
+
+// ---------- Fase 06: invoice, pembayaran, pengingat ----------
+
+enum InvoiceStatus {
+  ISSUED
+  VOID
+}
+
+// Pembayaran sewa = pendapatan; deposit dilacak terpisah (bukan pendapatan).
+enum PaymentPurpose {
+  RENT
+  DEPOSIT
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  GATEWAY
+  OTHER
+}
+
+// PENDING = menunggu verifikasi/konfirmasi gateway; hanya SUCCEEDED yang dihitung sebagai uang diterima.
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  VOIDED
+}
+
+enum ReminderKind {
+  MANUAL
+  AUTO
+}
+
+// Satu invoice aktif (ISSUED) per pesanan (indeks parsial di migrasi). Nominal adalah snapshot pesanan.
+model Invoice {
+  id            String        @id @default(uuid()) @db.Uuid
+  number        String        @unique
+  orderId       String        @map("order_id") @db.Uuid
+  status        InvoiceStatus @default(ISSUED)
+  rentAmount    BigInt        @map("rent_amount")
+  depositAmount BigInt        @map("deposit_amount")
+  dueDate       DateTime      @map("due_date") @db.Date
+  note          String?
+  issuedAt      DateTime      @default(now()) @map("issued_at") @db.Timestamptz(3)
+  voidedAt      DateTime?     @map("voided_at") @db.Timestamptz(3)
+  voidReason    String?       @map("void_reason")
+  createdBy     String?       @map("created_by") @db.Uuid
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  order     Order             @relation(fields: [orderId], references: [id])
+  payments  Payment[]
+  reminders InvoiceReminder[]
+
+  @@index([orderId])
+  @@index([status, dueDate])
+  @@map("invoices")
+}
+
+// Baris pembayaran tidak dihapus dan nominalnya tidak diubah; koreksi = status VOIDED beserta alasan.
+model Payment {
+  id          String         @id @default(uuid()) @db.Uuid
+  invoiceId   String         @map("invoice_id") @db.Uuid
+  purpose     PaymentPurpose
+  method      PaymentMethod
+  status      PaymentStatus
+  amount      BigInt
+  reference   String?
+  note        String?
+  paidAt      DateTime       @map("paid_at") @db.Timestamptz(3)
+  recordedBy  String?        @map("recorded_by") @db.Uuid
+  confirmedBy String?        @map("confirmed_by") @db.Uuid
+  confirmedAt DateTime?      @map("confirmed_at") @db.Timestamptz(3)
+  voidedAt    DateTime?      @map("voided_at") @db.Timestamptz(3)
+  voidReason  String?        @map("void_reason")
+  createdAt   DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+
+  @@index([invoiceId, status])
+  @@index([status, paidAt])
+  @@map("payments")
+}
+
+model InvoiceReminder {
+  id        String       @id @default(uuid()) @db.Uuid
+  invoiceId String       @map("invoice_id") @db.Uuid
+  kind      ReminderKind
+  note      String?
+  createdBy String?      @map("created_by") @db.Uuid
+  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+
+  @@index([invoiceId, createdAt])
+  @@map("invoice_reminders")
 }

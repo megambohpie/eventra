@@ -23,6 +23,7 @@ import type { AssetEventDto } from '@eventra/shared';
 import { api } from '@/api';
 import { useAuth } from '@/auth/AuthProvider';
 import { AssetChangeModal } from '@/components/assets/AssetChangeModal';
+import { AssetMetrics } from '@/components/assets/AssetMetrics';
 import { AssetModal } from '@/components/assets/AssetModal';
 import { AssetStatusBadge, ConditionBadge } from '@/components/assets/badges';
 import { Button } from '@/components/ui/Button';
@@ -248,6 +249,8 @@ export function AssetDetailPage() {
           )}
         </div>
       </PageCard>
+
+      <AssetMetrics assetId={id} />
 
       <PageCard>
         <h2 className="ev-section-title">{t('assets.detail.history')}</h2>

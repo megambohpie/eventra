@@ -3,7 +3,7 @@
 Dokumen ini adalah sumber ringkas keadaan proyek untuk manusia, Codex, Claude Code, atau agen lain. Baca sebelum implementasi agar pekerjaan tidak diulang.
 
 **Terakhir diperbarui:** 12 November 2026  
-**Status:** Fase 00–05 (termasuk insiden, servis, dan aset pengganti) selesai dan terverifikasi otomatis; Fase 06 belum dimulai dan menunggu persetujuan owner.
+**Status:** Fase 00–06 (termasuk dashboard owner, invoice/pembayaran, dan laporan keuangan) selesai dan terverifikasi otomatis; Fase 07 belum dimulai dan menunggu persetujuan owner.
 
 ## Urutan baca
 
@@ -94,6 +94,27 @@ Dokumen ini adalah sumber ringkas keadaan proyek untuk manusia, Codex, Claude Co
 | RBAC | Capability baru: `incident.read` (Owner, Admin, Koordinator, FIELD_PIC terbatas pada miliknya), `incident.report` (Admin, Koordinator, FIELD_PIC), `incident.review` (Admin, Koordinator), `service.read` (Owner, Admin, Koordinator, Gudang), `service.write` (Admin, Koordinator, Gudang), `replacement.receive` (Admin, FIELD_PIC). Pemindaian aset pengganti di gudang memakai `warehouse.write`. |
 | Web | `/incidents` (lapor, daftar), `/incidents/:id` (foto, kirim, keputusan, tutup, penggantian + terima, tiket, riwayat), `/replacements` + `/replacements/:id` (scan pilih/verifikasi, kirim), `/service-tickets`, lonceng notifikasi di navbar. Menu mengikuti capability. |
 
+## Fase 06 — yang ada sekarang
+
+| Area | Fakta |
+| --- | --- |
+| Schema | Migrasi `20261112052331_finance_invoices_payments` (aditif): `invoices`, `payments`, `invoice_reminders` + enum, sequence `invoice_number_seq` (INV-YYYY-######). Indeks unik parsial: satu invoice ISSUED per pesanan. CHECK nominal; trigger `guard_payment_change` (tanpa DELETE, nominal/tujuan/metode/tanggal tidak berubah, status searah PENDING→SUCCEEDED/FAILED/VOIDED, SUCCEEDED→VOIDED), `guard_invoice_change` (tanpa DELETE, nominal tetap, VOID final), pengingat append-only. Rollback = drop tabel/sequence/enum/fungsi tersebut. |
+| Invoice | `POST /invoices` menyalin `subtotal` (sewa) dan `depositTotal` pesanan; hanya pesanan AWAITING_PAYMENT…COMPLETED/ISSUE; jatuh tempo default = tanggal mulai sewa. Salah nominal = void (ditolak bila ada pembayaran aktif) lalu terbit ulang. Status pembayaran diturunkan (`computeInvoiceBalance` di shared): UNPAID/PARTIAL/PAID/OVERDUE/VOID. |
+| Pembayaran | `POST /invoices/:id/payments` (tujuan RENT/DEPOSIT; tunai/transfer/lainnya langsung SUCCEEDED oleh admin, GATEWAY = PENDING; transfer & gateway wajib referensi; nominal ≤ sisa per tujuan termasuk PENDING; invoice dikunci FOR UPDATE sehingga serentak tidak melebihi tagihan). `/payments/:id/confirm|reject|void`. **Adapter gateway:** `settlePayment` di `finance/service.ts` adalah titik masuk tunggal; belum ada gateway/webhook nyata (butuh keputusan penyedia, Fase 08). Bukti = nomor referensi (unggah berkas belum ada). |
+| Pendapatan vs piutang | `GET /reports/revenue?from&to&groupBy` = pembayaran RENT berstatus SUCCEEDED menurut tanggal diterima (UTC), deposit terpisah, pembayaran terlambat (diterima setelah jatuh tempo). `GET /reports/receivables` = sisa tagihan aktual per invoice (sewa + deposit) beserta PIC penyewa, ringkasan terlambat, dan nilai sewa pesanan berjalan (CONFIRMED/SCHEDULED/IN_PROGRESS/ISSUE) yang bukan pendapatan. |
+| Pengingat | `POST /invoices/:id/remind` (manual) dan `sendDueReminders` (`setInterval` 15 mnt di `server.ts`): invoice belum lunas dengan jatuh tempo ≤ 3 hari/terlambat, maks. satu per 24 jam; dicatat di `invoice_reminders` dan memberi notifikasi dalam aplikasi ke pemegang `finance.read` (tipe `invoice.reminder`). WhatsApp/email ke pelanggan tetap backlog. |
+| Dashboard | `GET /dashboards/owner?staleDays`: sebaran status aset, aset rusak, aset tanpa pembaruan (tanpa perubahan status/kondisi/lokasi N hari, tidak termasuk pensiun), insiden/tiket servis terbuka, aset paling sering disewa dan paling sering rusak. Pergerakan per tanggal memakai `/calendar` + `/calendar/day` yang sudah ada (drill-down pesanan, jumlah, lokasi, PIC), ditampilkan lewat komponen bersama `MovementList` (endpoint `/dashboards/asset-movements` pada spec tidak dibuat karena duplikat). `GET /assets/:id/metrics`: umur, harga beli, jumlah sewa, hari sewa, servis, biaya servis, insiden (harga/biaya hanya `asset.cost.read`). |
+| RBAC | `finance.read` (Owner, Admin), `finance.write` (Admin), `dashboard.read` (Owner, Admin, Koordinator). Owner tetap baca saja. |
+| Web | `/dashboard`, `/invoices`, `/invoices/:id`, `/finance`; kartu metrik di detail aset; komponen baru `ui/StatTile`, `components/finance/*`, `orders/MovementList` (diekstrak dari Kalender). |
+
+## Asumsi Fase 06
+
+- Invoice satu per pesanan (bukan per termin); deposit ditagih di invoice yang sama dan dilacak terpisah (bukan pendapatan). Pengembalian deposit belum dimodelkan.
+- Pesanan `confirm` tidak mensyaratkan pembayaran (tetap manual oleh admin seperti Fase 03).
+- Tanggal laporan memakai UTC (konsisten dengan tanggal lain); pergeseran zona WIB pada pembayaran dini hari belum ditangani.
+- Daftar invoice menyaring status turunan di memori (cukup untuk skala MVP); pindah ke SQL bila volume besar.
+- PDF invoice/penawaran (FR-05, Should) dan unggah bukti pembayaran belum dikerjakan.
+
 ## Asumsi Fase 05
 
 - Rute `/incidents/:id/replacement` pada spec digantikan `/replacement-tasks/*`; tugas penggantian dibuat otomatis oleh keputusan REPLACE.
@@ -142,20 +163,20 @@ pnpm.cmd dev:web -- --host 127.0.0.1 --port 5173 --strictPort
 - Jika PowerShell menolak `pnpm.ps1`, gunakan `pnpm.cmd`.
 - Backend TSX pernah gagal dalam sandbox karena akses profil OS; menjalankan development server di luar sandbox berhasil.
 
-## Verifikasi terakhir (Fase 05, 12 November 2026)
+## Verifikasi terakhir (Fase 06, 12 November 2026)
 
 | Perintah | Hasil |
 | --- | --- |
 | `eslint .` / `prettier --check .` | Lulus |
 | `tsc` di api, web, shared, api-client | Lulus |
-| Test shared / api / api-client / web | Lulus: 16 / 65 / 6 / 13 (api termasuk 5 test Fase 05: RBAC, foto 1–5 + trigger append-only, alur lengkap lapor→review→scan gudang→terima→kembali→servis lolos + audit, tolak/teknisi/panduan/batal, validasi tiket servis) |
+| Test shared / api / api-client / web | Lulus: 22 / 74 / 6 / 13 (api termasuk 9 test Fase 06: RBAC, siklus invoice-pembayaran-void, batas bayar + konkurensi, trigger DB, pendapatan vs piutang vs terlambat, pengingat, dashboard + metrik aset) |
 | `vite build` web dan `tsup` api | Lulus; peringatan bundle >500 kB belum blocker |
 
-**Belum terverifikasi penuh:** (1) `pnpm check` utuh gagal hanya di `prisma generate` (EPERM) selama `pnpm dev:api` berjalan; semua tahap dijalankan terpisah dan hijau (client Prisma ter-generate untuk tipe; hentikan dev API lalu jalankan `pnpm db:generate` bila engine perlu disegarkan). (2) Tampilan halaman Fase 02–05 (termasuk lonceng notifikasi) dan PDF belum diperiksa visual di browser pada lebar ponsel ≈360 px dan desktop; hanya typecheck/build/test otomatis. (3) Jalankan `pnpm db:migrate` pada database dev bila belum (migrasi Fase 05 sudah diterapkan ke `eventra` dev).
+**Belum terverifikasi penuh:** (1) `pnpm check` utuh belum dijalankan; tiap tahap dijalankan terpisah dan hijau. `prisma generate` gagal EPERM selama dev API berjalan (DLL engine terkunci) — client Prisma sudah ter-generate untuk tipe; hentikan dev API lalu `pnpm db:generate` bila engine perlu disegarkan. (2) Tampilan halaman Fase 02–06 dan PDF belum diperiksa visual di browser pada lebar ponsel ≈360 px dan desktop. (3) Jalankan `pnpm db:migrate` pada database dev bila belum (migrasi Fase 06 sudah diterapkan ke `eventra` dev).
 
 ## Pekerjaan berikutnya
 
-Ikuti `WORK_QUEUE.md`. Fase 06 (dashboard owner dan keuangan) dimulai hanya setelah owner menyetujui Fase 05; akan memakai status aset/insiden/tiket servis dan biaya servis Fase 05. Mobile (Fase 07) memakai API yang sama untuk lapor insiden dan terima pengganti.
+Ikuti `WORK_QUEUE.md`. Fase 07 (mobile operasional) dimulai hanya setelah owner menyetujui Fase 06; memakai API yang sama untuk scan, lapor insiden, dan terima pengganti. Fase 08 perlu memutuskan gateway pembayaran nyata (panggil `settlePayment`), pengiriman pengingat ke pelanggan, dan zona waktu laporan.
 
 ## Catatan terbuka
 

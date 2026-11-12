@@ -12,12 +12,13 @@ import type { NotificationDto, NotificationListDto } from '@eventra/shared';
 import { api } from '@/api';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
-import { formatDateTime } from '@/lib/format';
+import { formatDate, formatDateTime, formatRupiah } from '@/lib/format';
 
 const POLL_MS = 60_000;
 
 /** Tujuan klik notifikasi menurut jenis entitasnya. */
 function targetOf(n: NotificationDto): string {
+  if (n.entity === 'invoice') return `/invoices/${n.entityId}`;
   if (n.entity === 'incident') return `/incidents/${n.entityId}`;
   // Penerima (PIC lapangan) tidak punya akses gudang: arahkan ke insiden terkait bila tersedia.
   return n.params.incidentId ? `/incidents/${n.params.incidentId}` : `/replacements/${n.entityId}`;
@@ -26,6 +27,8 @@ function targetOf(n: NotificationDto): string {
 /** Terjemahkan kode keputusan/urgensi pada parameter agar kalimat notifikasi mudah dibaca. */
 function describe(params: Record<string, string>, t: TFunction): Record<string, string> {
   const out = { ...params };
+  if (params.outstanding) out.outstanding = formatRupiah(Number(params.outstanding));
+  if (params.dueDate) out.dueDate = formatDate(params.dueDate);
   if (params.decision) out.decision = t(`incidents.decisions.${params.decision}`);
   if (params.urgency) out.urgency = t(`incidents.urgencies.${params.urgency}`);
   return out;

@@ -8,3 +8,4 @@ export * from './assets';
 export * from './orders';
 export * from './warehouse';
 export * from './incidents';
+export * from './finance';

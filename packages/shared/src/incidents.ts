@@ -340,5 +340,6 @@ export const NOTIFICATION_TYPES = [
   'replacement.created',
   'replacement.dispatched',
   'replacement.received',
+  'invoice.reminder',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];

@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { apiEnvSchema, parseEnv } from '@eventra/shared';
 import { createApp } from './app';
+import { sendDueReminders } from './finance/service';
 import { expireHolds } from './orders/service';
 import type { Mailer } from './routes/auth';
 
@@ -41,8 +42,18 @@ const holdSweeper = setInterval(() => {
 }, HOLD_SWEEP_MS);
 holdSweeper.unref();
 
+// Pengingat tagihan: jatuh tempo ≤ 3 hari atau terlambat, maksimal satu per invoice per 24 jam (in-app).
+const REMINDER_SWEEP_MS = 15 * 60_000;
+const reminderSweeper = setInterval(() => {
+  sendDueReminders(prisma).catch((err: unknown) =>
+    console.error('Gagal membuat pengingat tagihan', err),
+  );
+}, REMINDER_SWEEP_MS);
+reminderSweeper.unref();
+
 async function shutdown(): Promise<void> {
   clearInterval(holdSweeper);
+  clearInterval(reminderSweeper);
   server.close();
   await prisma.$disconnect();
   process.exit(0);

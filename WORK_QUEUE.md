@@ -12,7 +12,7 @@
 | 03 | Done | Ketersediaan, paket, pesanan |
 | 04 | Done | Gudang, scan, dan PDF |
 | 05 | Done | Insiden, servis, penggantian |
-| 06 | Todo | Dashboard owner dan keuangan |
+| 06 | Done | Dashboard owner dan keuangan |
 | 07 | Todo | Mobile operasional |
 | 08 | Todo | Hardening dan rilis |
 
@@ -98,11 +98,13 @@
 
 ## Fase 06 — Dashboard Owner dan Keuangan
 
-- [ ] Dashboard kesehatan aset: tersedia, keluar, on-site, rusak, servis, pensiun, dan aset tanpa update.
-- [ ] Dashboard pergerakan barang per tanggal dengan drill-down pesanan, jumlah, lokasi, dan PIC.
-- [ ] Invoice, payment, pembayaran manual/gateway adapter, dan pengingat tagihan.
-- [ ] Laporan pendapatan diterima, pesanan berjalan, piutang, jatuh tempo, dan keterlambatan.
-- [ ] Detail aset: umur, harga beli, jumlah sewa, hari pakai, jumlah/biaya servis, dan insiden.
+- [x] Dashboard kesehatan aset: tersedia, keluar, on-site, rusak, servis, pensiun, dan aset tanpa update.
+- [x] Dashboard pergerakan barang per tanggal dengan drill-down pesanan, jumlah, lokasi, dan PIC.
+- [x] Invoice, payment, pembayaran manual/gateway adapter, dan pengingat tagihan.
+- [x] Laporan pendapatan diterima, pesanan berjalan, piutang, jatuh tempo, dan keterlambatan.
+- [x] Detail aset: umur, harga beli, jumlah sewa, hari pakai, jumlah/biaya servis, dan insiden.
+
+- [x] Tambahan di luar daftar: invoice per pesanan (snapshot sewa + deposit, satu invoice aktif per pesanan, void + terbit ulang); pembayaran dengan tujuan SEWA/DEPOSIT (hanya sewa yang SUCCEEDED menjadi pendapatan; deposit dilaporkan terpisah), metode tunai/transfer/gateway/lainnya (gateway PENDING sampai dikonfirmasi lewat `settlePayment`, titik masuk tunggal untuk konfirmasi manual maupun adapter gateway kelak), batas bayar per tujuan dengan kunci baris invoice, koreksi lewat void (baris tidak dihapus; trigger DB melarang hapus/ubah nominal); pengingat tagihan manual + job otomatis (jatuh tempo ≤ 3 hari atau terlambat, maks. 1 per 24 jam, notifikasi dalam aplikasi); status turunan Belum dibayar/Sebagian/Lunas/Terlambat; capability baru `finance.read/write`, `dashboard.read`; UI `/dashboard`, `/invoices`, `/invoices/:id`, `/finance`, metrik di detail aset.
 
 **Selesai bila:** pendapatan hanya menghitung pembayaran yang diterima dan piutang menampilkan sisa tagihan aktual per invoice.
 

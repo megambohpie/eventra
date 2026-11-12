@@ -37,6 +37,9 @@ export const CAPABILITIES = [
   'service.read',
   'service.write',
   'replacement.receive',
+  'finance.read',
+  'finance.write',
+  'dashboard.read',
 ] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 
@@ -53,6 +56,9 @@ const READ_ALL: Capability[] = [
   'warehouse.read',
   'incident.read',
   'service.read',
+  // Owner membaca dashboard dan keuangan; mutasi keuangan hanya Admin (Owner baca saja).
+  'finance.read',
+  'dashboard.read',
 ];
 
 export const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
@@ -77,6 +83,8 @@ export const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
     'incident.review',
     'service.read',
     'service.write',
+    // Koordinator memantau kesehatan aset dan pergerakan barang (tanpa data keuangan).
+    'dashboard.read',
   ],
   WAREHOUSE: [
     'product.read',

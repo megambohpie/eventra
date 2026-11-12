@@ -20,6 +20,8 @@ import { incidentsRouter } from './routes/incidents';
 import { notificationsRouter } from './routes/notifications';
 import { replacementsRouter } from './routes/replacements';
 import { serviceTicketsRouter } from './routes/serviceTickets';
+import { financeRouter } from './routes/finance';
+import { dashboardsRouter } from './routes/dashboards';
 
 export interface AppDeps {
   /** Mengembalikan true bila database dapat dijangkau. */
@@ -67,6 +69,8 @@ export function createApp({ checkDb, db, jwtSecret, mailer }: AppDeps): Express 
   protectedRouter.use(replacementsRouter(db));
   protectedRouter.use(serviceTicketsRouter(db));
   protectedRouter.use(notificationsRouter(db));
+  protectedRouter.use(financeRouter(db));
+  protectedRouter.use(dashboardsRouter(db));
   v1.use(protectedRouter);
 
   app.use('/api/v1', v1);

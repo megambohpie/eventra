@@ -3,6 +3,10 @@ import { RequireAuth, RequireCapability } from './auth/guards';
 import { Layout } from './components/Layout';
 import { AssetDetailPage } from './pages/AssetDetailPage';
 import { AssetsPage } from './pages/AssetsPage';
+import { DashboardPage } from './pages/DashboardPage';
+import { FinancePage } from './pages/FinancePage';
+import { InvoiceDetailPage } from './pages/InvoiceDetailPage';
+import { InvoicesPage } from './pages/InvoicesPage';
 import { CustomersPage } from './pages/CustomersPage';
 import { HomePage } from './pages/HomePage';
 import { IncidentDetailPage } from './pages/IncidentDetailPage';
@@ -63,6 +67,14 @@ export function App() {
           </Route>
           <Route element={<RequireCapability capability="service.read" />}>
             <Route path="service-tickets" element={<ServiceTicketsPage />} />
+          </Route>
+          <Route element={<RequireCapability capability="dashboard.read" />}>
+            <Route path="dashboard" element={<DashboardPage />} />
+          </Route>
+          <Route element={<RequireCapability capability="finance.read" />}>
+            <Route path="invoices" element={<InvoicesPage />} />
+            <Route path="invoices/:id" element={<InvoiceDetailPage />} />
+            <Route path="finance" element={<FinancePage />} />
           </Route>
           <Route element={<RequireCapability capability="master.read" />}>
             <Route path="master" element={<MasterPage />} />
