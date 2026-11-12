@@ -6,6 +6,7 @@ import type { ProductDto } from '@eventra/shared';
 import { api } from '@/api';
 import { useAuth } from '@/auth/AuthProvider';
 import { BundleModal } from '@/components/products/BundleModal';
+import { ProductThumb } from '@/components/products/ProductThumb';
 import { ProductModal } from '@/components/products/ProductModal';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -26,6 +27,7 @@ export function ProductsPage() {
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<ProductDto | 'new' | null>(null);
   const [bundleOf, setBundleOf] = useState<ProductDto | null>(null);
+  const [photoVersion, setPhotoVersion] = useState(0);
 
   const { data, loading, reload } = useResource(
     () => listProducts(api, { q: q || undefined, page, pageSize: PAGE_SIZE }),
@@ -70,6 +72,7 @@ export function ProductsPage() {
             <table className="table">
               <thead className="ev-table__head">
                 <tr>
+                  <th>{t('products.photo')}</th>
                   <th>{t('products.name')}</th>
                   <th>{t('products.sku')}</th>
                   <th>{t('products.category')}</th>
@@ -82,6 +85,13 @@ export function ProductsPage() {
               <tbody>
                 {data?.items.map((product) => (
                   <tr key={product.id} className="ev-table__row">
+                    <td>
+                      <ProductThumb
+                        productId={product.id}
+                        hasPhoto={product.hasPhoto}
+                        version={photoVersion}
+                      />
+                    </td>
                     <td>{product.name}</td>
                     <td>{product.sku ?? '-'}</td>
                     <td>{product.category.name}</td>
@@ -109,7 +119,7 @@ export function ProductsPage() {
                 ))}
                 {data?.items.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="ev-table__empty">
+                    <td colSpan={8} className="ev-table__empty">
                       {t('common.empty')}
                     </td>
                   </tr>
@@ -139,7 +149,10 @@ export function ProductsPage() {
           categories={categories.data}
           readOnly={!canWrite}
           onClose={() => setSelected(null)}
-          onChanged={reload}
+          onChanged={() => {
+            setPhotoVersion((v) => v + 1);
+            reload();
+          }}
         />
       )}
     </>

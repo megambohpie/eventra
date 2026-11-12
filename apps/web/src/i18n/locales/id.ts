@@ -107,6 +107,12 @@ export const id: Messages<typeof en> = {
     category: 'Kategori',
     pricingUnit: 'Dasar harga',
     units: { PCS: 'Per pcs', PACKAGE: 'Per paket' },
+    photo: 'Foto',
+    photoOptional: 'Foto (opsional)',
+    noPhoto: 'Belum ada foto',
+    addPhoto: 'Tambah foto',
+    changePhoto: 'Ganti foto',
+    removePhoto: 'Hapus foto',
     bundle: {
       action: 'Komposisi',
       title: 'Komposisi: {{name}}',

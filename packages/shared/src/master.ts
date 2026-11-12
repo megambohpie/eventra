@@ -106,4 +106,6 @@ export interface ProductDto {
   price: number;
   deposit: number;
   active: boolean;
+  /** Foto produk opsional; byte diambil lewat GET /products/:id/photo. */
+  hasPhoto: boolean;
 }

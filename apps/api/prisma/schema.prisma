@@ -118,6 +118,18 @@ model Customer {
   @@map("customers")
 }
 
+// Foto produk opsional (maks. 1, boleh diganti/dihapus). Byte terpisah dari products agar daftar tetap ringan.
+model ProductPhoto {
+  productId String   @id @map("product_id") @db.Uuid
+  mimeType  String   @map("mime_type")
+  data      Bytes
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  product Product @relation(fields: [productId], references: [id])
+
+  @@map("product_photos")
+}
+
 model Category {
   id        String    @id @default(uuid()) @db.Uuid
   name      String    @unique
@@ -155,10 +167,12 @@ model Product {
   price         BigInt
   deposit       BigInt             @default(0)
   active        Boolean            @default(true)
+  hasPhoto      Boolean            @default(false) @map("has_photo")
   createdBy     String?            @map("created_by") @db.Uuid
   createdAt     DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt     DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
   category      Category           @relation(fields: [categoryId], references: [id])
+  photo         ProductPhoto?
   assets        Asset[]
   receiptItems  StockReceiptItem[]
   bundleOf      ProductBundle[]    @relation("BundleProduct")

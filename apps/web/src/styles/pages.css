@@ -307,8 +307,17 @@
   .ev-form {
     @apply grid gap-2;
   }
+  .ev-photo-field {
+    @apply flex flex-wrap items-center gap-3;
+  }
+  .ev-photo-field__actions {
+    @apply flex flex-wrap items-center gap-2;
+  }
   .ev-thumbs--start {
     @apply justify-start;
+  }
+  .ev-thumb--empty {
+    @apply inline-flex items-center justify-center bg-base-200 text-base-content/40;
   }
   .ev-thumb--large {
     @apply size-20 sm:size-24;

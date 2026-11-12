@@ -103,6 +103,12 @@ export const en = {
     category: 'Category',
     pricingUnit: 'Pricing basis',
     units: { PCS: 'Per piece', PACKAGE: 'Per package' },
+    photo: 'Photo',
+    photoOptional: 'Photo (optional)',
+    noPhoto: 'No photo',
+    addPhoto: 'Add photo',
+    changePhoto: 'Change photo',
+    removePhoto: 'Remove photo',
     bundle: {
       action: 'Composition',
       title: 'Composition: {{name}}',

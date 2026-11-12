@@ -1,7 +1,12 @@
 import { useState, type FormEvent } from 'react';
 import { mdiContentSave } from '@mdi/js';
 import { useTranslation } from 'react-i18next';
-import { createProduct, updateProduct } from '@eventra/api-client';
+import {
+  createProduct,
+  deleteProductPhoto,
+  updateProduct,
+  uploadProductPhoto,
+} from '@eventra/api-client';
 import {
   PRICING_UNITS,
   type CategoryDto,
@@ -9,6 +14,7 @@ import {
   type ProductDto,
 } from '@eventra/shared';
 import { api } from '@/api';
+import { ProductPhotoField } from '@/components/products/ProductPhotoField';
 import { Button } from '@/components/ui/Button';
 import { CurrencyInput } from '@/components/ui/CurrencyInput';
 import { FormField } from '@/components/ui/FormField';
@@ -40,6 +46,8 @@ export function ProductModal({
   const [price, setPrice] = useState(String(product?.price ?? 0));
   const [deposit, setDeposit] = useState(String(product?.deposit ?? 0));
   const [active, setActive] = useState(product?.active ?? true);
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [photoRemoved, setPhotoRemoved] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const submit = async (event: FormEvent) => {
@@ -56,8 +64,12 @@ export function ProductModal({
         deposit: Number(deposit),
         active,
       };
-      if (product) await updateProduct(api, product.id, input);
-      else await createProduct(api, input);
+      const saved = product
+        ? await updateProduct(api, product.id, input)
+        : await createProduct(api, input);
+      // Foto opsional: hanya diunggah/dihapus bila pengguna memilihnya.
+      if (photo) await uploadProductPhoto(api, saved.id, photo);
+      else if (photoRemoved) await deleteProductPhoto(api, saved.id);
       notify('success', t('common.saved'));
       onChanged();
       onClose();
@@ -122,6 +134,15 @@ export function ProductModal({
           <FormField label={t('products.deposit')}>
             <CurrencyInput required value={deposit} onChange={setDeposit} />
           </FormField>
+          <ProductPhotoField
+            productId={product?.id}
+            hasPhoto={product?.hasPhoto ?? false}
+            file={photo}
+            removed={photoRemoved}
+            readOnly={readOnly}
+            onFile={setPhoto}
+            onRemove={setPhotoRemoved}
+          />
           <label className="label ev-toggle-row">
             <input
               type="checkbox"

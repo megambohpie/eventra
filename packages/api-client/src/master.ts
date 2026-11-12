@@ -1,4 +1,5 @@
 import type { AxiosInstance } from 'axios';
+import { uploadBody, type UploadFile } from './upload';
 import type {
   CategoryDto,
   CategoryInput,
@@ -46,3 +47,15 @@ export const createLocation = async (c: AxiosInstance, input: LocationInput) =>
   (await c.post<Envelope<LocationDto>>('/locations', input)).data.data;
 export const updateLocation = async (c: AxiosInstance, id: string, input: LocationInput) =>
   (await c.put<Envelope<LocationDto>>(`/locations/${id}`, input)).data.data;
+
+/** Foto produk opsional (JPEG/PNG, maks. 1; mengganti yang lama). */
+export const uploadProductPhoto = async (c: AxiosInstance, id: string, file: UploadFile) =>
+  (
+    await c.put<Envelope<ProductDto>>(`/products/${id}/photo`, uploadBody(file), {
+      headers: { 'Content-Type': file.type },
+    })
+  ).data.data;
+export const deleteProductPhoto = async (c: AxiosInstance, id: string) =>
+  (await c.delete<Envelope<ProductDto>>(`/products/${id}/photo`)).data.data;
+export const getProductPhoto = async (c: AxiosInstance, id: string) =>
+  (await c.get<Blob>(`/products/${id}/photo`, { responseType: 'blob' })).data;
