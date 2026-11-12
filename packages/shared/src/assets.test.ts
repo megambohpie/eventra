@@ -57,6 +57,6 @@ describe('aset', () => {
     for (const role of ['OPS_COORDINATOR', 'WAREHOUSE', 'FIELD_PIC', 'CUSTOMER'] as const) {
       expect(hasCapability(role, 'asset.cost.read')).toBe(false);
     }
-    expect(hasCapability('OWNER', 'asset.write')).toBe(false);
+    expect(hasCapability('OWNER', 'asset.write')).toBe(true);
   });
 });

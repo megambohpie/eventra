@@ -54,8 +54,8 @@ describe('incidents — RBAC', () => {
     expect(hasCapability('FIELD_PIC', 'incident.review')).toBe(false);
     expect(hasCapability('FIELD_PIC', 'warehouse.read')).toBe(false);
     expect(hasCapability('OWNER', 'incident.read')).toBe(true);
-    expect(hasCapability('OWNER', 'incident.report')).toBe(false);
-    expect(hasCapability('OWNER', 'service.write')).toBe(false);
+    expect(hasCapability('OWNER', 'incident.report')).toBe(true);
+    expect(hasCapability('OWNER', 'service.write')).toBe(true);
     expect(hasCapability('WAREHOUSE', 'service.write')).toBe(true);
     expect(hasCapability('WAREHOUSE', 'incident.review')).toBe(false);
     expect(hasCapability('OPS_COORDINATOR', 'incident.review')).toBe(true);

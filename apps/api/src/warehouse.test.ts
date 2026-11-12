@@ -130,7 +130,7 @@ describe('Fase 04 — gudang, scan, dokumen serah-terima', () => {
   beforeEach(resetDb);
   afterAll(() => db.$disconnect());
 
-  it('RBAC: owner hanya baca, field PIC ditolak, gudang boleh menulis', async () => {
+  it('RBAC: owner membaca, field PIC ditolak, gudang boleh menulis', async () => {
     const c = await setup();
     const { product } = await seedProduct('Speaker', 2);
     const o = await order(c, [{ productId: product.id, quantity: 1 }]);
@@ -140,7 +140,7 @@ describe('Fase 04 — gudang, scan, dokumen serah-terima', () => {
     expect((await request(c.app).get(`${V1}/pick-lists`).set(auth(owner))).status).toBe(200);
     expect((await request(c.app).get(`${V1}/pick-lists`).set(auth(field))).status).toBe(403);
     expect(
-      (await request(c.app).post(`${V1}/pick-lists`).set(auth(owner)).send({ orderId: o.id }))
+      (await request(c.app).post(`${V1}/pick-lists`).set(auth(field)).send({ orderId: o.id }))
         .status,
     ).toBe(403);
     expect((await createPick(c, o.id)).status).toBe(201);

@@ -40,13 +40,7 @@ describe('RBAC', () => {
 
   it('role tanpa capability tulis ditolak 403 dan tidak mengubah data', async () => {
     const { app } = createTestApp();
-    for (const role of [
-      'OWNER',
-      'OPS_COORDINATOR',
-      'WAREHOUSE',
-      'FIELD_PIC',
-      'CUSTOMER',
-    ] as const) {
+    for (const role of ['OPS_COORDINATOR', 'WAREHOUSE', 'FIELD_PIC', 'CUSTOMER'] as const) {
       const token = await loginAs(app, role);
       const auth = { Authorization: `Bearer ${token}` };
       expect(

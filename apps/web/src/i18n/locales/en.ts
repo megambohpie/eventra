@@ -64,8 +64,10 @@ export const en = {
   auth: {
     loginTitle: 'Sign in',
     loginSubtitle: 'Sign in to manage your rental assets',
-    demoTitle: 'Sample account (development only)',
-    demoFill: 'Autofill',
+    demoLink: 'Sample accounts',
+    demoPageTitle: 'Sample accounts',
+    demoPageSubtitle: 'One account per role (development only)',
+    demoRole: 'Role',
     email: 'Email',
     password: 'Password',
     login: 'Sign in',

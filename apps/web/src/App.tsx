@@ -22,6 +22,7 @@ import { PickListDetailPage } from './pages/PickListDetailPage';
 import { ProductsPage } from './pages/ProductsPage';
 import { ReceiptsPage } from './pages/ReceiptsPage';
 import { WarehousePage } from './pages/WarehousePage';
+import { DemoAccountsPage } from './pages/auth/DemoAccountsPage';
 import { ForgotPasswordPage } from './pages/auth/ForgotPasswordPage';
 import { LoginPage } from './pages/auth/LoginPage';
 import { ResetPasswordPage } from './pages/auth/ResetPasswordPage';
@@ -31,6 +32,7 @@ export function App() {
     <Routes>
       <Route element={<Layout />}>
         <Route path="login" element={<LoginPage />} />
+        <Route path="demo-accounts" element={<DemoAccountsPage />} />
         <Route path="forgot-password" element={<ForgotPasswordPage />} />
         <Route path="reset-password" element={<ResetPasswordPage />} />
         <Route element={<RequireAuth />}>

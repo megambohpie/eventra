@@ -29,7 +29,7 @@ Dokumen ini adalah sumber ringkas keadaan proyek untuk manusia, Codex, Claude Co
 | Area | Fakta |
 | --- | --- |
 | Schema | Migrasi `20261111111805_identity_master_data` (aditif): `users`, `refresh_tokens`, `password_reset_tokens`, `customers`, `categories`, `locations`, `products`. Rollback = drop tabel tersebut (migrasi lanjutan `drop_customer_contacts` menghapus `customer_contacts`) + hapus enum `Role`, `CustomerType`, `PricingUnit`. |
-| RBAC | Role = enum DB; capability dipetakan di `packages/shared/src/rbac.ts` (Owner baca-saja, Admin penuh, Koordinator/Gudang baca sebagian). API memakai `requireCapability`, web memakai `RequireCapability` + `useAuth().can`. |
+| RBAC | Role = enum DB; capability dipetakan di `packages/shared/src/rbac.ts` (Owner dan Admin penuh, Koordinator/Gudang baca sebagian). API memakai `requireCapability`, web memakai `RequireCapability` + `useAuth().can`. |
 | Auth | Login JWT akses 15 menit; refresh token acak (hash saja di DB, 7 hari) dirotasi, pemakaian ulang token lama mencabut semua sesi. Status/role user dibaca dari DB tiap request. Reset password: token sekali pakai 1 jam, mencabut semua sesi. |
 | Reset password | Belum ada pengiriman email: antarmuka `Mailer` di `routes/auth.ts`; di dev token dicetak ke log API, di production tidak dicetak. Implementasi nyata menunggu keputusan penyedia (lihat Fase 08 / RUNBOOK §8). |
 | Pelanggan | Data pelanggan saja. Keputusan owner: PIC tidak disimpan di pelanggan, melainkan ditunjuk per pesanan (Fase 03, `order_pics`). Migrasi `drop_customer_contacts` menghapus tabel `customer_contacts`. |
@@ -50,7 +50,7 @@ Dokumen ini adalah sumber ringkas keadaan proyek untuk manusia, Codex, Claude Co
 | Status/kondisi | Transisi manual dibatasi `MANUAL_STATUS_TRANSITIONS` (shared); aset DAMAGED yang AVAILABLE otomatis QUARANTINED dan tidak bisa kembali AVAILABLE selagi DAMAGED. Transisi operasional menunggu Fase 03–04. |
 | Penerimaan | `/stock-receipts`: draft → `receive` (atomik; klaim DRAFT→RECEIVED dengan updateMany sehingga dua request bersamaan tidak menggandakan aset) membuat aset + QR + event asal per unit. Draft dapat diubah/dibatalkan. Maks 500 unit/baris, 1000/penerimaan. |
 | QR/label | PNG (`GET /assets/:id/qr.png`) dan PDF label A4 3×8 (`GET /assets/labels.pdf?ids=`, maks 100) dibuat backend (`qrcode`, `pdfkit`). Scan: `GET /assets/scan/:token` (tanpa harga/pemasok). |
-| RBAC | Capability baru: `asset.read/write/cost.read/status`, `receipt.read/write`. Harga beli/biaya hanya `asset.cost.read` (Owner, Admin). Owner baca-saja; Gudang/Koordinator: baca + ubah kondisi/status; Gudang juga menerima stok. |
+| RBAC | Capability baru: `asset.read/write/cost.read/status`, `receipt.read/write`. Harga beli/biaya hanya `asset.cost.read` (Owner, Admin). Owner penuh (keputusan owner, 2026-11-12); Gudang/Koordinator: baca + ubah kondisi/status; Gudang juga menerima stok. |
 | Web | `/assets` (ringkasan, filter, pilih + cetak label, aset baru), `/assets/:id` (info, QR, riwayat, ubah kondisi/status, regenerate QR), `/receipts` (daftar, draft, receive, cetak label). |
 
 ## Fase 03 — yang ada sekarang
@@ -65,7 +65,7 @@ Dokumen ini adalah sumber ringkas keadaan proyek untuk manusia, Codex, Claude Co
 | Hold expiry | `expireHolds()` dijalankan `setInterval` 60 dtk di `server.ts`; konfirmasi hold kadaluarsa → 409 `HOLD_EXPIRED` dan pesanan `EXPIRED`. Job terjadwal produksi/observability ditunda ke Fase 08. |
 | PIC | `order_pics`: peran CUSTOMER_PIC/WAREHOUSE_OUT/WAREHOUSE_IN/FIELD; sumber OWNER (pengguna internal)/CUSTOMER/THIRD_PARTY. Gudang wajib internal; pihak ketiga wajib organisasi + bukti otorisasi dan mencatat penyetuju. Selain CUSTOMER_PIC hanya satu per peran. Telepon: angka saja (3–20 digit, boleh `+`). |
 | Kalender | `GET /calendar` (keluar = tanggal mulai, kembali = tanggal selesai, pesanan CONFIRMED dst.) dan `GET /calendar/day` (rincian pesanan, item, aset fisik, lokasi, PIC). |
-| RBAC | Owner baca saja; Admin penuh; Koordinator: order.read/write + availability (tanpa approve); Gudang: baca. |
+| RBAC | Owner dan Admin penuh; Koordinator: order.read/write + availability (tanpa approve); Gudang: baca. |
 | Web | `/orders`, `/orders/:id`, `/calendar`, modal Komposisi di `/products`. |
 
 ## Fase 04 — yang ada sekarang
@@ -104,7 +104,7 @@ Dokumen ini adalah sumber ringkas keadaan proyek untuk manusia, Codex, Claude Co
 | Pendapatan vs piutang | `GET /reports/revenue?from&to&groupBy` = pembayaran RENT berstatus SUCCEEDED menurut tanggal diterima (UTC), deposit terpisah, pembayaran terlambat (diterima setelah jatuh tempo). `GET /reports/receivables` = sisa tagihan aktual per invoice (sewa + deposit) beserta PIC penyewa, ringkasan terlambat, dan nilai sewa pesanan berjalan (CONFIRMED/SCHEDULED/IN_PROGRESS/ISSUE) yang bukan pendapatan. |
 | Pengingat | `POST /invoices/:id/remind` (manual) dan `sendDueReminders` (`setInterval` 15 mnt di `server.ts`): invoice belum lunas dengan jatuh tempo ≤ 3 hari/terlambat, maks. satu per 24 jam; dicatat di `invoice_reminders` dan memberi notifikasi dalam aplikasi ke pemegang `finance.read` (tipe `invoice.reminder`). WhatsApp/email ke pelanggan tetap backlog. |
 | Dashboard | `GET /dashboards/owner?staleDays`: sebaran status aset, aset rusak, aset tanpa pembaruan (tanpa perubahan status/kondisi/lokasi N hari, tidak termasuk pensiun), insiden/tiket servis terbuka, aset paling sering disewa dan paling sering rusak. Pergerakan per tanggal memakai `/calendar` + `/calendar/day` yang sudah ada (drill-down pesanan, jumlah, lokasi, PIC), ditampilkan lewat komponen bersama `MovementList` (endpoint `/dashboards/asset-movements` pada spec tidak dibuat karena duplikat). `GET /assets/:id/metrics`: umur, harga beli, jumlah sewa, hari sewa, servis, biaya servis, insiden (harga/biaya hanya `asset.cost.read`). |
-| RBAC | `finance.read` (Owner, Admin), `finance.write` (Admin), `dashboard.read` (Owner, Admin, Koordinator). Owner tetap baca saja. |
+| RBAC | `finance.read` (Owner, Admin), `finance.write` (Admin), `dashboard.read` (Owner, Admin, Koordinator). Owner kini punya semua capability. |
 | Web | `/dashboard`, `/invoices`, `/invoices/:id`, `/finance`; kartu metrik di detail aset; komponen baru `ui/StatTile`, `components/finance/*`, `orders/MovementList` (diekstrak dari Kalender). |
 
 ## Fase 07 — yang ada sekarang

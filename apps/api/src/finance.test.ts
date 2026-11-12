@@ -84,10 +84,10 @@ beforeEach(resetDb);
 afterAll(() => db.$disconnect());
 
 describe('RBAC keuangan', () => {
-  it('owner membaca saja, gudang ditolak, koordinator hanya dashboard', async () => {
+  it('owner punya akses penuh, gudang ditolak, koordinator hanya dashboard', async () => {
     const c = await setup();
     const order = await seedOrder(c);
-    expect((await post(c, c.owner, '/invoices', { orderId: order.id })).status).toBe(403);
+    expect((await post(c, c.coordinator, '/invoices', { orderId: order.id })).status).toBe(403);
     expect((await get(c, c.owner, '/invoices')).status).toBe(200);
     expect((await get(c, c.owner, '/reports/receivables')).status).toBe(200);
     expect((await get(c, c.warehouse, '/invoices')).status).toBe(403);
@@ -96,7 +96,7 @@ describe('RBAC keuangan', () => {
       (await get(c, c.coordinator, '/reports/revenue?from=2027-01-01&to=2027-01-31')).status,
     ).toBe(403);
     expect((await get(c, c.coordinator, '/dashboards/owner')).status).toBe(200);
-    expect((await post(c, c.owner, '/invoices/x/payments', {})).status).toBe(403);
+    expect((await post(c, c.coordinator, '/invoices/x/payments', {})).status).toBe(403);
   });
 });
 

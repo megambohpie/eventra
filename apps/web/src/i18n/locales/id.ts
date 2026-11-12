@@ -68,8 +68,10 @@ export const id: Messages<typeof en> = {
   auth: {
     loginTitle: 'Masuk',
     loginSubtitle: 'Masuk untuk mengelola aset rental Anda',
-    demoTitle: 'Akun contoh (hanya development)',
-    demoFill: 'Isi otomatis',
+    demoLink: 'Akun contoh',
+    demoPageTitle: 'Akun contoh',
+    demoPageSubtitle: 'Satu akun per role (hanya development)',
+    demoRole: 'Role',
     email: 'Email',
     password: 'Password',
     login: 'Masuk',

@@ -55,11 +55,11 @@ describe('Fase 02 — aset, QR, penerimaan', () => {
       expect((await request(app).get(`${V1}/stock-receipts`).set(auth(token))).status).toBe(403);
       await resetDb();
     }
-    const owner = await loginAs(app, 'OWNER');
+    const warehouse = await loginAs(app, 'WAREHOUSE');
     const { product } = await seedMaster();
     const res = await request(app)
       .post(`${V1}/assets`)
-      .set(auth(owner))
+      .set(auth(warehouse))
       .send({ productId: product.id });
     expect(res.status).toBe(403);
   });

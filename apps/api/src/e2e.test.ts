@@ -298,9 +298,9 @@ describe('Fase 08 — E2E smoke: alur kritis rental', () => {
     const metrics = await ok<AssetMetricsDto>('get', admin, `/assets/${a1.id}/metrics`);
     expect(metrics).toMatchObject({ rentalCount: 1, rentalDays: 2, incidentCount: 1 });
 
-    // Owner tetap baca saja.
+    // Owner memiliki otorisasi penuh (superset Admin).
     expect((await call('post', owner, '/customers', { type: 'COMPANY', name: 'X' })).status).toBe(
-      403,
+      201,
     );
 
     // ---- 7. Jejak audit dan scan ----

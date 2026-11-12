@@ -43,26 +43,9 @@ export const CAPABILITIES = [
 ] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 
-const READ_ALL: Capability[] = [
-  'user.read',
-  'customer.read',
-  'product.read',
-  'master.read',
-  'asset.read',
-  'asset.cost.read',
-  'receipt.read',
-  'order.read',
-  'availability.read',
-  'warehouse.read',
-  'incident.read',
-  'service.read',
-  // Owner membaca dashboard dan keuangan; mutasi keuangan hanya Admin (Owner baca saja).
-  'finance.read',
-  'dashboard.read',
-];
-
 export const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
-  OWNER: READ_ALL,
+  // Owner memiliki otorisasi tertinggi: semua capability (superset Admin).
+  OWNER: [...CAPABILITIES],
   ADMIN: [...CAPABILITIES],
   OPS_COORDINATOR: [
     // user.read: koordinator menunjuk PIC internal pada pesanan.
@@ -109,4 +92,9 @@ export const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
 
 export function hasCapability(role: Role, capability: Capability): boolean {
   return ROLE_CAPABILITIES[role].includes(capability);
+}
+
+/** Email akun contoh per role (hanya untuk seed dev dan halaman login dev; password dari env). */
+export function demoAccountEmail(role: Role): string {
+  return `${role.toLowerCase().replace(/_/g, '-')}@eventra.test`;
 }

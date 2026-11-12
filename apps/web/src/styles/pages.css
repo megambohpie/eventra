@@ -27,14 +27,8 @@
   .ev-auth__link {
     @apply text-center text-sm;
   }
-  .ev-auth__demo {
-    @apply items-start text-sm;
-  }
-  .ev-auth__demo-body {
-    @apply grid gap-1;
-  }
-  .ev-auth__demo-title {
-    @apply font-semibold;
+  .ev-demo {
+    @apply mx-auto grid w-full max-w-3xl gap-4;
   }
 
   /* ---------- Beranda ---------- */

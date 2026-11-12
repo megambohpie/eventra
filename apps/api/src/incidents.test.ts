@@ -148,7 +148,7 @@ describe('Fase 05 — insiden, servis, aset pengganti', () => {
   beforeEach(resetDb);
   afterAll(() => db.$disconnect());
 
-  it('RBAC: owner hanya baca, gudang tidak melapor, PIC lapangan hanya yang ditugaskan', async () => {
+  it('RBAC: owner membaca, gudang tidak melapor, PIC lapangan hanya yang ditugaskan', async () => {
     const c = await setup();
     const { product, assets } = await seedProduct('Panel', 3);
     await dispatched(c, product.id, assets, 1);
@@ -163,15 +163,6 @@ describe('Fase 05 — insiden, servis, aset pengganti', () => {
 
     expect((await get(c, owner, '/incidents')).status).toBe(200);
     expect((await get(c, owner, '/service-tickets')).status).toBe(200);
-    expect(
-      (
-        await post(c, owner, '/incidents', {
-          qrToken: a1.qrToken,
-          urgency: 'LOW',
-          description: 'rusak parah',
-        })
-      ).status,
-    ).toBe(403);
     expect(
       (
         await post(c, c.warehouse, '/incidents', {

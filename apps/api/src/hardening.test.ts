@@ -100,8 +100,8 @@ describe('Fase 08 — keamanan akses', () => {
 
   it('peran dalam token tidak dipercaya: peran dibaca dari database', async () => {
     const { app } = createTestApp();
-    const owner = await createUser('OWNER');
-    const forged = jwt.sign({ sub: owner.id, role: 'ADMIN' }, JWT_SECRET, { expiresIn: 60 });
+    const limited = await createUser('WAREHOUSE');
+    const forged = jwt.sign({ sub: limited.id, role: 'ADMIN' }, JWT_SECRET, { expiresIn: 60 });
     const res = await request(app)
       .post(`${V1}/customers`)
       .set(auth(forged))
@@ -109,20 +109,13 @@ describe('Fase 08 — keamanan akses', () => {
     expect(res.status).toBe(403);
   });
 
-  it('OWNER (baca saja) ditolak 403 di SEMUA endpoint tulis, kecuali yang memang milik sendiri', async () => {
+  it('OWNER (otorisasi penuh) tidak pernah ditolak 403 di endpoint tulis mana pun', async () => {
     const { app } = createTestApp();
     const owner = await loginAs(app, 'OWNER');
-    // Aksi pada data milik pengguna sendiri (sesi dan notifikasi), bukan data bisnis.
-    const ownData = new Set([
-      '/notifications/:id/read',
-      '/notifications/read-all',
-      '/availability/check', // POST hanya sebagai kueri baca (tidak menulis)
-    ]);
     const failures: string[] = [];
     for (const r of allRoutes().filter((x) => x.method !== 'get' && !isPublic(x))) {
-      if (ownData.has(r.path)) continue;
       const res = await send(app, r, owner);
-      if (res.status !== 403) failures.push(`${r.method.toUpperCase()} ${r.path} → ${res.status}`);
+      if (res.status === 403) failures.push(`${r.method.toUpperCase()} ${r.path} → ${res.status}`);
     }
     expect(failures).toEqual([]);
   });
@@ -270,11 +263,11 @@ describe('Fase 08 — unggah berkas', () => {
 
   it('unggah memerlukan capability yang tepat', async () => {
     const { app } = createTestApp();
-    const owner = await loginAs(app, 'OWNER');
+    const customer = await loginAs(app, 'CUSTOMER');
     for (const path of endpoints) {
       const res = await request(app)
         .post(`${V1}${path}`)
-        .set(auth(owner))
+        .set(auth(customer))
         .set('Content-Type', 'image/png')
         .send(PNG);
       expect(res.status, path).toBe(403);

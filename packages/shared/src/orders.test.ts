@@ -95,9 +95,9 @@ describe('skema PIC', () => {
 });
 
 describe('capability pesanan', () => {
-  it('owner baca saja; koordinator tidak menyetujui; hanya admin yang approve', () => {
+  it('owner punya semua akses; koordinator tidak menyetujui; hanya admin yang approve', () => {
     expect(hasCapability('OWNER', 'order.read')).toBe(true);
-    expect(hasCapability('OWNER', 'order.write')).toBe(false);
+    expect(hasCapability('OWNER', 'order.write')).toBe(true);
     expect(hasCapability('OPS_COORDINATOR', 'order.write')).toBe(true);
     expect(hasCapability('OPS_COORDINATOR', 'order.approve')).toBe(false);
     expect(hasCapability('WAREHOUSE', 'order.write')).toBe(false);

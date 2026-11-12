@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { mdiAccountOutline, mdiInformationOutline, mdiLockOutline, mdiLogin } from '@mdi/js';
+import { mdiAccountOutline, mdiOpenInNew, mdiLockOutline, mdiLogin } from '@mdi/js';
 import { useTranslation } from 'react-i18next';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/auth/AuthProvider';
@@ -7,14 +7,7 @@ import { AuthCard } from '@/components/auth/AuthCard';
 import { Button } from '@/components/ui/Button';
 import { FormField } from '@/components/ui/FormField';
 import { Icon } from '@/components/ui/Icon';
-
-// Akun contoh hanya tampil saat development dan hanya bila diisi di .env (tidak pernah di-commit).
-const DEMO_EMAIL: string | undefined = import.meta.env.DEV
-  ? import.meta.env.VITE_DEMO_EMAIL
-  : undefined;
-const DEMO_PASSWORD: string | undefined = import.meta.env.DEV
-  ? import.meta.env.VITE_DEMO_PASSWORD
-  : undefined;
+import { DEMO_PASSWORD } from '@/lib/demoAccounts';
 
 export function LoginPage() {
   const { t } = useTranslation();
@@ -48,32 +41,6 @@ export function LoginPage() {
       subtitle={t('auth.loginSubtitle')}
       onSubmit={submit}
     >
-      {DEMO_EMAIL && DEMO_PASSWORD && (
-        <div role="note" className="alert alert-info alert-soft ev-auth__demo">
-          <Icon path={mdiInformationOutline} />
-          <div className="ev-auth__demo-body">
-            <span className="ev-auth__demo-title">{t('auth.demoTitle')}</span>
-            <span>
-              {t('auth.email')}: <code>{DEMO_EMAIL}</code>
-            </span>
-            <span>
-              {t('auth.password')}: <code>{DEMO_PASSWORD}</code>
-            </span>
-            <div>
-              <Button
-                size="xs"
-                variant="primary"
-                onClick={() => {
-                  setEmail(DEMO_EMAIL);
-                  setPassword(DEMO_PASSWORD);
-                }}
-              >
-                {t('auth.demoFill')}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
       <FormField label={t('auth.email')}>
         <label className="input ev-control">
           <Icon path={mdiAccountOutline} className="ev-input-icon" />
@@ -110,6 +77,16 @@ export function LoginPage() {
       <Link to="/forgot-password" className="link link-hover ev-auth__link">
         {t('auth.forgotPassword')}
       </Link>
+      {DEMO_PASSWORD && (
+        <Link
+          to="/demo-accounts"
+          target="_blank"
+          rel="noreferrer"
+          className="link link-hover ev-auth__link"
+        >
+          {t('auth.demoLink')} <Icon path={mdiOpenInNew} />
+        </Link>
+      )}
     </AuthCard>
   );
 }

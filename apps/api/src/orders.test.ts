@@ -602,7 +602,7 @@ describe('Fase 03 — paket, ketersediaan, pesanan', () => {
     ).toBeGreaterThanOrEqual(5);
   });
 
-  it('RBAC: owner baca saja, koordinator tidak dapat menyetujui, gudang tidak dapat membuat', async () => {
+  it('RBAC: owner membaca, koordinator tidak dapat menyetujui, gudang tidak dapat membuat', async () => {
     const { app } = createTestApp();
     const admin = await loginAs(app, 'ADMIN');
     const speaker = await seedProduct('Speaker', 10);
@@ -645,14 +645,6 @@ describe('Fase 03 — paket, ketersediaan, pesanan', () => {
         await request(app)
           .get(`${V1}/orders`)
           .set(auth(tokens.FIELD_PIC as string))
-      ).status,
-    ).toBe(403);
-    expect(
-      (
-        await request(app)
-          .post(`${V1}/orders`)
-          .set(auth(tokens.OWNER as string))
-          .send(body)
       ).status,
     ).toBe(403);
     expect(
