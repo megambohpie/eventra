@@ -9,7 +9,7 @@
 | 00 | Done | Foundation dan standar proyek |
 | 01 | Done | Auth, RBAC, master data |
 | 02 | Done | Aset dan QR lifecycle |
-| 03 | Todo | Ketersediaan, paket, pesanan |
+| 03 | Done | Ketersediaan, paket, pesanan |
 | 04 | Todo | Gudang, scan, dan PDF |
 | 05 | Todo | Insiden, servis, penggantian |
 | 06 | Todo | Dashboard owner dan keuangan |
@@ -61,12 +61,13 @@
 
 ## Fase 03 — Paket, Ketersediaan, dan Pesanan
 
-- [ ] Schema bundle/konversi serta order, item, quote, allocation, dan hold.
-- [ ] Konfigurasi `1 satuan sewa → N aset fisik` (contoh 1 meter → 4 panel).
-- [ ] API cek ketersediaan per tanggal, beserta jumlah maksimum yang tersedia.
-- [ ] Transaksi atomic confirm order; release allocation saat batal/hold kadaluarsa.
-- [ ] Calendar web stok keluar/kembali per tanggal dan detail klik tanggal.
-- [ ] Manajemen PIC penyewa, gudang keluar/kembali, dan PIC lapangan (owner/penyewa/pihak ketiga).
+- [x] Schema bundle/konversi serta order, item, quote, allocation, dan hold.
+- [x] Konfigurasi `1 satuan sewa → N aset fisik` (contoh 1 meter → 4 panel).
+- [x] API cek ketersediaan per tanggal, beserta jumlah maksimum yang tersedia.
+- [x] Transaksi atomic confirm order; release allocation saat batal/hold kadaluarsa.
+- [x] Calendar web stok keluar/kembali per tanggal dan detail klik tanggal.
+- [x] Manajemen PIC penyewa, gudang keluar/kembali, dan PIC lapangan (owner/penyewa/pihak ketiga).
+- [x] Tambahan di luar daftar: alur status pesanan (submit → quote → hold → confirm, reject, cancel, schedule) dengan riwayat status; penawaran versi append-only; UI web Pesanan/Detail/Kalender (+ tab ketersediaan stok) dan modal Komposisi produk; capability `order.read/write/approve`, `availability.read`; `user.read` untuk koordinator; validasi telepon hanya angka (`phoneSchema`) di backend dan input web.
 
 **Selesai bila:** skenario stok 30, booking tanggal 8–9 sebanyak 15, lalu request 7–8 hanya mengizinkan 15; test konkurensi membuktikan tidak ada overbooking.
 

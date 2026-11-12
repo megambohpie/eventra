@@ -3,7 +3,7 @@
 Dokumen ini adalah sumber ringkas keadaan proyek untuk manusia, Codex, Claude Code, atau agen lain. Baca sebelum implementasi agar pekerjaan tidak diulang.
 
 **Terakhir diperbarui:** 12 November 2026  
-**Status:** Fase 00, 01, dan 02 (aset, QR, penerimaan stok, riwayat) selesai dan terverifikasi; Fase 03 belum dimulai dan menunggu persetujuan owner.
+**Status:** Fase 00–03 (termasuk paket, ketersediaan, pesanan) selesai dan terverifikasi; Fase 04 belum dimulai dan menunggu persetujuan owner.
 
 ## Urutan baca
 
@@ -53,6 +53,27 @@ Dokumen ini adalah sumber ringkas keadaan proyek untuk manusia, Codex, Claude Co
 | RBAC | Capability baru: `asset.read/write/cost.read/status`, `receipt.read/write`. Harga beli/biaya hanya `asset.cost.read` (Owner, Admin). Owner baca-saja; Gudang/Koordinator: baca + ubah kondisi/status; Gudang juga menerima stok. |
 | Web | `/assets` (ringkasan, filter, pilih + cetak label, aset baru), `/assets/:id` (info, QR, riwayat, ubah kondisi/status, regenerate QR), `/receipts` (daftar, draft, receive, cetak label). |
 
+## Fase 03 — yang ada sekarang
+
+| Area | Fakta |
+| --- | --- |
+| Schema | Migrasi `20261112001654_orders_bundles` (aditif): `product_bundles`, `orders`, `order_items`, `order_quotes`, `stock_allocations`, `order_pics`, `order_status_events`, sequence `order_number_seq` (`ORD-YYYY-######`), indeks unik parsial alokasi aktif, CHECK. Rollback = drop tabel/sequence/enum tersebut. |
+| Paket | `PUT /product-bundles/:productId` mengganti komponen (1 satuan sewa → N aset fisik). Satu tingkat: komponen tidak boleh berpaket, produk berpaket tidak boleh jadi komponen. Produk tanpa paket dipenuhi asetnya sendiri (1:1). |
+| Ketersediaan | `POST /availability/check` (maks. per item, per komponen) dan `GET /availability/calendar`. Stok total = aset berstatus yang boleh dialokasikan saat ini (bukan servis/karantina/pensiun/masalah). Hold kadaluarsa otomatis diabaikan walau job belum jalan. |
+| Alokasi | `stock_allocations` per produk fisik per tanggal, status HOLD/CONFIRMED/RELEASED (tidak dihapus). Konfirmasi atomik: klaim status → kunci baris produk `FOR UPDATE` (urut id) → hitung ulang → alokasi semua tanggal; kurang di satu tanggal = rollback total. Test konkurensi (6 konfirmasi serentak, stok 10, qty 4 → tepat 2 sukses) lulus. |
+| Pesanan | DRAFT → PENDING_REVIEW (wajib PIC penyewa + stok tersedia) → QUOTED (versi penawaran append-only, harga diambil ulang) → AWAITING_PAYMENT (hold, default 60 mnt) / CONFIRMED → SCHEDULED (wajib PIC gudang keluar/kembali + lapangan). Reject, cancel (melepas stok; membatalkan pesanan yang menahan stok butuh `order.approve`). Draft saja yang dapat diubah. Setiap perubahan status tercatat di `order_status_events` + audit. |
+| Hold expiry | `expireHolds()` dijalankan `setInterval` 60 dtk di `server.ts`; konfirmasi hold kadaluarsa → 409 `HOLD_EXPIRED` dan pesanan `EXPIRED`. Job terjadwal produksi/observability ditunda ke Fase 08. |
+| PIC | `order_pics`: peran CUSTOMER_PIC/WAREHOUSE_OUT/WAREHOUSE_IN/FIELD; sumber OWNER (pengguna internal)/CUSTOMER/THIRD_PARTY. Gudang wajib internal; pihak ketiga wajib organisasi + bukti otorisasi dan mencatat penyetuju. Selain CUSTOMER_PIC hanya satu per peran. Telepon: angka saja (3–20 digit, boleh `+`). |
+| Kalender | `GET /calendar` (keluar = tanggal mulai, kembali = tanggal selesai, pesanan CONFIRMED dst.) dan `GET /calendar/day` (rincian pesanan, item, aset fisik, lokasi, PIC). |
+| RBAC | Owner baca saja; Admin penuh; Koordinator: order.read/write + availability (tanpa approve); Gudang: baca. |
+| Web | `/orders`, `/orders/:id`, `/calendar`, modal Komposisi di `/products`. |
+
+## Asumsi bisnis Fase 03 (konfirmasi owner)
+
+- Harga sewa = harga × jumlah × hari (hari mulai dan selesai dihitung); deposit tidak dikali hari.
+- Hari pasang/bongkar tidak mengurangi kuota; hold default 60 menit (5–1440 per permintaan).
+- Pembayaran/deposit belum ada (Fase 06): `confirm` dilakukan admin secara manual.
+
 ## Keputusan yang wajib dijaga
 
 - Fokus utama: kontrol aset rental event untuk owner.
@@ -78,21 +99,20 @@ pnpm.cmd dev:web -- --host 127.0.0.1 --port 5173 --strictPort
 - Jika PowerShell menolak `pnpm.ps1`, gunakan `pnpm.cmd`.
 - Backend TSX pernah gagal dalam sandbox karena akses profil OS; menjalankan development server di luar sandbox berhasil.
 
-## Verifikasi terakhir (Fase 02, 12 November 2026)
+## Verifikasi terakhir (Fase 03, 12 November 2026)
 
 | Perintah | Hasil |
 | --- | --- |
-| `pnpm lint` / `pnpm format:check` | Lulus |
+| `eslint .` / `prettier --check .` | Lulus |
 | `tsc` di api, web, mobile, shared, api-client | Lulus |
-| Test shared / api / api-client / web | Lulus: 7 / 39 / 6 / 13 |
-| `tsup` (api) dan `build` web | Lulus; peringatan bundle >500 kB belum blocker |
-| `tsup` api dan build web | Lulus (pdfkit/qrcode external, dimuat dari node_modules) |
+| Test shared / api / api-client / web | Lulus: 12 / 52 / 6 / 13 (api termasuk 13 test Fase 03 + konkurensi) |
+| `vite build` web dan `tsup` api | Lulus; peringatan bundle >500 kB belum blocker |
 
-**Belum terverifikasi penuh:** (1) `pnpm check` utuh masih gagal di `prisma generate` (EPERM, server dev API lama mengunci `query_engine-windows.dll.node`); semua tahap lain dijalankan terpisah dan hijau. Hentikan server dev itu, lalu jalankan ulang `pnpm check`. (2) Tampilan halaman Fase 02 belum diperiksa visual di browser (ponsel ≈360 px dan desktop); hanya typecheck/lint/test/build.
+**Belum terverifikasi penuh:** (1) `pnpm check` utuh gagal hanya di langkah `prisma generate` (EPERM) bila server dev API berjalan; Prisma client sudah ter-generate dan semua tahap lain dijalankan terpisah dan hijau. Hentikan `pnpm dev:api` sebelum menjalankan `pnpm check`. (2) Tampilan halaman Fase 02–03 belum diperiksa visual di browser (ponsel ≈360 px dan desktop). (3) Server dev API dihentikan saat verifikasi; jalankan ulang `pnpm dev:api`.
 
 ## Pekerjaan berikutnya
 
-Ikuti `WORK_QUEUE.md`. Fase 03 (paket, ketersediaan, pesanan) dimulai hanya setelah owner menyetujui hasil Fase 02. Fase 03 akan memakai `NON_ALLOCATABLE_STATUSES` (shared) dan menggerakkan status operasional aset. Mobile belum memakai login/auth (Fase 07).
+Ikuti `WORK_QUEUE.md`. Fase 04 (gudang, scan, PDF) dimulai hanya setelah owner menyetujui Fase 03; akan memakai alokasi `stock_allocations`, `order_pics` gudang, dan menggerakkan status aset RESERVED…RETURN_PENDING serta status pesanan IN_PROGRESS/COMPLETED. Mobile belum memakai login/auth (Fase 07).
 
 ## Catatan terbuka
 

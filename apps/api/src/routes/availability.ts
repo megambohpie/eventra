@@ -29,7 +29,11 @@ export function availabilityRouter(db: PrismaClient): Router {
       if (!plan) throw new HttpError(404, 'NOT_FOUND', 'Produk tidak ditemukan');
       productIds = plan.components.map((c) => c.productId);
     } else {
-      const rows = await db.asset.groupBy({ by: ['productId'], take: 200 });
+      const rows = await db.asset.groupBy({
+        by: ['productId'],
+        orderBy: { productId: 'asc' },
+        take: 200,
+      });
       productIds = rows.map((r) => r.productId);
     }
     res.json({ data: await availabilityCalendar(db, productIds, q.from, q.to) });

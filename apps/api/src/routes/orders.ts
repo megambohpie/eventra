@@ -616,12 +616,12 @@ export function ordersRouter(db: PrismaClient): Router {
             units.set(c.productId, cur);
           }
         }
-        return [o.id, [...units.values()]] as const;
+        return [o.id, [...units.values()]] as [string, { productName: string; quantity: number }[]];
       }),
     );
   }
 
-  const totalUnits = (u: { quantity: number }[]) => u.reduce((n, x) => n + x.quantity, 0);
+  const totalUnits = (u: readonly { quantity: number }[]) => u.reduce((n, x) => n + x.quantity, 0);
 
   router.get('/calendar', requireCapability('order.read'), async (req, res) => {
     const { from, to } = orderCalendarQuerySchema.parse(req.query);
