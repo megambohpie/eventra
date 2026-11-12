@@ -5,6 +5,11 @@ import { AssetDetailPage } from './pages/AssetDetailPage';
 import { AssetsPage } from './pages/AssetsPage';
 import { CustomersPage } from './pages/CustomersPage';
 import { HomePage } from './pages/HomePage';
+import { IncidentDetailPage } from './pages/IncidentDetailPage';
+import { IncidentsPage } from './pages/IncidentsPage';
+import { ReplacementDetailPage } from './pages/ReplacementDetailPage';
+import { ReplacementsPage } from './pages/ReplacementsPage';
+import { ServiceTicketsPage } from './pages/ServiceTicketsPage';
 import { CalendarPage } from './pages/CalendarPage';
 import { MasterPage } from './pages/MasterPage';
 import { OrderDetailPage } from './pages/OrderDetailPage';
@@ -47,6 +52,17 @@ export function App() {
           <Route element={<RequireCapability capability="warehouse.read" />}>
             <Route path="warehouse" element={<WarehousePage />} />
             <Route path="warehouse/pick-lists/:id" element={<PickListDetailPage />} />
+          </Route>
+          <Route element={<RequireCapability capability="incident.read" />}>
+            <Route path="incidents" element={<IncidentsPage />} />
+            <Route path="incidents/:id" element={<IncidentDetailPage />} />
+          </Route>
+          <Route element={<RequireCapability capability="warehouse.read" />}>
+            <Route path="replacements" element={<ReplacementsPage />} />
+            <Route path="replacements/:id" element={<ReplacementDetailPage />} />
+          </Route>
+          <Route element={<RequireCapability capability="service.read" />}>
+            <Route path="service-tickets" element={<ServiceTicketsPage />} />
           </Route>
           <Route element={<RequireCapability capability="master.read" />}>
             <Route path="master" element={<MasterPage />} />

@@ -11,7 +11,7 @@
 | 02 | Done | Aset dan QR lifecycle |
 | 03 | Done | Ketersediaan, paket, pesanan |
 | 04 | Done | Gudang, scan, dan PDF |
-| 05 | Todo | Insiden, servis, penggantian |
+| 05 | Done | Insiden, servis, penggantian |
 | 06 | Todo | Dashboard owner dan keuangan |
 | 07 | Todo | Mobile operasional |
 | 08 | Todo | Hardening dan rilis |
@@ -86,11 +86,13 @@
 
 ## Fase 05 — Insiden, Servis, dan Aset Pengganti
 
-- [ ] Schema insiden, foto (validasi 1–5), service ticket, replacement task.
-- [ ] PIC lapangan scan aset rusak, memilih urgensi, mengisi deskripsi, dan unggah 1–5 foto.
-- [ ] Notifikasi/admin review dengan keputusan perbaikan, teknisi, tolak, atau penggantian.
-- [ ] Pick list serta scan aset pengganti keluar dan scan diterima PIC lapangan.
-- [ ] Hubungkan aset rusak/pengganti ke insiden dan catat tiket servis.
+- [x] Schema insiden, foto (validasi 1–5), service ticket, replacement task.
+- [x] PIC lapangan scan aset rusak, memilih urgensi, mengisi deskripsi, dan unggah 1–5 foto.
+- [x] Notifikasi/admin review dengan keputusan perbaikan, teknisi, tolak, atau penggantian.
+- [x] Pick list serta scan aset pengganti keluar dan scan diterima PIC lapangan.
+- [x] Hubungkan aset rusak/pengganti ke insiden dan catat tiket servis.
+
+- [x] Tambahan di luar daftar: insiden berstatus DRAFT → REPORTED (wajib 1–5 foto, ditegakkan API dan trigger DB), aset ditandai ISSUE_ON_SITE/DAMAGED saat laporan dikirim; keputusan admin (panduan, teknisi + tiket servis otomatis, tolak dengan alasan, penggantian) dan penutupan di lokasi; tugas penggantian (pilih → verifikasi QR → kirim → diterima PIC lapangan) dengan scan ditolak tercatat; aset pengganti masuk daftar aktif pesanan; tiket servis (buka/mulai/selesai dengan hasil pemeriksaan/batal) dengan biaya hanya untuk asset.cost.read; aset dengan insiden/tiket terbuka dikarantina saat kembali dan tidak bisa AVAILABLE manual; notifikasi dalam aplikasi (lonceng); capability baru incident.read/report/review, service.read/write, replacement.receive; UI /incidents, /replacements, /service-tickets.
 
 **Selesai bila:** alur kerusakan sampai penggantian dapat diuji end-to-end dan aset rusak tidak kembali ke stok tersedia sebelum lolos pemeriksaan.
 

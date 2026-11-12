@@ -7,3 +7,4 @@ export * from './master';
 export * from './assets';
 export * from './orders';
 export * from './warehouse';
+export * from './incidents';

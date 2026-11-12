@@ -22,6 +22,7 @@ import { currentUser, requireCapability } from '../auth/middleware';
 import { HttpError } from '../errors';
 import { parseId } from '../http';
 import { buildLabelsPdf, qrPng } from '../assets/labels';
+import { assertClearable } from '../incidents/service';
 import {
   QR_TOKEN_PATTERN,
   assetInclude,
@@ -321,6 +322,8 @@ export function assetsRouter(db: PrismaClient): Router {
           'Aset rusak harus diperbaiki (ubah kondisi) sebelum tersedia',
         );
       }
+      // Insiden belum tuntas / tiket servis terbuka: belum lolos pemeriksaan, tidak boleh tersedia.
+      if (input.status === 'AVAILABLE') await assertClearable(tx, id);
       const claimed = await tx.asset.updateMany({
         where: { id, status: before.status },
         data: { status: input.status },

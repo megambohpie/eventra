@@ -47,3 +47,15 @@ export function currentUser(req: { user?: AuthUser }): AuthUser {
   if (!req.user) throw new HttpError(401, 'UNAUTHENTICATED', 'Autentikasi diperlukan');
   return req.user;
 }
+
+/** Cukup salah satu capability (mis. gudang atau pelapor insiden dapat melihat tugas penggantian). */
+export function requireAnyCapability(...capabilities: Capability[]): RequestHandler {
+  return (req, _res, next) => {
+    const user = req.user;
+    if (!user) throw new HttpError(401, 'UNAUTHENTICATED', 'Autentikasi diperlukan');
+    if (!capabilities.some((c) => hasCapability(user.role, c))) {
+      throw new HttpError(403, 'FORBIDDEN', 'Anda tidak memiliki izin untuk aksi ini');
+    }
+    next();
+  };
+}

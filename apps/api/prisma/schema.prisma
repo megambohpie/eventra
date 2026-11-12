@@ -65,6 +65,10 @@ model User {
   picApprovals        OrderPic[]           @relation("PicApprover")
   orderEvents         OrderStatusEvent[]
   scanEvents          ScanEvent[]
+  incidentsReported   Incident[]           @relation("IncidentReporter")
+  incidentsReviewed   Incident[]           @relation("IncidentReviewer")
+  incidentEvents      IncidentEvent[]
+  notifications       Notification[]
 
   @@map("users")
 }
@@ -236,12 +240,16 @@ model Asset {
   createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt     DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  product       Product            @relation(fields: [productId], references: [id])
-  location      Location?          @relation(fields: [locationId], references: [id])
-  receipt       StockReceipt?      @relation(fields: [receiptId], references: [id])
-  events        AssetStatusEvent[]
-  pickListItems PickListItem[]
-  scanEvents    ScanEvent[]
+  product        Product            @relation(fields: [productId], references: [id])
+  location       Location?          @relation(fields: [locationId], references: [id])
+  receipt        StockReceipt?      @relation(fields: [receiptId], references: [id])
+  events         AssetStatusEvent[]
+  pickListItems  PickListItem[]
+  scanEvents     ScanEvent[]
+  incidents      Incident[]
+  serviceTickets ServiceTicket[]
+  replacedBy     ReplacementTask[]  @relation("ReplacementOldAsset")
+  replacementFor ReplacementTask[]  @relation("ReplacementNewAsset")
 
   @@unique([productId, serial])
   @@index([productId])
@@ -397,6 +405,8 @@ model Order {
   events            OrderStatusEvent[]
   pickLists         PickList[]
   handoverDocuments HandoverDocument[]
+  incidents         Incident[]
+  replacementTasks  ReplacementTask[]
 
   @@index([customerId])
   @@index([status])
@@ -525,6 +535,12 @@ enum ScanAction {
   CHECKOUT
   RETURN
   RETURN_MISSING
+  INCIDENT_SCAN
+  REPLACEMENT_PICK
+  REPLACEMENT_UNPICK
+  REPLACEMENT_VERIFY
+  REPLACEMENT_DISPATCH
+  REPLACEMENT_RECEIVE
 }
 
 enum ScanResult {
@@ -611,22 +627,26 @@ model PickListItem {
 
 // Append-only: setiap scan (berhasil maupun ditolak) tercatat beserta pelaksananya.
 model ScanEvent {
-  id         String          @id @default(uuid()) @db.Uuid
-  action     ScanAction
-  result     ScanResult
-  method     ScanMethod
-  reason     String?
-  pickListId String?         @map("pick_list_id") @db.Uuid
-  orderId    String?         @map("order_id") @db.Uuid
-  assetId    String?         @map("asset_id") @db.Uuid
-  condition  AssetCondition?
-  note       String?
-  actorId    String?         @map("actor_id") @db.Uuid
-  createdAt  DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  id                String          @id @default(uuid()) @db.Uuid
+  action            ScanAction
+  result            ScanResult
+  method            ScanMethod
+  reason            String?
+  pickListId        String?         @map("pick_list_id") @db.Uuid
+  orderId           String?         @map("order_id") @db.Uuid
+  assetId           String?         @map("asset_id") @db.Uuid
+  condition         AssetCondition?
+  note              String?
+  actorId           String?         @map("actor_id") @db.Uuid
+  incidentId        String?         @map("incident_id") @db.Uuid
+  replacementTaskId String?         @map("replacement_task_id") @db.Uuid
+  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  pickList PickList? @relation(fields: [pickListId], references: [id])
-  asset    Asset?    @relation(fields: [assetId], references: [id])
-  actor    User?     @relation(fields: [actorId], references: [id])
+  pickList        PickList?        @relation(fields: [pickListId], references: [id])
+  asset           Asset?           @relation(fields: [assetId], references: [id])
+  actor           User?            @relation(fields: [actorId], references: [id])
+  incident        Incident?        @relation(fields: [incidentId], references: [id])
+  replacementTask ReplacementTask? @relation(fields: [replacementTaskId], references: [id])
 
   @@index([pickListId, createdAt])
   @@index([assetId, createdAt])
@@ -687,4 +707,211 @@ model DocumentSignature {
 
   @@unique([documentId, role])
   @@map("document_signatures")
+}
+
+// ---------- Fase 05: insiden, servis, aset pengganti ----------
+
+enum IncidentUrgency {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum IncidentStatus {
+  DRAFT
+  REPORTED
+  GUIDANCE_GIVEN
+  TECHNICIAN_ASSIGNED
+  REPLACEMENT_IN_PROGRESS
+  REPLACED
+  REJECTED
+  CLOSED
+}
+
+enum IncidentDecision {
+  GUIDANCE
+  TECHNICIAN
+  REJECT
+  REPLACE
+}
+
+enum ServiceTicketStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum InspectionResult {
+  PASSED
+  FAILED
+}
+
+enum ReplacementStatus {
+  PENDING_PICK
+  PICKED
+  VERIFIED
+  DISPATCHED
+  RECEIVED
+  CANCELLED
+}
+
+// Laporan kerusakan dari lapangan. DRAFT sampai 1–5 foto terlampir lalu dikirim (submit).
+model Incident {
+  id                   String            @id @default(uuid()) @db.Uuid
+  number               String            @unique
+  assetId              String            @map("asset_id") @db.Uuid
+  orderId              String            @map("order_id") @db.Uuid
+  pickListId           String            @map("pick_list_id") @db.Uuid
+  reporterId           String            @map("reporter_id") @db.Uuid
+  urgency              IncidentUrgency
+  description          String
+  locationNote         String?           @map("location_note")
+  status               IncidentStatus    @default(DRAFT)
+  assetStatusBefore    AssetStatus?      @map("asset_status_before")
+  assetConditionBefore AssetCondition?   @map("asset_condition_before")
+  decision             IncidentDecision?
+  decisionNote         String?           @map("decision_note")
+  technicianName       String?           @map("technician_name")
+  reviewedBy           String?           @map("reviewed_by") @db.Uuid
+  reviewedAt           DateTime?         @map("reviewed_at") @db.Timestamptz(3)
+  reportedAt           DateTime?         @map("reported_at") @db.Timestamptz(3)
+  closedAt             DateTime?         @map("closed_at") @db.Timestamptz(3)
+  closeNote            String?           @map("close_note")
+  createdAt            DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  asset            Asset             @relation(fields: [assetId], references: [id])
+  order            Order             @relation(fields: [orderId], references: [id])
+  reporter         User              @relation("IncidentReporter", fields: [reporterId], references: [id])
+  reviewer         User?             @relation("IncidentReviewer", fields: [reviewedBy], references: [id])
+  photos           IncidentPhoto[]
+  events           IncidentEvent[]
+  serviceTickets   ServiceTicket[]
+  replacementTasks ReplacementTask[]
+  scans            ScanEvent[]
+
+  @@index([assetId])
+  @@index([orderId])
+  @@index([status])
+  @@index([reporterId])
+  @@map("incidents")
+}
+
+// Bukti foto insiden: append-only (trigger), maks. 5 per insiden (ditegakkan backend dalam transaksi berkunci).
+model IncidentPhoto {
+  id         String   @id @default(uuid()) @db.Uuid
+  incidentId String   @map("incident_id") @db.Uuid
+  mimeType   String   @map("mime_type")
+  data       Bytes
+  createdBy  String?  @map("created_by") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  incident Incident @relation(fields: [incidentId], references: [id])
+
+  @@index([incidentId])
+  @@map("incident_photos")
+}
+
+// Append-only: riwayat status insiden beserta pelaku.
+model IncidentEvent {
+  id         String          @id @default(uuid()) @db.Uuid
+  incidentId String          @map("incident_id") @db.Uuid
+  fromStatus IncidentStatus? @map("from_status")
+  toStatus   IncidentStatus  @map("to_status")
+  note       String?
+  actorId    String?         @map("actor_id") @db.Uuid
+  createdAt  DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  incident Incident @relation(fields: [incidentId], references: [id])
+  actor    User?    @relation(fields: [actorId], references: [id])
+
+  @@index([incidentId, createdAt])
+  @@map("incident_events")
+}
+
+// Satu tiket servis terbuka (OPEN/IN_PROGRESS) per aset (indeks parsial di migrasi). Biaya sensitif (asset.cost.read).
+model ServiceTicket {
+  id                String              @id @default(uuid()) @db.Uuid
+  number            String              @unique
+  assetId           String              @map("asset_id") @db.Uuid
+  incidentId        String?             @map("incident_id") @db.Uuid
+  complaint         String
+  status            ServiceTicketStatus @default(OPEN)
+  vendor            String?
+  cost              BigInt?
+  actionTaken       String?             @map("action_taken")
+  inspection        InspectionResult?
+  inspectionNote    String?             @map("inspection_note")
+  conditionBefore   AssetCondition      @map("condition_before")
+  conditionAfter    AssetCondition?     @map("condition_after")
+  assetStatusBefore AssetStatus         @map("asset_status_before")
+  startedAt         DateTime?           @map("started_at") @db.Timestamptz(3)
+  completedAt       DateTime?           @map("completed_at") @db.Timestamptz(3)
+  createdBy         String?             @map("created_by") @db.Uuid
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  asset    Asset     @relation(fields: [assetId], references: [id])
+  incident Incident? @relation(fields: [incidentId], references: [id])
+
+  @@index([assetId])
+  @@index([status])
+  @@index([incidentId])
+  @@map("service_tickets")
+}
+
+// Tugas penggantian: aset lama (rusak) dan aset pengganti ditautkan ke insiden yang sama.
+// Satu tugas aktif (bukan CANCELLED) per insiden (indeks parsial di migrasi).
+model ReplacementTask {
+  id                 String            @id @default(uuid()) @db.Uuid
+  number             String            @unique
+  incidentId         String            @map("incident_id") @db.Uuid
+  orderId            String            @map("order_id") @db.Uuid
+  pickListId         String            @map("pick_list_id") @db.Uuid
+  oldAssetId         String            @map("old_asset_id") @db.Uuid
+  productId          String            @map("product_id") @db.Uuid
+  replacementAssetId String?           @map("replacement_asset_id") @db.Uuid
+  status             ReplacementStatus @default(PENDING_PICK)
+  pickedAt           DateTime?         @map("picked_at") @db.Timestamptz(3)
+  verifiedAt         DateTime?         @map("verified_at") @db.Timestamptz(3)
+  dispatchedAt       DateTime?         @map("dispatched_at") @db.Timestamptz(3)
+  receivedAt         DateTime?         @map("received_at") @db.Timestamptz(3)
+  receivedBy         String?           @map("received_by") @db.Uuid
+  receivedPicId      String?           @map("received_pic_id") @db.Uuid
+  receiveCondition   AssetCondition?   @map("receive_condition")
+  receiveNote        String?           @map("receive_note")
+  cancelledAt        DateTime?         @map("cancelled_at") @db.Timestamptz(3)
+  createdBy          String?           @map("created_by") @db.Uuid
+  createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  incident         Incident    @relation(fields: [incidentId], references: [id])
+  order            Order       @relation(fields: [orderId], references: [id])
+  oldAsset         Asset       @relation("ReplacementOldAsset", fields: [oldAssetId], references: [id])
+  replacementAsset Asset?      @relation("ReplacementNewAsset", fields: [replacementAssetId], references: [id])
+  scans            ScanEvent[]
+
+  @@index([incidentId])
+  @@index([status])
+  @@index([orderId])
+  @@map("replacement_tasks")
+}
+
+// Notifikasi dalam aplikasi; teks diterjemahkan di klien dari `type` + `params`.
+model Notification {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  type      String
+  entity    String
+  entityId  String    @map("entity_id")
+  params    Json      @default("{}")
+  readAt    DateTime? @map("read_at") @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, readAt, createdAt])
+  @@map("notifications")
 }

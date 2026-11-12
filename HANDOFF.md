@@ -3,7 +3,7 @@
 Dokumen ini adalah sumber ringkas keadaan proyek untuk manusia, Codex, Claude Code, atau agen lain. Baca sebelum implementasi agar pekerjaan tidak diulang.
 
 **Terakhir diperbarui:** 12 November 2026  
-**Status:** Fase 00–04 (termasuk gudang, scan, dan dokumen serah-terima) selesai dan terverifikasi; Fase 05 belum dimulai dan menunggu persetujuan owner.
+**Status:** Fase 00–05 (termasuk insiden, servis, dan aset pengganti) selesai dan terverifikasi otomatis; Fase 06 belum dimulai dan menunggu persetujuan owner.
 
 ## Urutan baca
 
@@ -81,6 +81,28 @@ Dokumen ini adalah sumber ringkas keadaan proyek untuk manusia, Codex, Claude Co
 | RBAC | Capability baru `warehouse.read` (Owner, Admin, Koordinator, Gudang), `warehouse.write` dan `handover.sign` (Admin, Gudang). FIELD_PIC belum punya akses (Fase 05/07). |
 | Web | `/warehouse` (daftar + buat pick list), `/warehouse/pick-lists/:id` (scan pilih/verifikasi, checkout, scan kembali + foto, dokumen: unduh/cetak/tanda tangan canvas/revisi, log scan), tombol Gudang di detail pesanan, `SignaturePad` di `components/ui`. |
 
+## Fase 05 — yang ada sekarang
+
+| Area | Fakta |
+| --- | --- |
+| Schema | Migrasi `20261112032025_incidents_service_replacement` (aditif): `incidents`, `incident_photos`, `incident_events`, `service_tickets`, `replacement_tasks`, `notifications`, enum baru, nilai baru `ScanAction` (INCIDENT_SCAN, REPLACEMENT_*), kolom `incident_id`/`replacement_task_id` di `scan_events`; sequence `incident_number_seq`, `service_ticket_number_seq`, `replacement_number_seq` (INC-/SVC-/RPL-YYYY-######). Indeks unik parsial: satu tiket servis terbuka per aset, satu tugas penggantian aktif per insiden dan per aset pengganti. Trigger: foto/riwayat insiden append-only dan foto maks. 5. Rollback = drop tabel/sequence/enum/fungsi tersebut. |
+| Insiden | `POST /incidents` (scan QR/kode aset → DRAFT; hanya aset DISPATCHED pada pesanan berjalan; PIC lapangan wajib ditugaskan sebagai PIC FIELD pesanan itu) → `POST /incidents/:id/photos` (body mentah JPEG/PNG, maks. 5) → `POST /incidents/:id/submit` (wajib 1–5 foto; aset → ISSUE_ON_SITE + kondisi DAMAGED; notifikasi ke pemegang `incident.review`). Review: `POST /incidents/:id/review` (GUIDANCE, TECHNICIAN + tiket servis otomatis, REJECT dengan alasan = aset dipulihkan, REPLACE = tugas penggantian). `POST /incidents/:id/close` untuk yang tuntas di lokasi; insiden REPLACED ditutup otomatis saat servis aset lama lolos pemeriksaan. PIC lapangan hanya melihat insiden miliknya/pesanannya. |
+| Penggantian | `/replacement-tasks`: `scan` PICK/VERIFY (produk sama, bukan aset rusak, AVAILABLE, bukan DAMAGED; scan salah dicatat REJECTED), `DELETE /:id/asset`, `dispatch` (aset → IN_TRANSIT), `receive` oleh PIC lapangan (QR harus aset yang dikirim; aset → ON_SITE dan ditambahkan sebagai item DISPATCHED di pick list pesanan sehingga ikut dicocokkan saat kembali; insiden → REPLACED), `cancel` (sebelum dikirim; insiden kembali REPORTED). Semua operasi mengunci pick list pesanan lebih dulu (urutan kunci sama dengan scan gudang). |
+| Pemeriksaan | Aset dengan insiden belum tuntas (REPORTED…REPLACED) atau tiket servis terbuka: saat kembali ke gudang selalu QUARANTINED walau dilaporkan baik, dan `POST /assets/:id/status` ke AVAILABLE ditolak (`ASSET_NOT_CLEARED`). Servis `complete` dengan hasil PASSED (kondisi tidak rusak) → AVAILABLE dan menutup insiden REPLACED; FAILED → QUARANTINED. |
+| Servis | `/service-tickets` (buat/mulai/selesai/batal). Aset AVAILABLE/QUARANTINED → IN_SERVICE; aset ISSUE_ON_SITE tetap (kunjungan teknisi di lokasi). Biaya hanya terlihat dan terisi oleh `asset.cost.read`/dikirim pemegang `service.write`; DTO tanpa biaya untuk selain Owner/Admin. |
+| Notifikasi | `GET /notifications`, `POST /notifications/:id/read`, `/read-all` (milik pengguna login). Teks diterjemahkan di klien dari `type` + `params`. Pengiriman WhatsApp/push tetap backlog. |
+| RBAC | Capability baru: `incident.read` (Owner, Admin, Koordinator, FIELD_PIC terbatas pada miliknya), `incident.report` (Admin, Koordinator, FIELD_PIC), `incident.review` (Admin, Koordinator), `service.read` (Owner, Admin, Koordinator, Gudang), `service.write` (Admin, Koordinator, Gudang), `replacement.receive` (Admin, FIELD_PIC). Pemindaian aset pengganti di gudang memakai `warehouse.write`. |
+| Web | `/incidents` (lapor, daftar), `/incidents/:id` (foto, kirim, keputusan, tutup, penggantian + terima, tiket, riwayat), `/replacements` + `/replacements/:id` (scan pilih/verifikasi, kirim), `/service-tickets`, lonceng notifikasi di navbar. Menu mengikuti capability. |
+
+## Asumsi Fase 05
+
+- Rute `/incidents/:id/replacement` pada spec digantikan `/replacement-tasks/*`; tugas penggantian dibuat otomatis oleh keputusan REPLACE.
+- Aset pengganti harus produk yang sama dengan aset rusak (menjaga kebutuhan per produk di pick list).
+- Laporan hanya untuk aset yang sedang keluar pada pesanan berjalan; kerusakan aset di gudang ditangani lewat kondisi aset/tiket servis.
+- Tiket servis belum memiliki foto sebelum/sesudah (PRD menyebutnya); notifikasi hanya di dalam aplikasi (polling 60 dtk).
+- Scan web memakai input teks (pemindai hardware); kamera web/mobile menunggu Fase 07.
+- Pengguna FIELD_PIC harus ditunjuk sebagai PIC "Lapangan" (sumber Pemilik) pada pesanan agar dapat melapor dan menerima pengganti.
+
 ## Asumsi Fase 04
 
 - Rute `/warehouse/check-out` dan `/warehouse/returns` pada spec digabung ke `/warehouse/pick-lists/:id`; endpoint `/handover/checkout|return` menjadi `/pick-lists/:id/checkout` dan `/return/*`.
@@ -120,20 +142,20 @@ pnpm.cmd dev:web -- --host 127.0.0.1 --port 5173 --strictPort
 - Jika PowerShell menolak `pnpm.ps1`, gunakan `pnpm.cmd`.
 - Backend TSX pernah gagal dalam sandbox karena akses profil OS; menjalankan development server di luar sandbox berhasil.
 
-## Verifikasi terakhir (Fase 04, 12 November 2026)
+## Verifikasi terakhir (Fase 05, 12 November 2026)
 
 | Perintah | Hasil |
 | --- | --- |
 | `eslint .` / `prettier --check .` | Lulus |
-| `tsc` di api, web, shared, api-client (mobile cache hit) | Lulus |
-| Test shared / api / api-client / web | Lulus: 12 / 60 / 6 / 13 (api termasuk 8 test Fase 04: RBAC, paket, scan salah/kurang, lepas & batal pesanan, konkurensi aset yang sama, keluar→dokumen→tanda tangan→revisi→immutability, kembali/selisih/foto/scan terlambat, checkout butuh SCHEDULED) |
+| `tsc` di api, web, shared, api-client | Lulus |
+| Test shared / api / api-client / web | Lulus: 16 / 65 / 6 / 13 (api termasuk 5 test Fase 05: RBAC, foto 1–5 + trigger append-only, alur lengkap lapor→review→scan gudang→terima→kembali→servis lolos + audit, tolak/teknisi/panduan/batal, validasi tiket servis) |
 | `vite build` web dan `tsup` api | Lulus; peringatan bundle >500 kB belum blocker |
 
-**Belum terverifikasi penuh:** (1) `pnpm check` utuh gagal hanya di `prisma generate` (EPERM) karena server dev API berjalan; Prisma client sudah ter-generate dan semua tahap lain dijalankan terpisah dan hijau. Hentikan `pnpm dev:api` sebelum `pnpm check`. (2) Tampilan halaman Fase 02–04 dan hasil render PDF belum diperiksa visual di browser/penampil PDF (ponsel ≈360 px dan desktop); PDF hanya diperiksa struktur (header %PDF, jumlah halaman). (3) Jalankan `pnpm db:migrate` pada database dev bila belum (migrasi Fase 04 sudah diterapkan ke `eventra` dev saat pengerjaan).
+**Belum terverifikasi penuh:** (1) `pnpm check` utuh gagal hanya di `prisma generate` (EPERM) selama `pnpm dev:api` berjalan; semua tahap dijalankan terpisah dan hijau (client Prisma ter-generate untuk tipe; hentikan dev API lalu jalankan `pnpm db:generate` bila engine perlu disegarkan). (2) Tampilan halaman Fase 02–05 (termasuk lonceng notifikasi) dan PDF belum diperiksa visual di browser pada lebar ponsel ≈360 px dan desktop; hanya typecheck/build/test otomatis. (3) Jalankan `pnpm db:migrate` pada database dev bila belum (migrasi Fase 05 sudah diterapkan ke `eventra` dev).
 
 ## Pekerjaan berikutnya
 
-Ikuti `WORK_QUEUE.md`. Fase 05 (insiden, servis, penggantian) dimulai hanya setelah owner menyetujui Fase 04; akan memakai `scan_events`, pick list/dokumen Fase 04 untuk aset pengganti, dan status aset ISSUE_ON_SITE/IN_SERVICE. Mobile belum memakai login/auth (Fase 07).
+Ikuti `WORK_QUEUE.md`. Fase 06 (dashboard owner dan keuangan) dimulai hanya setelah owner menyetujui Fase 05; akan memakai status aset/insiden/tiket servis dan biaya servis Fase 05. Mobile (Fase 07) memakai API yang sama untuk lapor insiden dan terima pengganti.
 
 ## Catatan terbuka
 

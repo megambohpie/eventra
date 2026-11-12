@@ -32,6 +32,7 @@ import { parseId } from '../http';
 import { QR_TOKEN_PATTERN } from '../assets/service';
 import { planItems, requirements } from '../orders/availability';
 import { claimTransition, recordStatus, toSummaryDto as toOrderSummary } from '../orders/service';
+import { assetBlockers } from '../incidents/service';
 import { buildHandoverPdf, type PdfSignature } from '../warehouse/pdf';
 import {
   ScanRejected,
@@ -611,8 +612,13 @@ export function warehouseRouter(db: PrismaClient): Router {
             locationId = location.id;
           }
 
-          // Aset rusak masuk karantina (tidak bisa dialokasikan); selain itu kembali tersedia.
-          const toStatus = input.condition === 'DAMAGED' ? 'QUARANTINED' : 'AVAILABLE';
+          // Aset rusak, atau yang masih punya insiden/tiket servis terbuka, masuk karantina sampai lolos
+          // pemeriksaan (tidak bisa dialokasikan); selain itu kembali tersedia.
+          const blockers = await assetBlockers(tx, asset.id);
+          const toStatus =
+            input.condition === 'DAMAGED' || blockers.incident || blockers.ticket
+              ? 'QUARANTINED'
+              : 'AVAILABLE';
           const data: Prisma.AssetUncheckedUpdateManyInput = { condition: input.condition };
           if (locationId && locationId !== asset.locationId) data.locationId = locationId;
           await moveAsset(tx, asset, toStatus, user.id, `Kembali (${pick.number})`, data);

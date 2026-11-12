@@ -31,6 +31,12 @@ export const CAPABILITIES = [
   'warehouse.read',
   'warehouse.write',
   'handover.sign',
+  'incident.read',
+  'incident.report',
+  'incident.review',
+  'service.read',
+  'service.write',
+  'replacement.receive',
 ] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 
@@ -45,6 +51,8 @@ const READ_ALL: Capability[] = [
   'order.read',
   'availability.read',
   'warehouse.read',
+  'incident.read',
+  'service.read',
 ];
 
 export const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
@@ -63,6 +71,12 @@ export const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
     'order.write',
     'availability.read',
     'warehouse.read',
+    // Review insiden dan tiket servis (TECHNICAL_SPEC §3: koordinator menangani insiden/penggantian).
+    'incident.read',
+    'incident.report',
+    'incident.review',
+    'service.read',
+    'service.write',
   ],
   WAREHOUSE: [
     'product.read',
@@ -76,8 +90,12 @@ export const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
     'warehouse.read',
     'warehouse.write',
     'handover.sign',
+    // Gudang membuat/memperbarui tiket servis; aset pengganti di-scan lewat warehouse.write.
+    'service.read',
+    'service.write',
   ],
-  FIELD_PIC: [],
+  // PIC lapangan: lapor insiden, lihat laporannya sendiri, dan terima aset pengganti.
+  FIELD_PIC: ['incident.read', 'incident.report', 'replacement.receive'],
   CUSTOMER: [],
 };
 

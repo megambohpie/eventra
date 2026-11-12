@@ -300,4 +300,47 @@
   .ev-signature__canvas {
     @apply aspect-[600/220] w-full touch-none rounded-xl border border-base-300 bg-white;
   }
+  /* ---------- Insiden, servis, penggantian, notifikasi ---------- */
+  .ev-form {
+    @apply grid gap-2;
+  }
+  .ev-thumbs--start {
+    @apply justify-start;
+  }
+  .ev-thumb--large {
+    @apply size-20 sm:size-24;
+  }
+  .ev-dl__desc--wrap {
+    @apply break-words whitespace-pre-line;
+  }
+  .ev-cell--wrap {
+    @apply max-w-xs whitespace-normal break-words;
+  }
+  .ev-bell {
+    @apply relative;
+  }
+  .ev-bell__count {
+    @apply absolute -top-1 -right-1;
+  }
+  .ev-bell__panel {
+    @apply z-50 mt-2 w-[min(22rem,calc(100vw-1.5rem))] bg-base-100 shadow-xl;
+  }
+  .ev-bell__body {
+    @apply gap-2 p-3;
+  }
+  .ev-bell__head {
+    @apply flex items-center justify-between gap-2;
+  }
+  .ev-bell__title {
+    @apply font-semibold;
+  }
+  .ev-bell__list {
+    @apply max-h-80 flex-nowrap overflow-y-auto p-0;
+  }
+  .ev-bell__item {
+    @apply flex flex-col items-start gap-0.5 text-left text-sm;
+  }
+  .ev-bell__item[data-unread='true'] {
+    @apply font-semibold;
+  }
 }

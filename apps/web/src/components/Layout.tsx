@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {
   mdiAccountGroup,
+  mdiAlertOctagon,
   mdiCalendarMonth,
   mdiClipboardText,
   mdiCube,
@@ -9,6 +10,8 @@ import {
   mdiMapMarker,
   mdiPackageDown,
   mdiQrcode,
+  mdiSwapHorizontal,
+  mdiWrench,
   mdiWarehouse,
   mdiMenu,
   mdiMenuOpen,
@@ -19,6 +22,7 @@ import type { Capability } from '@eventra/shared';
 import { useAuth } from '../auth/AuthProvider';
 import { useSidebar } from '../hooks/useSidebar';
 import { LanguageSwitcher } from './LanguageSwitcher';
+import { NotificationBell } from './NotificationBell';
 import { ThemeToggle } from './ThemeToggle';
 import { Button } from './ui/Button';
 import { Icon } from './ui/Icon';
@@ -51,6 +55,24 @@ const NAV_ITEMS: { to: string; labelKey: string; icon: string; capability?: Capa
     labelKey: 'nav.warehouse',
     icon: mdiWarehouse,
     capability: 'warehouse.read',
+  },
+  {
+    to: '/incidents',
+    labelKey: 'nav.incidents',
+    icon: mdiAlertOctagon,
+    capability: 'incident.read',
+  },
+  {
+    to: '/replacements',
+    labelKey: 'nav.replacements',
+    icon: mdiSwapHorizontal,
+    capability: 'warehouse.read',
+  },
+  {
+    to: '/service-tickets',
+    labelKey: 'nav.service',
+    icon: mdiWrench,
+    capability: 'service.read',
   },
   { to: '/master', labelKey: 'nav.master', icon: mdiMapMarker, capability: 'master.read' },
 ];
@@ -124,6 +146,7 @@ export function Layout() {
             <ThemeToggle />
             {user && (
               <>
+                <NotificationBell />
                 <span className="ev-navbar__user">
                   {user.name} · {t(`roles.${user.role}`)}
                 </span>

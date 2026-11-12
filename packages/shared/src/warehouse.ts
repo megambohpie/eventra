@@ -40,6 +40,12 @@ export const SCAN_ACTIONS = [
   'CHECKOUT',
   'RETURN',
   'RETURN_MISSING',
+  'INCIDENT_SCAN',
+  'REPLACEMENT_PICK',
+  'REPLACEMENT_UNPICK',
+  'REPLACEMENT_VERIFY',
+  'REPLACEMENT_DISPATCH',
+  'REPLACEMENT_RECEIVE',
 ] as const;
 export type ScanAction = (typeof SCAN_ACTIONS)[number];
 export type ScanResult = 'OK' | 'REJECTED';
