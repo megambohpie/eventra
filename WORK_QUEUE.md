@@ -139,6 +139,7 @@
 - [x] API `GET /calendar/orders` (pesanan aktif selain REJECTED/CANCELLED/EXPIRED yang beririsan dengan rentang). Tanpa perubahan schema.
 - [x] Alur disederhanakan (permintaan owner): hanya **Ajukan → Konfirmasi** (konfirmasi dari PENDING_REVIEW, stok tetap dialokasikan atomik); PIC penyewa tidak lagi wajib; hanya PIC gudang dan PIC lapangan (internal atau penyewa); gudang dapat checkout dari pesanan CONFIRMED tanpa Jadwalkan. Penawaran/hold/jadwal/tolak disembunyikan dari UI (endpoint tetap ada).
 - [x] Halaman `/calendar` dan `OrderModal` dihapus (digantikan kalender depan dan POS).
+- [x] Alamat lengkap + titik peta lokasi acara pada form pesanan (`orders.event_address/event_lat/event_lng`, migrasi aditif `20261113090000_order_event_address_geo`). Titik dipilih lewat klik/seret di peta (Leaflet/OpenStreetMap, tanpa API key), tempel koordinat/tautan Google Maps, atau lokasi perangkat; tampil + tautan "Buka di Google Maps" di detail pesanan. Klik peta membuka dialog besar dengan pencarian tempat/alamat (`GET /geocode/search`).
 
 **Selesai bila:** pesanan dapat dibuat lewat halaman Pesanan maupun kalender; stok live tampil per produk; test API/web lulus.
 

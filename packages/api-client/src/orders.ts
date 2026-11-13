@@ -8,6 +8,7 @@ import type {
   CalendarDayDetailDto,
   CalendarDayDto,
   CalendarOrderDto,
+  GeocodeResultDto,
   HoldInput,
   OrderDto,
   OrderInput,
@@ -78,3 +79,5 @@ export const getCalendarOrders = async (c: AxiosInstance, from: string, to: stri
     .data;
 export const getMovementDay = async (c: AxiosInstance, date: string) =>
   (await c.get<Envelope<CalendarDayDetailDto>>('/calendar/day', { params: { date } })).data.data;
+export const searchPlaces = async (c: AxiosInstance, q: string, lang: 'id' | 'en') =>
+  (await c.get<Envelope<GeocodeResultDto[]>>('/geocode/search', { params: { q, lang } })).data.data;

@@ -18,6 +18,7 @@ import { OrderStatusBadge } from '@/components/orders/OrderStatusBadge';
 import { PicModal } from '@/components/orders/PicModal';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { LocationView } from '@/components/ui/LocationPicker';
 import { Icon } from '@/components/ui/Icon';
 import { Loading } from '@/components/ui/Loading';
 import { PageCard, PageHeader } from '@/components/ui/PageCard';
@@ -167,6 +168,23 @@ export function OrderDetailPage() {
             <dt className="ev-dl__term">{t('orders.eventLocation')}</dt>
             <dd className="ev-dl__desc">{order.eventLocation}</dd>
           </div>
+          {order.eventAddress && (
+            <div className="ev-dl__row">
+              <dt className="ev-dl__term">{t('orders.eventAddress')}</dt>
+              <dd className="ev-dl__desc">{order.eventAddress}</dd>
+            </div>
+          )}
+          {order.eventLat != null && order.eventLng != null && (
+            <div className="ev-dl__row">
+              <dt className="ev-dl__term">{t('orders.map.point')}</dt>
+              <dd className="ev-dl__desc">
+                <LocationView
+                  point={{ lat: order.eventLat, lng: order.eventLng }}
+                  address={order.eventAddress}
+                />
+              </dd>
+            </div>
+          )}
           <div className="ev-dl__row">
             <dt className="ev-dl__term">{t('orders.subtotal')}</dt>
             <dd className="ev-dl__desc">{formatRupiah(order.subtotal)}</dd>

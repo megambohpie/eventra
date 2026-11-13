@@ -224,6 +224,47 @@
   .ev-hint {
     @apply text-sm text-base-content/60;
   }
+  .ev-hint--error {
+    @apply text-error;
+  }
+  .ev-location {
+    @apply flex flex-col gap-2;
+  }
+  .ev-location__actions {
+    @apply flex flex-wrap items-center gap-1;
+  }
+  .ev-map {
+    @apply border-base-300 relative z-0 h-48 w-full overflow-hidden rounded-lg border;
+  }
+  .ev-map[data-large='true'] {
+    @apply h-[50vh] min-h-72;
+  }
+  .ev-map__canvas {
+    @apply h-full w-full;
+  }
+  .ev-location__preview {
+    @apply relative block w-full cursor-pointer text-left;
+  }
+  .ev-location__preview > .ev-map {
+    @apply pointer-events-none;
+  }
+  .ev-location__cta {
+    @apply bg-base-100/90 absolute right-2 bottom-2 z-10 flex items-center gap-1 rounded-full px-3 py-1 text-sm shadow;
+  }
+  .ev-mapdialog {
+    @apply flex flex-col gap-2;
+  }
+  .ev-mapdialog__results {
+    @apply bg-base-200 max-h-48 w-full flex-nowrap overflow-y-auto rounded-lg;
+  }
+  .ev-mapdialog__actions {
+    @apply flex justify-end gap-2;
+  }
+  .ev-map__pin-dot {
+    @apply bg-primary border-base-100 block size-7 rounded-full rounded-br-none border-2 shadow-md;
+    transform: rotate(45deg);
+    transform-origin: 50% 100%;
+  }
   .ev-availability {
     @apply flex flex-wrap items-center gap-2 text-sm;
   }

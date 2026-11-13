@@ -12,6 +12,7 @@ import { DEFAULT_RATE_LIMITS, emailKey, rateLimit, type RateLimitConfig } from '
 import { assetsRouter } from './routes/assets';
 import { availabilityRouter } from './routes/availability';
 import { bundlesRouter } from './routes/bundles';
+import { geocodeRouter } from './routes/geocode';
 import { ordersRouter } from './routes/orders';
 import { authRouter, type Mailer } from './routes/auth';
 import { receiptsRouter } from './routes/receipts';
@@ -129,6 +130,7 @@ export function createApp({
   protectedRouter.use(bundlesRouter(db));
   protectedRouter.use(availabilityRouter(db));
   protectedRouter.use(ordersRouter(db));
+  protectedRouter.use(geocodeRouter());
   protectedRouter.use(warehouseRouter(db));
   protectedRouter.use(incidentsRouter(db));
   protectedRouter.use(replacementsRouter(db));

@@ -389,6 +389,48 @@ describe('Fase 03 — paket, ketersediaan, pesanan', () => {
     for (const row of perDate) expect(row._sum.quantity).toBe(8);
   });
 
+  it('menyimpan alamat lengkap dan titik peta; titik setengah ditolak', async () => {
+    const { app } = createTestApp();
+    const admin = await loginAs(app, 'ADMIN');
+    const speaker = await seedProduct('Speaker', 10);
+    const customer = await seedCustomer();
+    const body = orderBody(
+      customer.id,
+      [{ productId: speaker.id, quantity: 1 }],
+      '2026-12-01',
+      '2026-12-01',
+    );
+
+    const created = await request(app)
+      .post('/api/v1/orders')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({
+        ...body,
+        eventAddress: 'Jl. Gatot Subroto 1, Jakarta',
+        eventLat: -6.2297,
+        eventLng: 106.8261,
+      });
+    expect(created.status).toBe(201);
+    expect(created.body.data).toMatchObject({
+      eventAddress: 'Jl. Gatot Subroto 1, Jakarta',
+      eventLat: -6.2297,
+      eventLng: 106.8261,
+    });
+
+    const cleared = await request(app)
+      .put(`/api/v1/orders/${created.body.data.id}`)
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ ...body, eventLat: null, eventLng: null });
+    expect(cleared.status).toBe(200);
+    expect(cleared.body.data).toMatchObject({ eventAddress: null, eventLat: null, eventLng: null });
+
+    const half = await request(app)
+      .post('/api/v1/orders')
+      .set('Authorization', `Bearer ${admin}`)
+      .send({ ...body, eventLat: -6.2 });
+    expect(half.status).toBe(400);
+  });
+
   it('konfirmasi ganda pesanan yang sama hanya berhasil satu kali', async () => {
     const { app } = createTestApp();
     const admin = await loginAs(app, 'ADMIN');

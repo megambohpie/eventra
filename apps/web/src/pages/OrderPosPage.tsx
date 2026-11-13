@@ -10,13 +10,14 @@ import {
   listProducts,
   updateOrder,
 } from '@eventra/api-client';
-import { rentalDays, type OrderDto, type ProductDto } from '@eventra/shared';
+import { rentalDays, type LatLng, type OrderDto, type ProductDto } from '@eventra/shared';
 import { api } from '@/api';
 import { CustomerModal } from '@/components/customers/CustomerModal';
 import { ProductThumb } from '@/components/products/ProductThumb';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { FormField } from '@/components/ui/FormField';
+import { LocationPicker } from '@/components/ui/LocationPicker';
 import { Loading } from '@/components/ui/Loading';
 import { PageCard, PageHeader } from '@/components/ui/PageCard';
 import { SearchInput } from '@/components/ui/SearchInput';
@@ -66,6 +67,12 @@ function PosForm({ order, initialStart, products, customers, reloadCustomers }: 
   const [startDate, setStartDate] = useState(order?.startDate ?? initialStart);
   const [endDate, setEndDate] = useState(order?.endDate ?? initialStart);
   const [eventLocation, setEventLocation] = useState(order?.eventLocation ?? '');
+  const [eventAddress, setEventAddress] = useState(order?.eventAddress ?? '');
+  const [point, setPoint] = useState<LatLng | null>(
+    order?.eventLat != null && order.eventLng != null
+      ? { lat: order.eventLat, lng: order.eventLng }
+      : null,
+  );
   const [note, setNote] = useState(order?.note ?? '');
   const [cart, setCart] = useState<Cart>(
     Object.fromEntries((order?.items ?? []).map((i) => [i.productId, i.quantity])),
@@ -126,6 +133,9 @@ function PosForm({ order, initialStart, products, customers, reloadCustomers }: 
         startDate,
         endDate,
         eventLocation,
+        eventAddress,
+        eventLat: point?.lat ?? null,
+        eventLng: point?.lng ?? null,
         note,
         items: cartLines.map((p) => ({ productId: p.id, quantity: cart[p.id] ?? 0 })),
       };
@@ -296,6 +306,16 @@ function PosForm({ order, initialStart, products, customers, reloadCustomers }: 
             onChange={(e) => setEventLocation(e.target.value)}
           />
         </FormField>
+        <FormField label={t('orders.eventAddress')}>
+          <textarea
+            className="textarea ev-control"
+            rows={2}
+            placeholder={t('orders.eventAddressPlaceholder')}
+            value={eventAddress}
+            onChange={(e) => setEventAddress(e.target.value)}
+          />
+        </FormField>
+        <LocationPicker value={point} onChange={setPoint} />
         <FormField label={t('common.note')}>
           <textarea
             className="textarea ev-control"

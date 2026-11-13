@@ -218,10 +218,19 @@ export const orderInputSchema = z
     startDate: dateOnly,
     endDate: dateOnly,
     eventLocation: z.string().trim().min(1).max(300),
+    /** Alamat lengkap lokasi acara. */
+    eventAddress: optionalText(1000),
+    /** Titik peta (WGS84, sama dengan koordinat Google Maps); keduanya terisi atau kosong. */
+    eventLat: z.number().min(-90).max(90).nullish(),
+    eventLng: z.number().min(-180).max(180).nullish(),
     note: optionalText(1000),
     items: z.array(orderItemInputSchema).min(1).max(50),
   })
   .refine(dateRange, dateRangeMessage)
+  .refine((o) => (o.eventLat == null) === (o.eventLng == null), {
+    path: ['eventLat'],
+    message: 'Latitude dan longitude harus diisi bersamaan',
+  })
   .refine((o) => new Set(o.items.map((i) => i.productId)).size === o.items.length, {
     path: ['items'],
     message: 'Produk duplikat pada item pesanan',
@@ -312,6 +321,9 @@ export interface OrderSummaryDto {
 }
 
 export interface OrderDto extends OrderSummaryDto {
+  eventAddress: string | null;
+  eventLat: number | null;
+  eventLng: number | null;
   note: string | null;
   confirmedAt: string | null;
   items: OrderItemDto[];

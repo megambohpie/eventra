@@ -89,6 +89,9 @@ export async function toOrderDto(db: Db, o: OrderRow): Promise<OrderDto> {
 
   return {
     ...toSummaryDto(o),
+    eventAddress: o.eventAddress,
+    eventLat: o.eventLat,
+    eventLng: o.eventLng,
     note: o.note,
     confirmedAt: o.confirmedAt?.toISOString() ?? null,
     items: o.items.map((i) => {

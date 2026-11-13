@@ -402,6 +402,9 @@ model Order {
   startDate     DateTime    @map("start_date") @db.Date
   endDate       DateTime    @map("end_date") @db.Date
   eventLocation String      @map("event_location")
+  eventAddress  String?     @map("event_address")
+  eventLat      Float?      @map("event_lat")
+  eventLng      Float?      @map("event_lng")
   note          String?
   subtotal      BigInt      @default(0)
   depositTotal  BigInt      @default(0) @map("deposit_total")
