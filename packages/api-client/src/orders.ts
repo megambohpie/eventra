@@ -7,6 +7,7 @@ import type {
   BundleInput,
   CalendarDayDetailDto,
   CalendarDayDto,
+  CalendarOrderDto,
   HoldInput,
   OrderDto,
   OrderInput,
@@ -72,5 +73,8 @@ export const deleteOrderPic = async (c: AxiosInstance, orderId: string, picId: s
 
 export const getMovementCalendar = async (c: AxiosInstance, from: string, to: string) =>
   (await c.get<Envelope<CalendarDayDto[]>>('/calendar', { params: { from, to } })).data.data;
+export const getCalendarOrders = async (c: AxiosInstance, from: string, to: string) =>
+  (await c.get<Envelope<CalendarOrderDto[]>>('/calendar/orders', { params: { from, to } })).data
+    .data;
 export const getMovementDay = async (c: AxiosInstance, date: string) =>
   (await c.get<Envelope<CalendarDayDetailDto>>('/calendar/day', { params: { date } })).data.data;

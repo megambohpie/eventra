@@ -374,7 +374,9 @@ export async function buildPayload(
     },
   });
   const warehouseRole = type === 'OUT' ? 'WAREHOUSE_OUT' : 'WAREHOUSE_IN';
-  const warehouse = pick.order.pics.find((p) => p.role === warehouseRole);
+  const warehouse =
+    pick.order.pics.find((p) => p.role === warehouseRole) ??
+    pick.order.pics.find((p) => p.role === 'WAREHOUSE_OUT' || p.role === 'WAREHOUSE_IN');
   const dispatched = pick.items.filter((i) => i.dispatchedAt !== null);
   const items: HandoverItemSnapshot[] = dispatched
     .map((i) =>

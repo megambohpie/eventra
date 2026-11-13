@@ -15,6 +15,7 @@
 | 06 | Done | Dashboard owner dan keuangan |
 | 07 | Done | Mobile operasional |
 | 08 | Done | Hardening dan rilis |
+| 09 | Done | UX pesanan: POS dan kalender depan |
 
 ## Definition of Ready untuk Setiap Item
 
@@ -130,6 +131,16 @@
 - [x] Tambahan di luar daftar: batas laju di memori (login per IP+email dan per IP, refresh, reset password, global) dengan 429 + `Retry-After`; CORS allowlist (`CORS_ORIGINS`, wajib di production), `TRUST_PROXY`, validasi env production (tolak wildcard/secret contoh); header `Cache-Control: no-store`; request id (`x-request-id`) + access log JSON yang memakai template rute (token QR/reset tidak pernah masuk log); `ErrorReporter` tunggal untuk 500, job gagal, dan error proses; `JobMonitor` (guard anti-tumpang-tindih, status per job) + endpoint `/health/live` dan `/health/ready`; graceful shutdown; migrasi `hardening_append_only` (trigger append-only untuk `audit_logs`, `asset_status_events`, `order_status_events`); skrip `ops/backup.sh` + `ops/restore-verify.sh` (diuji nyata: dump → restore ke DB sementara → bandingkan 36 tabel, trigger, migrasi); test: `hardening.test.ts`, `load.test.ts`, `e2e.test.ts`.
 
 **Selesai bila:** semua test wajib hijau, UAT owner disetujui, backup restore berhasil, dan runbook tersedia.
+
+## Fase 09 — UX Pesanan: POS dan Kalender Depan (permintaan owner, 13 Nov 2026)
+
+- [x] Halaman depan (`/`) menampilkan kalender pesanan: tiap pesanan = blok panjang dari tanggal mulai sampai selesai (dipotong per minggu), berisi nama pemesan; klik blok → detail pesanan; tombol **+** pada tanggal hari ini/mendatang → pesanan baru dengan tanggal terisi.
+- [x] Pesanan baru/ubah draft berbentuk POS (`/orders/new`, `/orders/:id/edit`): kartu produk dengan stok live untuk rentang sewa, klik = tambah qty, qty bisa +/− atau diketik (dibatasi stok), ringkasan + perkiraan total, pelanggan baru dari POS. Dapat dibuka dari halaman Pesanan maupun kalender.
+- [x] API `GET /calendar/orders` (pesanan aktif selain REJECTED/CANCELLED/EXPIRED yang beririsan dengan rentang). Tanpa perubahan schema.
+- [x] Alur disederhanakan (permintaan owner): hanya **Ajukan → Konfirmasi** (konfirmasi dari PENDING_REVIEW, stok tetap dialokasikan atomik); PIC penyewa tidak lagi wajib; hanya PIC gudang dan PIC lapangan (internal atau penyewa); gudang dapat checkout dari pesanan CONFIRMED tanpa Jadwalkan. Penawaran/hold/jadwal/tolak disembunyikan dari UI (endpoint tetap ada).
+- [x] Halaman `/calendar` dan `OrderModal` dihapus (digantikan kalender depan dan POS).
+
+**Selesai bila:** pesanan dapat dibuat lewat halaman Pesanan maupun kalender; stok live tampil per produk; test API/web lulus.
 
 ## Backlog Setelah MVP
 

@@ -20,6 +20,8 @@ import { SearchSelect } from '@/components/ui/SearchSelect';
 import { sanitizePhone } from '@/lib/format';
 import { notify } from '@/lib/notifications';
 
+const SELECTABLE_PIC_ROLES: readonly PicRole[] = ['WAREHOUSE_OUT', 'FIELD'];
+
 interface PicModalProps {
   orderId: string;
   pic?: OrderPicDto;
@@ -33,11 +35,12 @@ interface PicModalProps {
 
 export function PicModal({ orderId, pic, takenRoles, users, onClose, onChanged }: PicModalProps) {
   const { t } = useTranslation();
+  // Alur ringkas: hanya PIC gudang dan PIC lapangan (peran lama tetap tampil bila sedang diubah).
   const roles = PIC_ROLES.filter(
-    (r) => r === 'CUSTOMER_PIC' || r === pic?.role || !takenRoles.includes(r),
+    (r) => r === pic?.role || (SELECTABLE_PIC_ROLES.includes(r) && !takenRoles.includes(r)),
   );
-  const [role, setRole] = useState<PicRole>(pic?.role ?? roles[0] ?? 'CUSTOMER_PIC');
-  const [source, setSource] = useState<PicSource>(pic?.source ?? 'CUSTOMER');
+  const [role, setRole] = useState<PicRole>(pic?.role ?? roles[0] ?? 'WAREHOUSE_OUT');
+  const [source, setSource] = useState<PicSource>(pic?.source ?? 'OWNER');
   const [userId, setUserId] = useState(pic?.userId ?? '');
   const [name, setName] = useState(pic?.source === 'OWNER' ? '' : (pic?.name ?? ''));
   const [phone, setPhone] = useState(pic?.source === 'OWNER' ? '' : (pic?.phone ?? ''));
@@ -105,7 +108,7 @@ export function PicModal({ orderId, pic, takenRoles, users, onClose, onChanged }
               disabled={internalOnly}
               onChange={(e) => setSource(e.target.value as PicSource)}
             >
-              {PIC_SOURCES.map((s) => (
+              {PIC_SOURCES.filter((s) => s !== 'THIRD_PARTY' || s === effectiveSource).map((s) => (
                 <option key={s} value={s}>
                   {t(`orders.pics.sources.${s}`)}
                 </option>

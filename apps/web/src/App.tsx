@@ -14,9 +14,9 @@ import { IncidentsPage } from './pages/IncidentsPage';
 import { ReplacementDetailPage } from './pages/ReplacementDetailPage';
 import { ReplacementsPage } from './pages/ReplacementsPage';
 import { ServiceTicketsPage } from './pages/ServiceTicketsPage';
-import { CalendarPage } from './pages/CalendarPage';
 import { MasterPage } from './pages/MasterPage';
 import { OrderDetailPage } from './pages/OrderDetailPage';
+import { OrderPosPage } from './pages/OrderPosPage';
 import { OrdersPage } from './pages/OrdersPage';
 import { PickListDetailPage } from './pages/PickListDetailPage';
 import { ProductsPage } from './pages/ProductsPage';
@@ -53,7 +53,10 @@ export function App() {
           <Route element={<RequireCapability capability="order.read" />}>
             <Route path="orders" element={<OrdersPage />} />
             <Route path="orders/:id" element={<OrderDetailPage />} />
-            <Route path="calendar" element={<CalendarPage />} />
+          </Route>
+          <Route element={<RequireCapability capability="order.write" />}>
+            <Route path="orders/new" element={<OrderPosPage />} />
+            <Route path="orders/:id/edit" element={<OrderPosPage />} />
           </Route>
           <Route element={<RequireCapability capability="warehouse.read" />}>
             <Route path="warehouse" element={<WarehousePage />} />

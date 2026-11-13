@@ -2,7 +2,7 @@
 
 Dokumen ini adalah sumber ringkas keadaan proyek untuk manusia, Codex, Claude Code, atau agen lain. Baca sebelum implementasi agar pekerjaan tidak diulang.
 
-**Terakhir diperbarui:** 12 November 2026  
+**Terakhir diperbarui:** 13 November 2026 
 **Status:** Fase 00–08 selesai dan terverifikasi otomatis (Fase 08 = hardening dan rilis). Yang tersisa adalah langkah manusia: UAT owner (`RELEASE_PLAN.md` §3), uji mobile di perangkat nyata, pemeriksaan visual web 360 px/desktop, dan uji restore di server target. Keputusan terbuka (penyedia email, gateway pembayaran, cookie httpOnly) ada di `RUNBOOK.md` §8.
 
 ## Urutan baca
@@ -132,6 +132,15 @@ Dokumen ini adalah sumber ringkas keadaan proyek untuk manusia, Codex, Claude Co
 | Backup | `ops/backup.sh` (pg_dump format custom + sha256 + rotasi) dan `ops/restore-verify.sh` (restore ke DB sementara, bandingkan baris 36 tabel, trigger, migrasi); `pnpm ops:backup`, `pnpm ops:restore-verify`. Diuji nyata terhadap DB dev (Docker): "RESTORE OK". Folder `backups/` di-gitignore. |
 | Test baru | `hardening.test.ts` (25: 401 pada SEMUA rute non-publik dibaca dari sumber rute, OWNER 403 pada semua rute tulis, JWT palsu/kadaluarsa/alg none, peran dari DB, rate limit, unggah: tipe/magic bytes/ukuran, token QR tidak bocor di DTO/audit/log, audit & append-only, header/CORS/health/error reporter, hold expiry + JobMonitor), `load.test.ts` (30 konfirmasi serentak stok 20 → tepat 10 menang; 108 request campuran; multi-produk urutan berlawanan tanpa deadlock; `LOAD_FACTOR=n` menaikkan skala; p95 ≈ 1 dtk lokal), `e2e.test.ts` (terima stok → pesan → bayar → scan keluar → tanda tangan → insiden → scan kembali → pendapatan/piutang). |
 | Dokumen | `RUNBOOK.md` (komponen, checklist env, deploy, observability, backup/restore, rollback migrasi, prosedur insiden, batasan), `RELEASE_PLAN.md` (gerbang rilis, urutan peluncuran, lembar UAT owner). |
+
+## Fase 09 — UX pesanan (13 November 2026)
+
+| Area | Fakta |
+| --- | --- |
+| API | `GET /calendar/orders?from&to` (`order.read`): pesanan selain REJECTED/CANCELLED/EXPIRED yang beririsan dengan rentang; DTO `CalendarOrderDto`. Tanpa migrasi. |
+| Web | Beranda = `OrderCalendar` (blok per pesanan, logika minggu di `lib/calendar.ts`), lalu shortcut/status. POS di `pages/OrderPosPage.tsx` (rute `/orders/new?start=`, `/orders/:id/edit`, butuh `order.write`; hanya draft yang dapat diubah); logika keranjang di `lib/pos.ts`. Stok live = `/availability/check` semua produk aktif (potongan 50) dengan `excludeOrderId` saat ubah. `CalendarPage` dan `OrderModal` dihapus; menu Kalender dihapus. |
+| Alur ringkas | `submit` tidak lagi mensyaratkan PIC; `confirm` menerima PENDING_REVIEW (selain QUOTED/AWAITING_PAYMENT); checkout gudang menerima CONFIRMED atau SCHEDULED (`ORDER_NOT_SCHEDULED` kini berarti belum terkonfirmasi); penandatangan WAREHOUSE boleh PIC berperan WAREHOUSE_OUT atau WAREHOUSE_IN. UI detail pesanan hanya: Ubah, Ajukan, Konfirmasi, Gudang, Batalkan. PicModal hanya menawarkan PIC gudang (internal) dan PIC lapangan (internal/penyewa); peran lama tetap tampil. Endpoint quote/hold/schedule/reject dipertahankan. |
+| Catatan | Total di POS hanya perkiraan (server menghitung ulang). Produk maks. 100 (batas `pageSize`). Belum diperiksa visual di browser 360 px/desktop. |
 
 ## Asumsi Fase 08
 

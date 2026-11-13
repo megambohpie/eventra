@@ -22,6 +22,7 @@ import {
 import type { Capability, HealthResponse } from '@eventra/shared';
 import { api } from '@/api';
 import { useAuth } from '@/auth/AuthProvider';
+import { OrderCalendar } from '@/components/orders/OrderCalendar';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
@@ -123,6 +124,8 @@ export function HomePage() {
 
   return (
     <div className="ev-home">
+      {can('order.read') && <OrderCalendar />}
+
       <section className="ev-hero">
         <Icon path={mdiWarehouse} className="ev-hero__art" />
         <p className="ev-hero__eyebrow">{t('home.title')}</p>

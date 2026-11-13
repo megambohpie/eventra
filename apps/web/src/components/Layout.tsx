@@ -3,7 +3,6 @@ import {
   mdiAccountGroup,
   mdiAlertOctagon,
   mdiCashMultiple,
-  mdiCalendarMonth,
   mdiClipboardText,
   mdiCube,
   mdiHome,
@@ -58,7 +57,6 @@ const NAV_ITEMS: { to: string; labelKey: string; icon: string; capability?: Capa
     capability: 'receipt.read',
   },
   { to: '/orders', labelKey: 'nav.orders', icon: mdiClipboardText, capability: 'order.read' },
-  { to: '/calendar', labelKey: 'nav.calendar', icon: mdiCalendarMonth, capability: 'order.read' },
   {
     to: '/warehouse',
     labelKey: 'nav.warehouse',

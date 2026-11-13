@@ -72,7 +72,7 @@ function Detail({ pick, canWrite, canSign, reload }: DetailProps) {
   const preparing = pick.status === 'OPEN' || pick.status === 'VERIFIED';
   const awaitingReturn = pick.status === 'DISPATCHED' || pick.status === 'RETURN_ISSUE';
   const afterDispatch = awaitingReturn || pick.status === 'RETURNED';
-  const scheduled = pick.orderStatus === 'SCHEDULED';
+  const scheduled = pick.orderStatus === 'CONFIRMED' || pick.orderStatus === 'SCHEDULED';
 
   const submitScan = async (event: FormEvent) => {
     event.preventDefault();

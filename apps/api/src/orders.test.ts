@@ -5,6 +5,7 @@ import type {
   AvailabilityResultDto,
   CalendarDayDetailDto,
   CalendarDayDto,
+  CalendarOrderDto,
   OrderDto,
   Role,
 } from '@eventra/shared';
@@ -451,11 +452,6 @@ describe('Fase 03 — paket, ketersediaan, pesanan', () => {
     const pics = (body: object) =>
       request(app).post(`${V1}/orders/${id}/pics`).set(auth(admin)).send(body);
 
-    // Tanpa PIC penyewa tidak bisa diajukan.
-    const noPic = await request(app).post(`${V1}/orders/${id}/submit`).set(auth(admin));
-    expect(noPic.status).toBe(409);
-    expect(errorCode(noPic)).toBe('PIC_REQUIRED');
-
     // PIC gudang harus pengguna internal; pihak ketiga wajib otorisasi.
     expect(
       (await pics({ role: 'WAREHOUSE_OUT', source: 'CUSTOMER', name: 'X', phone: '0811' })).status,
@@ -727,6 +723,31 @@ describe('Fase 03 — paket, ketersediaan, pesanan', () => {
     );
   });
 
+  it('alur ringkas: ajukan lalu konfirmasi, tanpa PIC, penawaran, hold, atau jadwal', async () => {
+    const { app } = createTestApp();
+    const admin = await loginAs(app, 'ADMIN');
+    const speaker = await seedProduct('Speaker Ringkas', 5);
+    const customer = await seedCustomer('PT Ringkas');
+    const created = await request(app)
+      .post(`${V1}/orders`)
+      .set(auth(admin))
+      .send(
+        orderBody(
+          customer.id,
+          [{ productId: speaker.id, quantity: 2 }],
+          '2026-12-10',
+          '2026-12-11',
+        ),
+      );
+    const id = (created.body as { data: OrderDto }).data.id;
+    const submitted = await request(app).post(`${V1}/orders/${id}/submit`).set(auth(admin));
+    expect(submitted.status).toBe(200);
+    expect((submitted.body as { data: OrderDto }).data.status).toBe('PENDING_REVIEW');
+    const confirmed = await confirm(app, admin, id);
+    expect(confirmed.status).toBe(200);
+    expect((confirmed.body as { data: OrderDto }).data.status).toBe('CONFIRMED');
+  });
+
   it('kalender: keluar pada tanggal mulai, kembali pada tanggal selesai, dengan rincian', async () => {
     const { app } = createTestApp();
     const admin = await loginAs(app, 'ADMIN');
@@ -777,6 +798,23 @@ describe('Fase 03 — paket, ketersediaan, pesanan', () => {
       outgoingOrders: 0,
       returningOrders: 0,
     });
+
+    // Kalender depan: semua pesanan aktif (termasuk yang belum dikonfirmasi) sebagai blok rentang.
+    const blocks = await request(app)
+      .get(`${V1}/calendar/orders?from=2026-12-01&to=2026-12-31`)
+      .set(auth(admin));
+    const orders = (blocks.body as { data: CalendarOrderDto[] }).data;
+    expect(orders.map((o) => o.orderId)).toContain(a);
+    expect(orders.find((o) => o.orderId === a)).toMatchObject({
+      customerName: 'PT Acara Megah',
+      startDate: '2026-12-03',
+      endDate: '2026-12-05',
+    });
+    expect(orders.length).toBeGreaterThanOrEqual(2);
+    const outside = await request(app)
+      .get(`${V1}/calendar/orders?from=2027-02-01&to=2027-02-28`)
+      .set(auth(admin));
+    expect((outside.body as { data: unknown[] }).data).toHaveLength(0);
 
     const day = await request(app).get(`${V1}/calendar/day?date=2026-12-03`).set(auth(admin));
     const detail = (day.body as { data: CalendarDayDetailDto }).data;

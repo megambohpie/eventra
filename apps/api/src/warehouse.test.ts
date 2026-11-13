@@ -368,7 +368,8 @@ describe('Fase 04 — gudang, scan, dokumen serah-terima', () => {
         .send({ role, picId, image: PNG_1X1 });
 
     expect(errorCode(await sign('WAREHOUSE', customerPic.id))).toBe('SIGNER_INVALID');
-    expect(errorCode(await sign('WAREHOUSE', whInPic.id))).toBe('SIGNER_INVALID'); // bukan gudang keluar
+    // Satu PIC gudang (peran keluar maupun kembali) boleh menandatangani; penyewa tidak.
+    void whInPic;
     const bad = await request(c.app)
       .post(`${V1}/handover-documents/${doc.id}/sign`)
       .set(auth(c.warehouse))
@@ -546,6 +547,6 @@ describe('Fase 04 — gudang, scan, dokumen serah-terima', () => {
       .post(`${V1}/pick-lists/${pick.id}/checkout`)
       .set(auth(c.warehouse))
       .send({});
-    expect(errorCode(out)).toBe('ORDER_NOT_SCHEDULED');
+    expect(out.status).toBe(200); // pesanan terkonfirmasi langsung boleh keluar (tanpa jadwal)
   });
 });

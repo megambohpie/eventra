@@ -462,11 +462,11 @@ export function warehouseRouter(db: PrismaClient): Router {
             'Semua aset harus dipilih dan diverifikasi sebelum barang keluar',
           );
         }
-        if (orderStatus !== 'SCHEDULED') {
+        if (orderStatus !== 'CONFIRMED' && orderStatus !== 'SCHEDULED') {
           throw new HttpError(
             409,
             'ORDER_NOT_SCHEDULED',
-            'Pesanan harus dijadwalkan (PIC lengkap) sebelum barang keluar',
+            'Pesanan harus terkonfirmasi sebelum barang keluar',
           );
         }
         // Verifikasi ulang terhadap pick list: jumlah per produk dan kondisi aset saat ini.
@@ -524,7 +524,12 @@ export function warehouseRouter(db: PrismaClient): Router {
           where: { id },
           data: { status: 'DISPATCHED', dispatchedAt: now },
         });
-        const from = await claimTransition(tx, pick.orderId, ['SCHEDULED'], 'IN_PROGRESS');
+        const from = await claimTransition(
+          tx,
+          pick.orderId,
+          ['CONFIRMED', 'SCHEDULED'],
+          'IN_PROGRESS',
+        );
         await recordStatus(
           tx,
           pick.orderId,
@@ -965,10 +970,10 @@ export function warehouseRouter(db: PrismaClient): Router {
         const pic = await tx.orderPic.findFirst({
           where: { id: input.picId, orderId: doc.orderId },
         });
-        const warehouseRole = doc.type === 'OUT' ? 'WAREHOUSE_OUT' : 'WAREHOUSE_IN';
+        // Satu PIC gudang cukup untuk keluar maupun kembali.
         const allowed =
           input.role === 'WAREHOUSE'
-            ? pic?.role === warehouseRole
+            ? pic?.role === 'WAREHOUSE_OUT' || pic?.role === 'WAREHOUSE_IN'
             : pic?.role === 'CUSTOMER_PIC' || pic?.role === 'FIELD';
         if (!pic || !allowed) {
           throw new HttpError(

@@ -1,15 +1,5 @@
 import { useState } from 'react';
-import {
-  mdiCalendarCheck,
-  mdiCancel,
-  mdiCheckCircle,
-  mdiClockOutline,
-  mdiFileDocumentEdit,
-  mdiPencil,
-  mdiPlus,
-  mdiSend,
-  mdiCloseCircle,
-} from '@mdi/js';
+import { mdiCancel, mdiCheckCircle, mdiPencil, mdiPlus, mdiSend } from '@mdi/js';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 import {
@@ -17,38 +7,25 @@ import {
   confirmOrder,
   deleteOrderPic,
   getOrder,
-  holdOrder,
-  listCustomers,
-  listProducts,
   listUsers,
-  quoteOrder,
-  rejectOrder,
-  scheduleOrder,
   submitOrder,
 } from '@eventra/api-client';
-import {
-  DEFAULT_HOLD_MINUTES,
-  PIC_ROLES,
-  SINGLE_PIC_ROLES,
-  type OrderDto,
-  type OrderPicDto,
-} from '@eventra/shared';
+import { PIC_ROLES, SINGLE_PIC_ROLES, type OrderDto, type OrderPicDto } from '@eventra/shared';
 import { api } from '@/api';
 import { useAuth } from '@/auth/AuthProvider';
-import { OrderModal } from '@/components/orders/OrderModal';
 import { OrderNoteModal } from '@/components/orders/OrderNoteModal';
 import { OrderStatusBadge } from '@/components/orders/OrderStatusBadge';
 import { PicModal } from '@/components/orders/PicModal';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { Icon } from '@/components/ui/Icon';
 import { Loading } from '@/components/ui/Loading';
 import { PageCard, PageHeader } from '@/components/ui/PageCard';
 import { useResource } from '@/hooks/useResource';
 import { formatDate, formatDateTime, formatRupiah } from '@/lib/format';
 import { notify } from '@/lib/notifications';
 
-type Dialog =
-  'edit' | 'quote' | 'hold' | 'reject' | 'cancel' | { kind: 'pic'; pic?: OrderPicDto } | null;
+type Dialog = 'cancel' | { kind: 'pic'; pic?: OrderPicDto } | null;
 
 const PIC_LOCKED = ['COMPLETED', 'REJECTED', 'CANCELLED', 'EXPIRED'];
 
@@ -61,17 +38,6 @@ export function OrderDetailPage() {
   const [dialog, setDialog] = useState<Dialog>(null);
 
   const { data: order, loading, reload } = useResource(() => getOrder(api, id), id);
-  const customers = useResource(
-    () =>
-      canWrite && can('customer.read')
-        ? listCustomers(api, { pageSize: 100 })
-        : Promise.resolve(undefined),
-    'customers',
-  );
-  const products = useResource(
-    () => (canWrite ? listProducts(api, { pageSize: 100 }) : Promise.resolve(undefined)),
-    'products',
-  );
   const users = useResource(
     () => (can('user.read') ? listUsers(api, { pageSize: 100 }) : Promise.resolve(undefined)),
     'users',
@@ -138,14 +104,10 @@ export function OrderDetailPage() {
         <div className="ev-detail__actions">
           {canWrite && s === 'DRAFT' && (
             <>
-              <Button
-                size="sm"
-                variant="secondary"
-                icon={mdiPencil}
-                onClick={() => setDialog('edit')}
-              >
+              <Link className="btn btn-secondary btn-sm" to={`/orders/${order.id}/edit`}>
+                <Icon path={mdiPencil} />
                 {t('common.edit')}
-              </Button>
+              </Link>
               <Button
                 size="sm"
                 variant="primary"
@@ -156,27 +118,7 @@ export function OrderDetailPage() {
               </Button>
             </>
           )}
-          {canApprove && (s === 'PENDING_REVIEW' || s === 'QUOTED') && (
-            <Button
-              size="sm"
-              variant="primary"
-              icon={mdiFileDocumentEdit}
-              onClick={() => setDialog('quote')}
-            >
-              {s === 'QUOTED' ? t('orders.actions.requote') : t('orders.actions.quote')}
-            </Button>
-          )}
-          {canApprove && s === 'QUOTED' && (
-            <Button
-              size="sm"
-              variant="secondary"
-              icon={mdiClockOutline}
-              onClick={() => setDialog('hold')}
-            >
-              {t('orders.actions.hold')}
-            </Button>
-          )}
-          {canApprove && (s === 'QUOTED' || s === 'AWAITING_PAYMENT') && (
+          {canApprove && (s === 'PENDING_REVIEW' || s === 'QUOTED' || s === 'AWAITING_PAYMENT') && (
             <Button
               size="sm"
               variant="success"
@@ -192,26 +134,6 @@ export function OrderDetailPage() {
                 {t('orders.actions.warehouse')}
               </Link>
             )}
-          {canWrite && s === 'CONFIRMED' && (
-            <Button
-              size="sm"
-              variant="primary"
-              icon={mdiCalendarCheck}
-              onClick={run(() => scheduleOrder(api, order.id), 'orders.scheduled')}
-            >
-              {t('orders.actions.schedule')}
-            </Button>
-          )}
-          {canApprove && (s === 'PENDING_REVIEW' || s === 'QUOTED') && (
-            <Button
-              size="sm"
-              variant="error"
-              icon={mdiCloseCircle}
-              onClick={() => setDialog('reject')}
-            >
-              {t('orders.actions.reject')}
-            </Button>
-          )}
           {canWrite &&
             [
               'DRAFT',
@@ -309,11 +231,6 @@ export function OrderDetailPage() {
             </Button>
           )}
         </PageHeader>
-        {!order.pics.some((p) => p.role === 'CUSTOMER_PIC') && s === 'DRAFT' && (
-          <div role="alert" className="alert alert-warning ev-notice">
-            <span>{t('orders.pics.needCustomerPic')}</span>
-          </div>
-        )}
         <div className="ev-table-wrap">
           <table className="table">
             <thead className="ev-table__head">
@@ -424,49 +341,6 @@ export function OrderDetailPage() {
         )}
       </PageCard>
 
-      {dialog === 'edit' && customers.data && products.data && (
-        <OrderModal
-          order={order}
-          customers={customers.data.items.filter((c) => c.active || c.id === order.customerId)}
-          products={products.data.items.filter((p) => p.active)}
-          onClose={closeDialog}
-          onSaved={reload}
-        />
-      )}
-      {dialog === 'quote' && (
-        <OrderNoteModal
-          title={t('orders.actions.quote')}
-          confirmLabel={t('orders.actions.quote')}
-          onClose={closeDialog}
-          onConfirm={async ({ note }) => {
-            await run(() => quoteOrder(api, order.id, { note }), 'orders.quoted')();
-            closeDialog();
-          }}
-        />
-      )}
-      {dialog === 'hold' && (
-        <OrderNoteModal
-          title={t('orders.actions.hold')}
-          confirmLabel={t('orders.actions.hold')}
-          holdMinutes={DEFAULT_HOLD_MINUTES}
-          onClose={closeDialog}
-          onConfirm={async ({ holdMinutes }) => {
-            await run(() => holdOrder(api, order.id, { holdMinutes }), 'orders.held')();
-            closeDialog();
-          }}
-        />
-      )}
-      {dialog === 'reject' && (
-        <OrderNoteModal
-          title={t('orders.actions.reject')}
-          confirmLabel={t('orders.actions.reject')}
-          onClose={closeDialog}
-          onConfirm={async ({ note }) => {
-            await run(() => rejectOrder(api, order.id, { note }))();
-            closeDialog();
-          }}
-        />
-      )}
       {dialog === 'cancel' && (
         <OrderNoteModal
           title={t('orders.actions.cancel')}

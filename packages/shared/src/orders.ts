@@ -33,10 +33,10 @@ export type OrderStatus = (typeof ORDER_STATUSES)[number];
 /** Transisi yang valid; setiap perubahan divalidasi backend dan dicatat sebagai event. */
 export const ORDER_TRANSITIONS: Record<OrderStatus, readonly OrderStatus[]> = {
   DRAFT: ['PENDING_REVIEW', 'CANCELLED'],
-  PENDING_REVIEW: ['QUOTED', 'REJECTED', 'CANCELLED'],
+  PENDING_REVIEW: ['QUOTED', 'CONFIRMED', 'REJECTED', 'CANCELLED'],
   QUOTED: ['AWAITING_PAYMENT', 'CONFIRMED', 'REJECTED', 'CANCELLED', 'QUOTED'],
   AWAITING_PAYMENT: ['CONFIRMED', 'EXPIRED', 'CANCELLED'],
-  CONFIRMED: ['SCHEDULED', 'CANCELLED'],
+  CONFIRMED: ['SCHEDULED', 'IN_PROGRESS', 'CANCELLED'],
   SCHEDULED: ['IN_PROGRESS', 'CANCELLED'],
   IN_PROGRESS: ['COMPLETED', 'ISSUE'],
   ISSUE: ['IN_PROGRESS', 'COMPLETED'],
@@ -407,6 +407,23 @@ export interface CalendarMovementDto {
   /** Aset fisik per produk pemenuhan pada tanggal tersebut. */
   units: { productName: string; quantity: number }[];
   pics: Pick<OrderPicDto, 'role' | 'name' | 'phone' | 'source'>[];
+}
+
+/** Status yang tidak lagi menempati kalender (pesanan gugur). */
+export const CALENDAR_HIDDEN_STATUSES: readonly OrderStatus[] = [
+  'REJECTED',
+  'CANCELLED',
+  'EXPIRED',
+];
+
+/** Satu pesanan pada kalender depan; ditampilkan sebagai blok sepanjang rentang sewa. */
+export interface CalendarOrderDto {
+  orderId: string;
+  orderNumber: string;
+  status: OrderStatus;
+  customerName: string;
+  startDate: string;
+  endDate: string;
 }
 
 export interface CalendarDayDetailDto {

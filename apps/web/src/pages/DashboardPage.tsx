@@ -229,7 +229,7 @@ export function DashboardPage() {
       {canOrders && (
         <PageCard>
           <PageHeader title={t('dashboard.movements')} subtitle={t('dashboard.movementsHint')}>
-            <Link className="btn btn-ghost btn-sm" to="/calendar">
+            <Link className="btn btn-ghost btn-sm" to="/">
               {t('dashboard.openCalendar')}
             </Link>
           </PageHeader>

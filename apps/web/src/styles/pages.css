@@ -228,10 +228,163 @@
     @apply flex flex-wrap items-center gap-2 text-sm;
   }
   .ev-calendar {
-    @apply grid grid-cols-7 gap-1;
+    @apply grid gap-1;
+  }
+  .ev-calendar__weekdays {
+    @apply grid grid-cols-7 gap-0.5;
   }
   .ev-calendar__weekday {
     @apply px-1 text-center text-xs font-medium text-base-content/60 uppercase;
+  }
+  /* Satu minggu: baris tanggal, lalu blok pesanan (kolom/lebar dari data-col & data-span). */
+  .ev-calendar__week {
+    @apply grid grid-flow-row-dense grid-cols-7 gap-x-0.5 gap-y-1 rounded-lg border border-base-300/60 bg-base-100 pb-1;
+  }
+  .ev-calendar__cell {
+    @apply flex min-h-9 items-start justify-between gap-1 border-r border-base-300/40 p-1 last:border-r-0 sm:min-h-12 sm:p-2;
+  }
+  .ev-calendar__cell[data-blank='true'] {
+    @apply bg-base-200/40;
+  }
+  .ev-calendar__cell[data-past='true'] .ev-calendar__date {
+    @apply text-base-content/40;
+  }
+  .ev-calendar__cell[data-today='true'] {
+    @apply bg-secondary/10;
+  }
+  .ev-calendar__cell[data-today='true'] .ev-calendar__date {
+    @apply text-secondary;
+  }
+  .ev-calendar__add {
+    @apply text-primary;
+  }
+  .ev-calendar__bar {
+    @apply mx-0.5 block min-w-0 truncate rounded-md border border-transparent px-1.5 py-0.5 text-[0.65rem] font-medium leading-snug sm:text-xs;
+    @apply bg-neutral/15 text-base-content transition-colors hover:brightness-95;
+  }
+  .ev-calendar__bar[data-before='true'] {
+    @apply ml-0 rounded-l-none;
+  }
+  .ev-calendar__bar[data-after='true'] {
+    @apply mr-0 rounded-r-none;
+  }
+  .ev-calendar__bar[data-status='PENDING_REVIEW'],
+  .ev-calendar__bar[data-status='QUOTED'],
+  .ev-calendar__bar[data-status='AWAITING_PAYMENT'] {
+    @apply bg-warning/25;
+  }
+  .ev-calendar__bar[data-status='CONFIRMED'],
+  .ev-calendar__bar[data-status='SCHEDULED'] {
+    @apply bg-primary/25;
+  }
+  .ev-calendar__bar[data-status='IN_PROGRESS'] {
+    @apply bg-info/25;
+  }
+  .ev-calendar__bar[data-status='COMPLETED'] {
+    @apply bg-success/25;
+  }
+  .ev-calendar__bar[data-status='ISSUE'] {
+    @apply bg-error/25;
+  }
+  /* ---------- POS pesanan ---------- */
+  .ev-pos {
+    @apply grid items-start gap-4 pb-16 lg:grid-cols-[minmax(0,1fr)_22rem] lg:pb-0;
+  }
+  .ev-pos__cart {
+    @apply lg:sticky lg:top-4;
+  }
+  .ev-pos__toolbar {
+    @apply grid gap-2 sm:grid-cols-2;
+  }
+  .ev-pos__grid {
+    @apply grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4;
+  }
+  .ev-pos__card {
+    @apply flex flex-col overflow-hidden rounded-2xl border border-base-300 bg-base-100 transition-colors;
+  }
+  .ev-pos__card[data-selected='true'] {
+    @apply border-primary bg-primary/5 ring-1 ring-primary;
+  }
+  .ev-pos__card[data-soldout='true'] {
+    @apply opacity-60;
+  }
+  .ev-pos__pick {
+    @apply flex min-h-11 flex-1 cursor-pointer flex-col items-start gap-1 p-3 text-left hover:bg-base-200 disabled:cursor-not-allowed;
+  }
+  .ev-pos__thumb {
+    @apply flex w-full justify-center;
+  }
+  .ev-pos__name {
+    @apply text-sm font-semibold leading-snug;
+  }
+  .ev-pos__price {
+    @apply text-xs text-base-content/60;
+  }
+  .ev-pos__stock {
+    @apply mt-auto pt-1;
+  }
+  .ev-pos__qty {
+    @apply flex items-center justify-between gap-1 border-t border-base-300 p-1;
+  }
+  .ev-pos__qty-input {
+    @apply w-14 text-center;
+  }
+  .ev-pos__lines {
+    @apply grid gap-1 text-sm;
+  }
+  .ev-pos__line {
+    @apply flex justify-between gap-2;
+  }
+  .ev-pos__totals {
+    @apply grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 border-t border-base-300 pt-2 text-sm;
+  }
+  .ev-pos__totals dd {
+    @apply text-right font-semibold;
+  }
+  .ev-pos__bar {
+    @apply fixed inset-x-0 bottom-0 z-20 flex items-center justify-between gap-2 border-t border-base-300 bg-base-100 px-4 py-3 shadow-lg lg:hidden;
+  }
+  .ev-calendar__bar[data-col='1'] {
+    @apply col-start-1;
+  }
+  .ev-calendar__bar[data-col='2'] {
+    @apply col-start-2;
+  }
+  .ev-calendar__bar[data-col='3'] {
+    @apply col-start-3;
+  }
+  .ev-calendar__bar[data-col='4'] {
+    @apply col-start-4;
+  }
+  .ev-calendar__bar[data-col='5'] {
+    @apply col-start-5;
+  }
+  .ev-calendar__bar[data-col='6'] {
+    @apply col-start-6;
+  }
+  .ev-calendar__bar[data-col='7'] {
+    @apply col-start-7;
+  }
+  .ev-calendar__bar[data-span='1'] {
+    @apply col-span-1;
+  }
+  .ev-calendar__bar[data-span='2'] {
+    @apply col-span-2;
+  }
+  .ev-calendar__bar[data-span='3'] {
+    @apply col-span-3;
+  }
+  .ev-calendar__bar[data-span='4'] {
+    @apply col-span-4;
+  }
+  .ev-calendar__bar[data-span='5'] {
+    @apply col-span-5;
+  }
+  .ev-calendar__bar[data-span='6'] {
+    @apply col-span-6;
+  }
+  .ev-calendar__bar[data-span='7'] {
+    @apply col-span-7;
   }
   .ev-calendar__day {
     @apply flex min-h-16 flex-col items-start gap-0.5 rounded-lg border border-base-300/60 bg-base-100 p-1 text-left text-[0.65rem] leading-tight transition-colors hover:bg-base-200 sm:min-h-24 sm:p-2 sm:text-xs;

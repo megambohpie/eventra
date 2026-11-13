@@ -20,6 +20,8 @@ import {
   rentalDays,
   type CalendarDayDetailDto,
   type CalendarDayDto,
+  type CalendarOrderDto,
+  CALENDAR_HIDDEN_STATUSES,
   type CalendarMovementDto,
   type OrderStatus,
   type OrderSummaryDto,
@@ -212,7 +214,7 @@ export function ordersRouter(db: PrismaClient): Router {
 
   // ---------- Alur status ----------
 
-  /** Ajukan: wajib ada PIC penyewa (FR-13) dan stok tersedia saat ini. */
+  /** Ajukan: stok harus tersedia saat ini (PIC tidak lagi wajib; owner lalu langsung Konfirmasi). */
   router.post('/orders/:id/submit', requireCapability('order.write'), async (req, res) => {
     const id = parseId(req.params.id);
     await db.$transaction(async (tx) => {
@@ -221,9 +223,6 @@ export function ordersRouter(db: PrismaClient): Router {
         throw new HttpError(409, 'INVALID_ORDER_STATE', 'Hanya pesanan draft yang dapat diajukan');
       }
       await assertCustomerActive(tx, order.customerId);
-      if (!order.pics.some((p) => p.role === 'CUSTOMER_PIC')) {
-        throw new HttpError(409, 'PIC_REQUIRED', 'PIC penyewa wajib ada sebelum pesanan diajukan');
-      }
       const availability = await checkAvailability(
         tx,
         items(order),
@@ -354,10 +353,16 @@ export function ordersRouter(db: PrismaClient): Router {
     }
     await db.$transaction(async (tx) => {
       const order = await loadOrder(tx, id);
-      const from = await claimTransition(tx, id, ['QUOTED', 'AWAITING_PAYMENT'], 'CONFIRMED', {
-        confirmedAt: now,
-        holdExpiresAt: null,
-      });
+      const from = await claimTransition(
+        tx,
+        id,
+        ['PENDING_REVIEW', 'QUOTED', 'AWAITING_PAYMENT'],
+        'CONFIRMED',
+        {
+          confirmedAt: now,
+          holdExpiresAt: null,
+        },
+      );
       await allocateOrder(
         tx,
         { id, startDate: isoDate(order.startDate), endDate: isoDate(order.endDate) },
@@ -664,6 +669,36 @@ export function ordersRouter(db: PrismaClient): Router {
       }
     }
     res.json({ data: [...days.values()] });
+  });
+
+  /** Pesanan aktif (bukan ditolak/batal/kedaluwarsa) yang rentang sewanya beririsan dengan [from, to]. */
+  router.get('/calendar/orders', requireCapability('order.read'), async (req, res) => {
+    const { from, to } = orderCalendarQuerySchema.parse(req.query);
+    const orders = await db.order.findMany({
+      where: {
+        status: { notIn: [...CALENDAR_HIDDEN_STATUSES] },
+        startDate: { lte: dateOnlyToDate(to) },
+        endDate: { gte: dateOnlyToDate(from) },
+      },
+      select: {
+        id: true,
+        number: true,
+        status: true,
+        startDate: true,
+        endDate: true,
+        customer: { select: { name: true } },
+      },
+      orderBy: [{ startDate: 'asc' }, { number: 'asc' }],
+    });
+    const data: CalendarOrderDto[] = orders.map((o) => ({
+      orderId: o.id,
+      orderNumber: o.number,
+      status: o.status,
+      customerName: o.customer.name,
+      startDate: isoDate(o.startDate),
+      endDate: isoDate(o.endDate),
+    }));
+    res.json({ data });
   });
 
   router.get('/calendar/day', requireCapability('order.read'), async (req, res) => {
