@@ -64,6 +64,10 @@
   }
 
   /* ---------- Modal ---------- */
+  .ev-modal__box--side {
+    @apply h-dvh max-h-dvh w-full max-w-2xl justify-self-end rounded-none;
+    animation: ev-slide-in 0.2s ease-out;
+  }
   .ev-modal__box--wide {
     @apply max-w-3xl;
   }
@@ -174,5 +178,14 @@
   /* ---------- Bahasa ---------- */
   .ev-lang {
     @apply flex items-center gap-1;
+  }
+}
+
+@keyframes ev-slide-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
   }
 }

@@ -18,6 +18,7 @@ import { ProductPhotoField } from '@/components/products/ProductPhotoField';
 import { Button } from '@/components/ui/Button';
 import { CurrencyInput } from '@/components/ui/CurrencyInput';
 import { FormField } from '@/components/ui/FormField';
+import { randomSkuSuffix, suggestSku } from '@/lib/sku';
 import { Modal } from '@/components/ui/Modal';
 import { SearchSelect } from '@/components/ui/SearchSelect';
 import { notify } from '@/lib/notifications';
@@ -39,7 +40,10 @@ export function ProductModal({
 }: ProductModalProps) {
   const { t } = useTranslation();
   const [name, setName] = useState(product?.name ?? '');
-  const [sku, setSku] = useState(product?.sku ?? '');
+  const [skuInput, setSkuInput] = useState(product?.sku ?? '');
+  // Produk baru: SKU diusulkan otomatis sampai pengguna mengetiknya sendiri.
+  const [skuEdited, setSkuEdited] = useState(Boolean(product));
+  const [skuSuffix] = useState(randomSkuSuffix);
   const [categoryId, setCategoryId] = useState(product?.categoryId ?? categories[0]?.id ?? '');
   const [pricingUnit, setPricingUnit] = useState<PricingUnit>(product?.pricingUnit ?? 'PCS');
   const [unitLabel, setUnitLabel] = useState(product?.unitLabel ?? '');
@@ -49,6 +53,8 @@ export function ProductModal({
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoRemoved, setPhotoRemoved] = useState(false);
   const [saving, setSaving] = useState(false);
+  const categoryName = categories.find((c) => c.id === categoryId)?.name ?? '';
+  const sku = skuEdited ? skuInput : suggestSku(categoryName, name, skuSuffix);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -96,7 +102,10 @@ export function ProductModal({
             <input
               className="input ev-control"
               value={sku}
-              onChange={(e) => setSku(e.target.value)}
+              onChange={(e) => {
+                setSkuInput(e.target.value);
+                setSkuEdited(true);
+              }}
             />
           </FormField>
           <FormField label={t('products.category')}>

@@ -1,6 +1,7 @@
 import type { AxiosInstance } from 'axios';
 import type {
   AssetMetricsDto,
+  AssetRentalDto,
   DashboardQuery,
   InvoiceCreateInput,
   InvoiceDto,
@@ -51,5 +52,7 @@ export const getReceivablesReport = async (c: AxiosInstance) =>
   (await c.get<Envelope<ReceivablesReportDto>>('/reports/receivables')).data.data;
 export const getOwnerDashboard = async (c: AxiosInstance, params: DashboardQuery = {}) =>
   (await c.get<Envelope<OwnerDashboardDto>>('/dashboards/owner', { params })).data.data;
+export const listAssetRentals = async (c: AxiosInstance, assetId: string) =>
+  (await c.get<Envelope<AssetRentalDto[]>>(`/assets/${assetId}/rentals`)).data.data;
 export const getAssetMetrics = async (c: AxiosInstance, assetId: string) =>
   (await c.get<Envelope<AssetMetricsDto>>(`/assets/${assetId}/metrics`)).data.data;

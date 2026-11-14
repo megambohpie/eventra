@@ -1,9 +1,14 @@
 import type { AxiosInstance } from 'axios';
+import { uploadBody, type UploadFile } from './upload';
 import type {
+  AssetBatchDto,
   AssetConditionChangeInput,
   AssetCreateInput,
   AssetDto,
   AssetEventDto,
+  AssetGroupDto,
+  AssetGroupQuery,
+  AssetPhotoDto,
   AssetListQuery,
   AssetScanDto,
   AssetStatusChangeInput,
@@ -24,7 +29,15 @@ export const getAssetSummary = async (c: AxiosInstance) =>
 export const getAsset = async (c: AxiosInstance, id: string) =>
   (await c.get<Envelope<AssetDto>>(`/assets/${id}`)).data.data;
 export const createAsset = async (c: AxiosInstance, input: AssetCreateInput) =>
-  (await c.post<Envelope<AssetDto>>('/assets', input)).data.data;
+  (await c.post<Envelope<AssetDto> & { meta: { count: number; ids: string[] } }>('/assets', input))
+    .data;
+export const listAssetGroups = async (c: AxiosInstance, params: AssetGroupQuery = {}) =>
+  (await c.get<Envelope<Page<AssetGroupDto>>>('/assets/groups', { params })).data.data;
+export const getAssetBatches = async (
+  c: AxiosInstance,
+  productId: string,
+  params: Omit<AssetGroupQuery, 'page' | 'pageSize'> = {},
+) => (await c.get<Envelope<AssetBatchDto[]>>(`/assets/groups/${productId}`, { params })).data.data;
 export const updateAsset = async (c: AxiosInstance, id: string, input: AssetUpdateInput) =>
   (await c.put<Envelope<AssetDto>>(`/assets/${id}`, input)).data.data;
 export const changeAssetCondition = async (
@@ -69,3 +82,30 @@ export const cancelReceipt = async (c: AxiosInstance, id: string) =>
   (await c.post<Envelope<ReceiptDto>>(`/stock-receipts/${id}/cancel`)).data.data;
 export const receiveReceipt = async (c: AxiosInstance, id: string) =>
   (await c.post<Envelope<ReceiptDto>>(`/stock-receipts/${id}/receive`)).data.data;
+
+export const listAssetPhotos = async (c: AxiosInstance, id: string) =>
+  (await c.get<Envelope<AssetPhotoDto[]>>(`/assets/${id}/photos`)).data.data;
+export const uploadAssetPhoto = async (c: AxiosInstance, id: string, file: UploadFile) =>
+  (
+    await c.post<Envelope<AssetPhotoDto>>(`/assets/${id}/photos`, uploadBody(file), {
+      headers: { 'Content-Type': file.type },
+    })
+  ).data.data;
+export const getAssetPhoto = async (c: AxiosInstance, id: string, photoId: string) =>
+  (await c.get<Blob>(`/assets/${id}/photos/${photoId}`, { responseType: 'blob' })).data;
+
+export const uploadBatchPhoto = async (
+  c: AxiosInstance,
+  productId: string,
+  date: string,
+  file: UploadFile,
+) =>
+  (
+    await c.post<Envelope<AssetPhotoDto>>(`/assets/groups/${productId}/photos`, uploadBody(file), {
+      params: { date },
+      headers: { 'Content-Type': file.type },
+    })
+  ).data.data;
+export const getBatchPhoto = async (c: AxiosInstance, productId: string, photoId: string) =>
+  (await c.get<Blob>(`/assets/groups/${productId}/photos/${photoId}`, { responseType: 'blob' }))
+    .data;

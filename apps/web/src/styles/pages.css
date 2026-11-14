@@ -171,6 +171,89 @@
   .ev-dl__desc {
     @apply break-words;
   }
+  /* Detail aset (halaman dan dialog): panel, baris informasi, dan QR yang rapi */
+  .ev-assetdetail {
+    @apply gap-4;
+  }
+  .ev-assetdetail__panel {
+    @apply border-base-300/60 grid gap-4 rounded-2xl border p-4 sm:p-5;
+  }
+  .ev-assetdetail__head {
+    @apply flex flex-wrap items-center justify-between gap-3;
+  }
+  .ev-assetdetail .ev-detail__grid {
+    @apply gap-5 md:grid-cols-[1fr_15rem] md:gap-8;
+  }
+  .ev-assetdetail .ev-section-title {
+    @apply text-base-content/60 mb-2 text-xs font-semibold tracking-wider uppercase;
+  }
+  .ev-assetdetail .ev-dl {
+    @apply gap-0;
+  }
+  .ev-assetdetail .ev-dl__row {
+    @apply border-base-300/50 items-baseline gap-x-4 border-b py-2 last:border-b-0 sm:grid-cols-[8.5rem_1fr];
+  }
+  .ev-assetdetail .ev-dl__term {
+    @apply text-xs;
+  }
+  .ev-assetdetail .ev-dl__desc {
+    @apply text-sm font-medium;
+  }
+  .ev-assetdetail .ev-dl--cols {
+    @apply sm:grid-cols-2 sm:gap-x-8;
+  }
+  .ev-assetdetail .ev-dl--cols .ev-dl__row {
+    @apply sm:grid-cols-[1fr_auto] sm:justify-between;
+  }
+  .ev-assetdetail .ev-qr {
+    @apply md:border-base-300/50 justify-items-center text-center md:border-l md:pl-8;
+  }
+  .ev-assetdetail .ev-qr__image {
+    @apply size-44;
+  }
+  .ev-qr__hint {
+    @apply text-base-content/60 max-w-[14rem] text-xs;
+  }
+  .ev-qr__actions {
+    @apply flex flex-wrap items-center justify-center gap-2;
+  }
+  .ev-count-link {
+    @apply text-primary cursor-pointer font-semibold underline decoration-dotted underline-offset-4;
+  }
+  .ev-history {
+    @apply grid gap-3;
+  }
+  .ev-history__item {
+    @apply border-base-300/50 grid gap-1 rounded-xl border p-3;
+  }
+  .ev-history__head {
+    @apply flex flex-wrap items-center justify-between gap-2;
+  }
+  .ev-history__badges {
+    @apply flex flex-wrap items-center gap-1;
+  }
+  .ev-history__line {
+    @apply text-sm;
+  }
+  .ev-history__meta {
+    @apply text-base-content/60 text-xs;
+  }
+  .ev-history__cond {
+    @apply flex items-center gap-2;
+  }
+  .ev-assetdetail .ev-timeline {
+    @apply gap-5;
+  }
+  .ev-assetdetail .ev-timeline__item::before {
+    content: '';
+    @apply bg-primary ring-base-100 absolute top-1.5 -left-[1.45rem] size-2.5 rounded-full ring-4;
+  }
+  .ev-assetdetail .ev-timeline__title {
+    @apply text-sm;
+  }
+  .ev-assetdetail .ev-timeline__text {
+    @apply text-base-content/80 text-sm;
+  }
   .ev-qr {
     @apply grid content-start justify-items-center gap-2 md:justify-items-start;
   }
@@ -221,6 +304,60 @@
   }
 
   /* ---------- Pesanan & kalender ---------- */
+  .ev-table__row--click {
+    @apply cursor-pointer;
+  }
+  .ev-table__row--click[data-open='true'] {
+    @apply bg-base-200/60;
+  }
+  .ev-table__expand > td {
+    @apply bg-base-200/30 px-2 py-2 sm:px-6;
+  }
+  .ev-batchlist {
+    @apply flex flex-col gap-1;
+  }
+  .ev-batchlist__item {
+    @apply hover:bg-base-200 grid w-full cursor-pointer grid-cols-2 items-center gap-x-4 gap-y-1 rounded-lg px-3 py-2 text-left sm:grid-cols-[12rem_6rem_1fr];
+  }
+  .ev-batchlist__date {
+    @apply font-semibold;
+  }
+  .ev-photostrip {
+    @apply flex flex-col gap-2;
+  }
+  .ev-photostrip > .btn {
+    @apply self-start;
+  }
+  .ev-photostrip__list {
+    @apply flex flex-wrap items-center gap-2;
+  }
+  .ev-photostrip__item {
+    @apply cursor-pointer;
+  }
+  .ev-photostrip__zoom {
+    @apply mx-auto max-h-[75vh] w-auto max-w-full rounded-lg;
+  }
+  .ev-icon--muted {
+    @apply text-base-content/50;
+  }
+  .ev-qty {
+    @apply text-lg font-bold;
+  }
+  .ev-chips {
+    @apply flex flex-wrap items-center gap-2;
+  }
+  .ev-chip {
+    @apply inline-flex items-center gap-1 text-sm;
+  }
+  .ev-batches {
+    @apply flex flex-col gap-4;
+  }
+  .ev-batch__title {
+    @apply flex flex-wrap items-baseline gap-2 text-base font-semibold;
+  }
+  .ev-batch__qty {
+    @apply text-base-content/60 text-sm font-normal;
+  }
   .ev-hint {
     @apply text-sm text-base-content/60;
   }

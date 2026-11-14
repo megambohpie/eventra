@@ -7,6 +7,7 @@ import {
   hasCapability,
   rentalDays,
   type AssetMetricsDto,
+  type AssetRentalDto,
   type AssetRankDto,
   type AssetStatus,
   type OwnerDashboardDto,
@@ -166,6 +167,41 @@ export function dashboardsRouter(db: PrismaClient): Router {
       serviceCost: withCost ? tickets.reduce((n, t) => n + Number(t.cost ?? 0n), 0) : null,
       incidentCount,
     };
+    res.json({ data });
+  });
+
+  /** Riwayat sewa satu unit: pesanan tempat unit dikirim (terbaru dulu), maks. 100. */
+  router.get('/assets/:id/rentals', requireCapability('order.read'), async (req, res) => {
+    const id = parseId(req.params.id);
+    if (!(await db.asset.findUnique({ where: { id }, select: { id: true } }))) {
+      throw new HttpError(404, 'NOT_FOUND', 'Aset tidak ditemukan');
+    }
+    const items = await db.pickListItem.findMany({
+      where: { assetId: id, dispatchedAt: { not: null } },
+      orderBy: { dispatchedAt: 'desc' },
+      take: 100,
+      include: { pickList: { include: { order: { include: { customer: true } } } } },
+    });
+    const data: AssetRentalDto[] = items.map((i) => {
+      const o = i.pickList.order;
+      const startDate = isoDay(o.startDate);
+      const endDate = isoDay(o.endDate);
+      return {
+        orderId: o.id,
+        orderNumber: o.number,
+        orderStatus: o.status,
+        customerName: o.customer.name,
+        eventLocation: o.eventLocation,
+        startDate,
+        endDate,
+        days: rentalDays(startDate, endDate),
+        dispatchedAt: (i.dispatchedAt as Date).toISOString(),
+        returnedAt: i.returnedAt?.toISOString() ?? null,
+        dispatchCondition: i.dispatchCondition,
+        returnCondition: i.returnCondition,
+        returnNote: i.returnNote,
+      };
+    });
     res.json({ data });
   });
 

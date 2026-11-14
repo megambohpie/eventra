@@ -18,6 +18,8 @@ import { FormField } from '@/components/ui/FormField';
 import { Modal } from '@/components/ui/Modal';
 import { SearchSelect } from '@/components/ui/SearchSelect';
 import { notify } from '@/lib/notifications';
+import { suggestSourceRef } from '@/lib/receiptRef';
+import { randomSkuSuffix } from '@/lib/sku';
 
 interface ItemDraft {
   key: number;
@@ -51,11 +53,15 @@ export function ReceiptModal({
   const { t } = useTranslation();
   const activeLocations = locations.filter((l) => l.active || l.id === receipt?.locationId);
   const [source, setSource] = useState<ReceiptSource>(receipt?.source ?? 'PURCHASE');
-  const [sourceRef, setSourceRef] = useState(receipt?.sourceRef ?? '');
+  const [refInput, setRefInput] = useState(receipt?.sourceRef ?? '');
+  // Penerimaan baru: referensi diusulkan otomatis sampai pengguna mengetiknya sendiri.
+  const [refEdited, setRefEdited] = useState(Boolean(receipt));
+  const [refSuffix] = useState(randomSkuSuffix);
   const [supplier, setSupplier] = useState(receipt?.supplier ?? '');
   const [locationId, setLocationId] = useState(receipt?.locationId ?? activeLocations[0]?.id ?? '');
   const [receivedDate, setReceivedDate] = useState(receipt?.receivedDate ?? today());
   const [note, setNote] = useState(receipt?.note ?? '');
+  const sourceRef = refEdited ? refInput : suggestSourceRef(source, receivedDate, refSuffix);
   const [nextKey, setNextKey] = useState(receipt?.items.length ?? 1);
   const [items, setItems] = useState<ItemDraft[]>(
     receipt
@@ -144,7 +150,10 @@ export function ReceiptModal({
             <input
               className="input ev-control"
               value={sourceRef}
-              onChange={(e) => setSourceRef(e.target.value)}
+              onChange={(e) => {
+                setRefInput(e.target.value);
+                setRefEdited(true);
+              }}
             />
           </FormField>
           <FormField label={t('receipts.supplier')}>

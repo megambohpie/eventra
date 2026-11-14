@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { AssetCondition } from './assets';
+import type { OrderStatus } from './orders';
 import type { AssetStatus, BadgeVariant } from './status';
 
 const dateOnly = z.iso.date();
@@ -323,6 +324,24 @@ export interface OwnerDashboardDto {
   openServiceTickets: number;
   mostRented: AssetRankDto[];
   mostDamaged: AssetRankDto[];
+}
+
+/** Satu penyewaan unit aset: pesanan tempat unit dikirim, beserta kondisi keluar dan kembali. */
+export interface AssetRentalDto {
+  orderId: string;
+  orderNumber: string;
+  orderStatus: OrderStatus;
+  customerName: string;
+  eventLocation: string;
+  startDate: string;
+  endDate: string;
+  days: number;
+  dispatchedAt: string;
+  /** Kosong selama unit masih di luar gudang. */
+  returnedAt: string | null;
+  dispatchCondition: AssetCondition | null;
+  returnCondition: AssetCondition | null;
+  returnNote: string | null;
 }
 
 export interface AssetMetricsDto {

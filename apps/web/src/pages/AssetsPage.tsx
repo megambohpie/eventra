@@ -1,25 +1,19 @@
-import { useState } from 'react';
-import { mdiAlertCircleOutline, mdiPlus, mdiPrinter } from '@mdi/js';
+import { Fragment, useState } from 'react';
+import { mdiAlertCircleOutline, mdiChevronDown, mdiChevronUp, mdiPlus } from '@mdi/js';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
-import {
-  getAssetLabelsPdf,
-  getAssetSummary,
-  listAssets,
-  listLocations,
-  listProducts,
-} from '@eventra/api-client';
+import { getAssetSummary, listAssetGroups, listLocations, listProducts } from '@eventra/api-client';
 import {
   ASSET_CONDITIONS,
   ASSET_STATUSES,
-  MAX_LABELS,
   type AssetCondition,
   type AssetStatus,
 } from '@eventra/shared';
 import { api } from '@/api';
 import { useAuth } from '@/auth/AuthProvider';
 import { AssetModal } from '@/components/assets/AssetModal';
-import { AssetStatusBadge, ConditionBadge } from '@/components/assets/badges';
+import { AssetBatchDrawer } from '@/components/assets/AssetBatchDrawer';
+import { AssetBatchList } from '@/components/assets/AssetBatchList';
+import { AssetStatusBadge } from '@/components/assets/badges';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { Loading } from '@/components/ui/Loading';
@@ -27,8 +21,6 @@ import { PageCard, PageHeader } from '@/components/ui/PageCard';
 import { Pagination } from '@/components/ui/Pagination';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { useResource } from '@/hooks/useResource';
-import { downloadBlob } from '@/lib/download';
-import { notify } from '@/lib/notifications';
 
 const PAGE_SIZE = 20;
 
@@ -44,21 +36,24 @@ export function AssetsPage() {
   const [locationId, setLocationId] = useState('');
   const [attention, setAttention] = useState(false);
   const [page, setPage] = useState(1);
-  const [selected, setSelected] = useState<string[]>([]);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [drawer, setDrawer] = useState<{
+    productId: string;
+    productName: string;
+    date: string;
+  } | null>(null);
   const [creating, setCreating] = useState(false);
 
+  const filters = {
+    q: q || undefined,
+    status: status || undefined,
+    condition: condition || undefined,
+    locationId: locationId || undefined,
+    attention: attention ? ('true' as const) : undefined,
+  };
   const filterKey = `${q}|${status}|${condition}|${locationId}|${attention}|${page}`;
   const { data, loading, reload } = useResource(
-    () =>
-      listAssets(api, {
-        q: q || undefined,
-        status: status || undefined,
-        condition: condition || undefined,
-        locationId: locationId || undefined,
-        attention: attention ? 'true' : undefined,
-        page,
-        pageSize: PAGE_SIZE,
-      }),
+    () => listAssetGroups(api, { ...filters, page, pageSize: PAGE_SIZE }),
     filterKey,
   );
   const summary = useResource(() => getAssetSummary(api), `summary-${data?.total ?? 0}`);
@@ -68,27 +63,7 @@ export function AssetsPage() {
     'products',
   );
 
-  const resetPage = () => {
-    setPage(1);
-    setSelected([]);
-  };
-  const toggle = (id: string) =>
-    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-  const pageIds = data?.items.map((a) => a.id) ?? [];
-  const allSelected = pageIds.length > 0 && pageIds.every((id) => selected.includes(id));
-
-  const printLabels = async () => {
-    if (selected.length > MAX_LABELS) {
-      notify('error', t('assets.maxLabels', { max: MAX_LABELS }));
-      return;
-    }
-    try {
-      downloadBlob(await getAssetLabelsPdf(api, selected), 'eventra-qr-labels.pdf');
-      notify('success', t('assets.labelsDownloaded'));
-    } catch {
-      /* error sudah tampil sebagai notifikasi */
-    }
-  };
+  const resetPage = () => setPage(1);
 
   const stats = summary.data;
   const tiles = [
@@ -205,11 +180,6 @@ export function AssetsPage() {
             />
             {t('assets.onlyAttention')}
           </label>
-          {selected.length > 0 && (
-            <Button size="sm" variant="secondary" icon={mdiPrinter} onClick={printLabels}>
-              {t('assets.printLabels', { count: selected.length })}
-            </Button>
-          )}
         </div>
 
         {loading && !data ? (
@@ -219,73 +189,73 @@ export function AssetsPage() {
             <table className="table">
               <thead className="ev-table__head">
                 <tr>
-                  <th>
-                    <input
-                      type="checkbox"
-                      className="checkbox checkbox-sm"
-                      aria-label={t('common.all')}
-                      checked={allSelected}
-                      onChange={() =>
-                        setSelected((prev) =>
-                          allSelected
-                            ? prev.filter((id) => !pageIds.includes(id))
-                            : [...new Set([...prev, ...pageIds])],
-                        )
-                      }
-                    />
-                  </th>
-                  <th>{t('assets.code')}</th>
                   <th>{t('assets.product')}</th>
-                  <th>{t('assets.serial')}</th>
-                  <th>{t('assets.condition')}</th>
+                  <th>{t('assets.qty')}</th>
                   <th>{t('common.status')}</th>
-                  <th>{t('assets.location')}</th>
                   <th />
                 </tr>
               </thead>
               <tbody>
-                {data?.items.map((asset) => (
-                  <tr key={asset.id} className="ev-table__row">
-                    <td>
-                      <input
-                        type="checkbox"
-                        className="checkbox checkbox-sm"
-                        aria-label={t('assets.selectAsset', { code: asset.code })}
-                        checked={selected.includes(asset.id)}
-                        onChange={() => toggle(asset.id)}
-                      />
-                    </td>
-                    <td>
-                      <Link to={`/assets/${asset.id}`} className="link ev-link">
-                        {asset.code}
-                      </Link>
-                      {asset.needsAttention && (
-                        <Icon
-                          path={mdiAlertCircleOutline}
-                          className="ev-icon--warning"
-                          title={t('assets.attention')}
-                        />
+                {data?.items.map((group) => {
+                  const isOpen = expanded === group.productId;
+                  const toggle = () => setExpanded(isOpen ? null : group.productId);
+                  return (
+                    <Fragment key={group.productId}>
+                      <tr
+                        className="ev-table__row ev-table__row--click"
+                        data-open={isOpen}
+                        onClick={toggle}
+                      >
+                        <td>
+                          <strong>{group.productName}</strong>
+                          <span className="ev-table__hint ev-table__hint--block">
+                            {[group.categoryName, group.sku].filter(Boolean).join(' · ')}
+                          </span>
+                        </td>
+                        <td className="ev-qty">{group.total}</td>
+                        <td>
+                          <span className="ev-chips">
+                            {ASSET_STATUSES.filter((st) => group.byStatus[st]).map((st) => (
+                              <span key={st} className="ev-chip">
+                                <AssetStatusBadge status={st} /> {group.byStatus[st]}
+                              </span>
+                            ))}
+                            {group.attention > 0 && (
+                              <Icon
+                                path={mdiAlertCircleOutline}
+                                className="ev-icon--warning"
+                                title={t('assets.attention')}
+                              />
+                            )}
+                          </span>
+                        </td>
+                        <td className="ev-table__actions">
+                          <Icon path={isOpen ? mdiChevronUp : mdiChevronDown} />
+                        </td>
+                      </tr>
+                      {isOpen && (
+                        <tr className="ev-table__expand">
+                          <td colSpan={4}>
+                            <AssetBatchList
+                              productId={group.productId}
+                              filters={filters}
+                              onOpen={(batch) =>
+                                setDrawer({
+                                  productId: group.productId,
+                                  productName: group.productName,
+                                  date: batch.date,
+                                })
+                              }
+                            />
+                          </td>
+                        </tr>
                       )}
-                    </td>
-                    <td>{asset.product.name}</td>
-                    <td>{asset.serial ?? '-'}</td>
-                    <td>
-                      <ConditionBadge condition={asset.condition} />
-                    </td>
-                    <td>
-                      <AssetStatusBadge status={asset.status} />
-                    </td>
-                    <td>{asset.location?.name ?? '-'}</td>
-                    <td className="ev-table__actions">
-                      <Link to={`/assets/${asset.id}`} className="btn btn-ghost btn-sm">
-                        {t('common.details')}
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
+                    </Fragment>
+                  );
+                })}
                 {data?.items.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="ev-table__empty">
+                    <td colSpan={4} className="ev-table__empty">
                       {t('common.empty')}
                     </td>
                   </tr>
@@ -298,6 +268,16 @@ export function AssetsPage() {
           <Pagination page={page} pageSize={PAGE_SIZE} total={data.total} onChange={setPage} />
         )}
       </PageCard>
+
+      {drawer && (
+        <AssetBatchDrawer
+          productId={drawer.productId}
+          productName={drawer.productName}
+          date={drawer.date}
+          filters={filters}
+          onClose={() => setDrawer(null)}
+        />
+      )}
 
       {creating && products.data && locations.data && (
         <AssetModal

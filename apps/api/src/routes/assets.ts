@@ -1,19 +1,28 @@
-import { Router } from 'express';
+import express, { Router } from 'express';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import {
   ATTENTION_CONDITIONS,
+  MAX_ASSET_PHOTOS,
+  MAX_PHOTO_BYTES,
+  PHOTO_MIME_TYPES,
   ATTENTION_STATUSES,
   MANUAL_STATUS_TRANSITIONS,
   assetConditionChangeSchema,
   assetCreateSchema,
+  assetGroupQuerySchema,
   assetListQuerySchema,
   assetStatusChangeSchema,
   assetUpdateSchema,
   hasCapability,
   labelIdsSchema,
+  type AssetBatchDto,
+  type AssetPhotoDto,
+  type AssetCondition,
   type AssetDto,
+  type AssetGroupDto,
   type AssetEventDto,
   type AssetScanDto,
+  type AssetStatus,
   type AssetSummaryDto,
   type Page,
 } from '@eventra/shared';
@@ -23,6 +32,7 @@ import { HttpError } from '../errors';
 import { parseId } from '../http';
 import { buildLabelsPdf, qrPng } from '../assets/labels';
 import { assertClearable } from '../incidents/service';
+import { detectImageMime } from '../warehouse/service';
 import {
   QR_TOKEN_PATTERN,
   assetInclude,
@@ -54,7 +64,200 @@ export function assetsRouter(db: PrismaClient): Router {
     return asset;
   };
 
+  /** Filter bersama untuk daftar unit, daftar barang, dan rincian per tanggal. */
+  const buildWhere = (query: {
+    q?: string;
+    status?: AssetStatus;
+    condition?: AssetCondition;
+    locationId?: string;
+    productId?: string;
+    attention?: 'true' | 'false';
+  }): Prisma.AssetWhereInput => {
+    const and: Prisma.AssetWhereInput[] = [];
+    if (query.q) {
+      and.push({
+        OR: [
+          { code: { contains: query.q, mode: 'insensitive' } },
+          { serial: { contains: query.q, mode: 'insensitive' } },
+          { product: { name: { contains: query.q, mode: 'insensitive' } } },
+        ],
+      });
+    }
+    if (query.status) and.push({ status: query.status });
+    if (query.condition) and.push({ condition: query.condition });
+    if (query.locationId) and.push({ locationId: query.locationId });
+    if (query.productId) and.push({ productId: query.productId });
+    if (query.attention === 'true') and.push(ATTENTION_WHERE);
+    if (query.attention === 'false') and.push({ NOT: ATTENTION_WHERE });
+    return { AND: and };
+  };
+
   // ---- Rute statis harus didaftarkan sebelum /assets/:id ----
+
+  /** Satu baris per barang: jumlah unit, sebaran status, dan unit yang perlu perhatian. */
+  router.get('/assets/groups', requireCapability('asset.read'), async (req, res) => {
+    const query = assetGroupQuerySchema.parse(req.query);
+    const where = buildWhere(query);
+    const grouped = await db.asset.groupBy({ by: ['productId'], where });
+    const products = await db.product.findMany({
+      where: { id: { in: grouped.map((g) => g.productId) } },
+      include: { category: true },
+      orderBy: { name: 'asc' },
+    });
+    const pageProducts = products.slice(
+      (query.page - 1) * query.pageSize,
+      query.page * query.pageSize,
+    );
+    const ids = pageProducts.map((p) => p.id);
+    const [byStatus, attention] = await Promise.all([
+      db.asset.groupBy({
+        by: ['productId', 'status'],
+        where: { AND: [where, { productId: { in: ids } }] },
+        _count: { _all: true },
+      }),
+      db.asset.groupBy({
+        by: ['productId'],
+        where: { AND: [where, { productId: { in: ids } }, ATTENTION_WHERE] },
+        _count: { _all: true },
+      }),
+    ]);
+    const items: AssetGroupDto[] = pageProducts.map((p) => {
+      const statuses: AssetGroupDto['byStatus'] = {};
+      let total = 0;
+      for (const row of byStatus) {
+        if (row.productId !== p.id) continue;
+        statuses[row.status] = row._count._all;
+        total += row._count._all;
+      }
+      return {
+        productId: p.id,
+        productName: p.name,
+        sku: p.sku,
+        categoryName: p.category.name,
+        total,
+        attention: attention.find((a) => a.productId === p.id)?._count._all ?? 0,
+        byStatus: statuses,
+      };
+    });
+    const data: Page<AssetGroupDto> = {
+      items,
+      total: products.length,
+      page: query.page,
+      pageSize: query.pageSize,
+    };
+    res.json({ data });
+  });
+
+  /** Isi gambar dari body mentah; tipe harus JPEG/PNG dan cocok dengan magic bytes. */
+  const imageFrom = (req: express.Request): { mime: string; bytes: Buffer } => {
+    const body: unknown = req.body;
+    if (!Buffer.isBuffer(body) || body.length === 0) {
+      throw new HttpError(400, 'INVALID_IMAGE', 'Unggah foto JPEG atau PNG');
+    }
+    const mime = detectImageMime(body);
+    if (!mime || mime !== req.headers['content-type']?.split(';')[0]?.trim()) {
+      throw new HttpError(400, 'INVALID_IMAGE', 'Berkas bukan gambar JPEG/PNG yang valid');
+    }
+    return { mime, bytes: body };
+  };
+  const sendImage = (res: express.Response, photo: { mimeType: string; data: Uint8Array }) => {
+    res.setHeader('Content-Type', photo.mimeType);
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.send(Buffer.from(photo.data));
+  };
+  const batchDate = (req: express.Request): Date => {
+    const raw = typeof req.query.date === 'string' ? req.query.date : '';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(raw) || Number.isNaN(Date.parse(raw))) {
+      throw new HttpError(400, 'VALIDATION_ERROR', 'Tanggal kelompok tidak valid (YYYY-MM-DD)');
+    }
+    return dateOnlyToDate(raw);
+  };
+
+  /** Foto contoh kelompok pembelian (barang + tanggal perolehan); append-only, maks. 5. */
+  router.post(
+    '/assets/groups/:productId/photos',
+    requireCapability('asset.status'),
+    express.raw({ type: [...PHOTO_MIME_TYPES], limit: MAX_PHOTO_BYTES }),
+    async (req, res) => {
+      const productId = parseId(req.params.productId);
+      const date = batchDate(req);
+      const { mime, bytes } = imageFrom(req);
+      const photo = await db.$transaction(async (tx) => {
+        if (!(await tx.product.findUnique({ where: { id: productId }, select: { id: true } }))) {
+          throw new HttpError(404, 'NOT_FOUND', 'Barang tidak ditemukan');
+        }
+        const count = await tx.assetBatchPhoto.count({ where: { productId, batchDate: date } });
+        if (count >= MAX_ASSET_PHOTOS) {
+          throw new HttpError(409, 'PHOTO_LIMIT', `Maksimal ${MAX_ASSET_PHOTOS} foto per kelompok`);
+        }
+        const created = await tx.assetBatchPhoto.create({
+          data: {
+            productId,
+            batchDate: date,
+            mimeType: mime,
+            data: new Uint8Array(bytes),
+            createdBy: currentUser(req).id,
+          },
+          select: { id: true, createdAt: true },
+        });
+        await writeAudit(tx, req, {
+          action: 'asset.batch_photo',
+          entity: 'product',
+          entityId: productId,
+          after: { date: req.query.date, photoId: created.id, bytes: bytes.length },
+        });
+        return created;
+      });
+      const data: AssetPhotoDto = { id: photo.id, createdAt: photo.createdAt.toISOString() };
+      res.status(201).json({ data });
+    },
+  );
+
+  router.get(
+    '/assets/groups/:productId/photos/:photoId',
+    requireCapability('asset.read'),
+    async (req, res) => {
+      const photo = await db.assetBatchPhoto.findFirst({
+        where: { id: parseId(req.params.photoId), productId: parseId(req.params.productId) },
+      });
+      if (!photo) throw new HttpError(404, 'NOT_FOUND', 'Foto tidak ditemukan');
+      sendImage(res, photo);
+    },
+  );
+
+  /** Rincian satu barang: unit dikelompokkan per tanggal perolehan (terbaru dulu). */
+  router.get('/assets/groups/:productId', requireCapability('asset.read'), async (req, res) => {
+    const productId = parseId(req.params.productId);
+    const query = assetGroupQuerySchema.parse(req.query);
+    const rows = await db.asset.findMany({
+      where: buildWhere({ ...query, productId }),
+      include: assetInclude,
+      orderBy: { code: 'asc' },
+      take: 2000,
+    });
+    const cost = canSeeCost(req);
+    const byDate = new Map<string, AssetDto[]>();
+    for (const row of rows) {
+      const dto = toAssetDto(row, cost);
+      byDate.set(dto.acquiredDate, [...(byDate.get(dto.acquiredDate) ?? []), dto]);
+    }
+    const batchPhotos = await db.assetBatchPhoto.findMany({
+      where: { productId },
+      select: { id: true, batchDate: true, createdAt: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    const data: AssetBatchDto[] = [...byDate.entries()]
+      .sort(([a], [b]) => b.localeCompare(a))
+      .map(([date, assets]) => ({
+        date,
+        quantity: assets.length,
+        assets,
+        photos: batchPhotos
+          .filter((p) => p.batchDate.toISOString().slice(0, 10) === date)
+          .map((p) => ({ id: p.id, createdAt: p.createdAt.toISOString() })),
+      }));
+    res.json({ data });
+  });
 
   router.get('/assets/summary', requireCapability('asset.read'), async (_req, res) => {
     const [total, attention, byStatus, byCondition] = await Promise.all([
@@ -111,23 +314,7 @@ export function assetsRouter(db: PrismaClient): Router {
 
   router.get('/assets', requireCapability('asset.read'), async (req, res) => {
     const query = assetListQuerySchema.parse(req.query);
-    const and: Prisma.AssetWhereInput[] = [];
-    if (query.q) {
-      and.push({
-        OR: [
-          { code: { contains: query.q, mode: 'insensitive' } },
-          { serial: { contains: query.q, mode: 'insensitive' } },
-          { product: { name: { contains: query.q, mode: 'insensitive' } } },
-        ],
-      });
-    }
-    if (query.status) and.push({ status: query.status });
-    if (query.condition) and.push({ condition: query.condition });
-    if (query.locationId) and.push({ locationId: query.locationId });
-    if (query.productId) and.push({ productId: query.productId });
-    if (query.attention === 'true') and.push(ATTENTION_WHERE);
-    if (query.attention === 'false') and.push({ NOT: ATTENTION_WHERE });
-    const where: Prisma.AssetWhereInput = { AND: and };
+    const where = buildWhere(query);
 
     const [items, total] = await Promise.all([
       db.asset.findMany({
@@ -153,44 +340,54 @@ export function assetsRouter(db: PrismaClient): Router {
     const input = assetCreateSchema.parse(req.body);
     const user = currentUser(req);
     const created = await db.$transaction(async (tx) => {
-      const [code] = await nextAssetCodes(tx, 1);
+      const codes = await nextAssetCodes(tx, input.quantity);
       const status = initialStatus(input.condition);
-      const asset = await tx.asset.create({
-        data: {
-          code: code as string,
-          qrToken: newQrToken(),
-          productId: input.productId,
-          serial: input.serial ?? null,
-          condition: input.condition,
-          status,
-          locationId: input.locationId ?? null,
-          supplier: input.supplier ?? null,
-          purchaseDate: input.purchaseDate ? dateOnlyToDate(input.purchaseDate) : null,
-          purchasePrice: input.purchasePrice ?? null,
-          notes: input.notes ?? null,
-          createdBy: user.id,
-        },
-        include: assetInclude,
-      });
-      await tx.assetStatusEvent.create({
-        data: {
-          assetId: asset.id,
-          type: 'CREATED',
-          toStatus: status,
-          toCondition: input.condition,
-          toLocationId: asset.locationId,
-          actorId: user.id,
-        },
-      });
-      await writeAudit(tx, req, {
-        action: 'asset.create',
-        entity: 'asset',
-        entityId: asset.id,
-        after: asset,
-      });
-      return asset;
+      const assets = [];
+      for (const code of codes) {
+        const asset = await tx.asset.create({
+          data: {
+            code,
+            qrToken: newQrToken(),
+            productId: input.productId,
+            serial: input.serial ?? null,
+            condition: input.condition,
+            status,
+            locationId: input.locationId ?? null,
+            supplier: input.supplier ?? null,
+            purchaseDate: input.purchaseDate ? dateOnlyToDate(input.purchaseDate) : null,
+            purchasePrice: input.purchasePrice ?? null,
+            notes: input.notes ?? null,
+            createdBy: user.id,
+          },
+          include: assetInclude,
+        });
+        await tx.assetStatusEvent.create({
+          data: {
+            assetId: asset.id,
+            type: 'CREATED',
+            toStatus: status,
+            toCondition: input.condition,
+            toLocationId: asset.locationId,
+            actorId: user.id,
+          },
+        });
+        await writeAudit(tx, req, {
+          action: 'asset.create',
+          entity: 'asset',
+          entityId: asset.id,
+          after: asset,
+        });
+        assets.push(asset);
+      }
+      return assets;
     });
-    res.status(201).json({ data: toAssetDto(created, canSeeCost(req)) });
+    const [first] = created;
+    if (!first) throw new HttpError(500, 'INTERNAL_ERROR', 'Aset tidak terbuat');
+    // data = unit pertama (kompatibel dengan pembuatan tunggal); meta memuat jumlah dan seluruh id.
+    res.status(201).json({
+      data: toAssetDto(first, canSeeCost(req)),
+      meta: { count: created.length, ids: created.map((x) => x.id) },
+    });
   });
 
   router.get('/assets/:id', requireCapability('asset.read'), async (req, res) => {
@@ -352,6 +549,68 @@ export function assetsRouter(db: PrismaClient): Router {
       return asset;
     });
     res.json({ data: toAssetDto(updated, canSeeCost(req)) });
+  });
+
+  // ---- Foto kondisi awal per unit: append-only, maks. 5 ----
+
+  router.get('/assets/:id/photos', requireCapability('asset.read'), async (req, res) => {
+    const assetId = parseId(req.params.id);
+    await loadAsset(assetId);
+    const rows = await db.assetPhoto.findMany({
+      where: { assetId },
+      select: { id: true, createdAt: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    const data: AssetPhotoDto[] = rows.map((r) => ({
+      id: r.id,
+      createdAt: r.createdAt.toISOString(),
+    }));
+    res.json({ data });
+  });
+
+  router.post(
+    '/assets/:id/photos',
+    requireCapability('asset.status'),
+    express.raw({ type: [...PHOTO_MIME_TYPES], limit: MAX_PHOTO_BYTES }),
+    async (req, res) => {
+      const assetId = parseId(req.params.id);
+      const { mime, bytes } = imageFrom(req);
+      const photo = await db.$transaction(async (tx) => {
+        if (!(await tx.asset.findUnique({ where: { id: assetId }, select: { id: true } }))) {
+          throw new HttpError(404, 'NOT_FOUND', 'Aset tidak ditemukan');
+        }
+        const count = await tx.assetPhoto.count({ where: { assetId } });
+        if (count >= MAX_ASSET_PHOTOS) {
+          throw new HttpError(409, 'PHOTO_LIMIT', `Maksimal ${MAX_ASSET_PHOTOS} foto per aset`);
+        }
+        const created = await tx.assetPhoto.create({
+          data: {
+            assetId,
+            mimeType: mime,
+            data: new Uint8Array(bytes),
+            createdBy: currentUser(req).id,
+          },
+          select: { id: true, createdAt: true },
+        });
+        await writeAudit(tx, req, {
+          action: 'asset.photo',
+          entity: 'asset',
+          entityId: assetId,
+          after: { photoId: created.id, bytes: bytes.length },
+        });
+        return created;
+      });
+      const data: AssetPhotoDto = { id: photo.id, createdAt: photo.createdAt.toISOString() };
+      res.status(201).json({ data });
+    },
+  );
+
+  router.get('/assets/:id/photos/:photoId', requireCapability('asset.read'), async (req, res) => {
+    const photo = await db.assetPhoto.findFirst({
+      where: { id: parseId(req.params.photoId), assetId: parseId(req.params.id) },
+    });
+    if (!photo) throw new HttpError(404, 'NOT_FOUND', 'Foto tidak ditemukan');
+    sendImage(res, photo);
   });
 
   router.get('/assets/:id/history', requireCapability('asset.read'), async (req, res) => {

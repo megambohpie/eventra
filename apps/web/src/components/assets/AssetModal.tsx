@@ -36,10 +36,14 @@ export function AssetModal({
   onChanged,
 }: AssetModalProps) {
   const { t } = useTranslation();
-  const [productId, setProductId] = useState(asset?.productId ?? products[0]?.id ?? '');
+  const [productId, setProductId] = useState(asset?.productId ?? '');
   const [serial, setSerial] = useState(asset?.serial ?? '');
+  const [quantity, setQuantity] = useState('1');
+  const qty = Math.max(1, Number(quantity) || 1);
   const [condition, setCondition] = useState<AssetCondition>(asset?.condition ?? 'GOOD');
   const [locationId, setLocationId] = useState(asset?.locationId ?? '');
+  // Aset baru: kolom lokasi tampil kosong sampai dipilih (kosong = tanpa lokasi).
+  const [locationPicked, setLocationPicked] = useState(Boolean(asset));
   const [supplier, setSupplier] = useState(asset?.supplier ?? '');
   const [purchaseDate, setPurchaseDate] = useState(asset?.purchaseDate ?? '');
   const [purchasePrice, setPurchasePrice] = useState(
@@ -68,7 +72,8 @@ export function AssetModal({
       } else {
         await createAsset(api, {
           productId,
-          serial,
+          quantity: qty,
+          serial: qty > 1 ? '' : serial,
           condition,
           locationId: locationId || undefined,
           supplier,
@@ -100,9 +105,20 @@ export function AssetModal({
               options={products.map((p) => ({ value: p.id, label: p.name }))}
             />
           </FormField>
+          {!asset && (
+            <FormField label={t('assets.qty')}>
+              <input
+                className="input ev-control"
+                inputMode="numeric"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value.replace(/\D/g, '').slice(0, 3))}
+              />
+            </FormField>
+          )}
           <FormField label={t('assets.serial')}>
             <input
               className="input ev-control"
+              disabled={!asset && qty > 1}
               value={serial}
               onChange={(e) => setSerial(e.target.value)}
             />
@@ -125,8 +141,11 @@ export function AssetModal({
           <FormField label={t('assets.location')}>
             <SearchSelect
               ariaLabel={t('assets.location')}
-              value={locationId}
-              onChange={setLocationId}
+              value={locationPicked ? locationId : '__unset__'}
+              onChange={(v) => {
+                setLocationId(v);
+                setLocationPicked(true);
+              }}
               options={[
                 { value: '', label: t('assets.noLocation') },
                 ...locations
@@ -167,7 +186,13 @@ export function AssetModal({
           </div>
         </fieldset>
         <div className="modal-action">
-          <Button type="submit" variant="primary" icon={mdiContentSave} loading={saving}>
+          <Button
+            type="submit"
+            variant="primary"
+            icon={mdiContentSave}
+            loading={saving}
+            disabled={!productId}
+          >
             {t('common.save')}
           </Button>
         </div>

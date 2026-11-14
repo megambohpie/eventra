@@ -77,16 +77,25 @@ export const needsAttention = (status: AssetStatus, condition: AssetCondition): 
 const rupiah = z.number().int().min(0).max(100_000_000_000);
 const dateOnly = z.iso.date();
 
-export const assetCreateSchema = z.object({
-  productId: z.uuid(),
-  serial: optionalText(80),
-  condition: z.enum(ASSET_CONDITIONS).default('GOOD'),
-  locationId: z.uuid().optional(),
-  supplier: optionalText(160),
-  purchaseDate: dateOnly.optional(),
-  purchasePrice: rupiah.optional(),
-  notes: optionalText(500),
-});
+export const MAX_CREATE_QUANTITY = 500;
+
+export const assetCreateSchema = z
+  .object({
+    productId: z.uuid(),
+    serial: optionalText(80),
+    condition: z.enum(ASSET_CONDITIONS).default('GOOD'),
+    locationId: z.uuid().optional(),
+    supplier: optionalText(160),
+    purchaseDate: dateOnly.optional(),
+    purchasePrice: rupiah.optional(),
+    notes: optionalText(500),
+    /** Jumlah unit fisik yang dibuat sekaligus (masing-masing punya kode dan QR sendiri). */
+    quantity: z.number().int().min(1).max(MAX_CREATE_QUANTITY).default(1),
+  })
+  .refine((a) => a.quantity === 1 || !a.serial, {
+    path: ['serial'],
+    message: 'Nomor seri hanya untuk satu unit; kosongkan bila membuat banyak unit',
+  });
 export type AssetCreateInput = z.input<typeof assetCreateSchema>;
 
 export const assetUpdateSchema = z.object({
@@ -191,12 +200,16 @@ export interface AssetDto {
   location: Pick<LocationDto, 'id' | 'name'> | null;
   supplier: string | null;
   purchaseDate: string | null;
+  /** Tanggal perolehan untuk pengelompokan: tanggal beli, atau tanggal terima stok, atau tanggal dibuat. */
+  acquiredDate: string;
   /** Hanya ada bila pemanggil memiliki capability `asset.cost.read`. */
   purchasePrice?: number | null;
   receiptId: string | null;
   receiptNumber: string | null;
   notes: string | null;
   needsAttention: boolean;
+  /** Jumlah foto kondisi awal unit ini. */
+  photoCount: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -211,6 +224,45 @@ export interface AssetScanDto {
   allocatable: boolean;
   location: string | null;
 }
+
+/** Maksimum foto kondisi awal per unit, dan foto contoh per kelompok pembelian. */
+export const MAX_ASSET_PHOTOS = 5;
+
+export interface AssetPhotoDto {
+  id: string;
+  createdAt: string;
+}
+
+/** Satu baris per barang (produk): jumlah unit fisik dan sebarannya. */
+export interface AssetGroupDto {
+  productId: string;
+  productName: string;
+  sku: string | null;
+  categoryName: string;
+  total: number;
+  attention: number;
+  byStatus: Partial<Record<AssetStatus, number>>;
+}
+
+/** Unit satu barang yang diperoleh pada tanggal yang sama. */
+export interface AssetBatchDto {
+  date: string;
+  quantity: number;
+  assets: AssetDto[];
+  /** Foto contoh kelompok ini (tanpa isi gambar). */
+  photos: AssetPhotoDto[];
+}
+
+export const assetGroupQuerySchema = z.object({
+  q: z.string().trim().max(100).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+  status: z.enum(ASSET_STATUSES).optional(),
+  condition: z.enum(ASSET_CONDITIONS).optional(),
+  locationId: z.uuid().optional(),
+  attention: z.enum(['true', 'false']).optional(),
+});
+export type AssetGroupQuery = z.input<typeof assetGroupQuerySchema>;
 
 export interface AssetSummaryDto {
   total: number;

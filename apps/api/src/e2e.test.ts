@@ -3,6 +3,7 @@ import request from 'supertest';
 import type {
   AssetDto,
   AssetMetricsDto,
+  AssetRentalDto,
   CustomerDto,
   IncidentDto,
   InvoiceDto,
@@ -297,6 +298,15 @@ describe('Fase 08 — E2E smoke: alur kritis rental', () => {
     expect(dashboard).toBeTruthy();
     const metrics = await ok<AssetMetricsDto>('get', admin, `/assets/${a1.id}/metrics`);
     expect(metrics).toMatchObject({ rentalCount: 1, rentalDays: 2, incidentCount: 1 });
+    const rentals = await ok<AssetRentalDto[]>('get', admin, `/assets/${a1.id}/rentals`);
+    expect(rentals).toHaveLength(1);
+    expect(rentals[0]).toMatchObject({
+      orderNumber: expect.stringMatching(/^ORD-/),
+      customerName: expect.any(String),
+      days: 2,
+    });
+    expect(rentals[0]?.returnedAt).not.toBeNull();
+    expect((await call('get', warehouse, `/assets/${a1.id}/rentals`)).status).toBe(200);
 
     // Owner memiliki otorisasi penuh (superset Admin).
     expect((await call('post', owner, '/customers', { type: 'COMPANY', name: 'X' })).status).toBe(

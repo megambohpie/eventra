@@ -9,16 +9,24 @@ interface ModalProps {
   onClose: () => void;
   /** Lebar besar untuk form dengan banyak kolom/tabel. */
   wide?: boolean;
+  /** Panel yang menggeser masuk dari sisi kanan layar (daftar panjang). */
+  side?: boolean;
   children: ReactNode;
 }
 
 /** Dialog DaisyUI standar; isi dirender hanya saat terbuka sehingga state form selalu segar. */
-export function Modal({ open, title, onClose, wide = false, children }: ModalProps) {
+export function Modal({ open, title, onClose, wide = false, side = false, children }: ModalProps) {
   const { t } = useTranslation();
   if (!open) return null;
   return (
-    <dialog className="modal modal-open" aria-label={title} onCancel={onClose}>
-      <div className={`modal-box ${wide ? 'ev-modal__box--wide' : ''}`.trim()}>
+    <dialog
+      className={`modal modal-open${side ? ' modal-end' : ''}`}
+      aria-label={title}
+      onCancel={onClose}
+    >
+      <div
+        className={`modal-box ${wide ? 'ev-modal__box--wide' : ''} ${side ? 'ev-modal__box--side' : ''}`.trim()}
+      >
         <div className="ev-modal__head">
           <h2 className="ev-modal__title">{title}</h2>
           <Button

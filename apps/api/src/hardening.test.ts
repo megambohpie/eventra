@@ -233,7 +233,12 @@ describe('Fase 08 — unggah berkas', () => {
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
     'base64',
   );
-  const endpoints = [`/incidents/${UUID}/photos`, `/pick-lists/${UUID}/items/${UUID}/photos`];
+  const endpoints = [
+    `/incidents/${UUID}/photos`,
+    `/pick-lists/${UUID}/items/${UUID}/photos`,
+    `/assets/${UUID}/photos`,
+    `/assets/groups/${UUID}/photos?date=2026-01-01`,
+  ];
 
   it.each(endpoints)('%s menolak tipe, isi, dan ukuran yang tidak sah', async (path) => {
     const { app } = createTestApp();

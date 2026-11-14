@@ -430,6 +430,117 @@ describe('Fase 02 — aset, QR, penerimaan', () => {
     ).toBe(409);
   });
 
+  it('aset per barang: qty membuat banyak unit; daftar per barang; rincian per tanggal perolehan', async () => {
+    const { app } = createTestApp();
+    const admin = await loginAs(app, 'ADMIN');
+    const { product, location } = await seedMaster();
+
+    // 3 unit dibeli 2026-01-05; satu unit lain tanpa tanggal beli.
+    const bulk = await request(app)
+      .post(`${V1}/assets`)
+      .set(auth(admin))
+      .send({ productId: product.id, quantity: 3, purchaseDate: '2026-01-05' });
+    expect(bulk.status).toBe(201);
+    expect(bulk.body.meta.count).toBe(3);
+    const serialMany = await request(app)
+      .post(`${V1}/assets`)
+      .set(auth(admin))
+      .send({ productId: product.id, quantity: 2, serial: 'SN-X' });
+    expect(serialMany.status).toBe(400);
+    await request(app)
+      .post(`${V1}/assets`)
+      .set(auth(admin))
+      .send({ productId: product.id, locationId: location.id });
+    // Penerimaan stok 2026-11-10 (2 unit) memakai tanggal terima sebagai tanggal perolehan.
+    await receive(app, admin, receiptBody(product.id, location.id));
+
+    const groups = await request(app).get(`${V1}/assets/groups`).set(auth(admin));
+    expect(groups.status).toBe(200);
+    expect(groups.body.data.items).toHaveLength(1);
+    expect(groups.body.data.items[0]).toMatchObject({
+      productId: product.id,
+      total: 7,
+      byStatus: { AVAILABLE: 7 },
+    });
+
+    const batches = await request(app).get(`${V1}/assets/groups/${product.id}`).set(auth(admin));
+    expect(batches.status).toBe(200);
+    const list = batches.body.data as { date: string; quantity: number; assets: AssetDto[] }[];
+    const today = new Date().toISOString().slice(0, 10);
+    expect(list.map((b) => [b.date, b.quantity])).toEqual([
+      [today, 1],
+      ['2026-11-10', 3],
+      ['2026-01-05', 3],
+    ]);
+    expect(list.flatMap((b) => b.assets)).toHaveLength(7);
+
+    // Filter lokasi dipakai bersama: hanya unit di gudang utama.
+    const filtered = await request(app)
+      .get(`${V1}/assets/groups/${product.id}?locationId=${location.id}`)
+      .set(auth(admin));
+    expect(filtered.body.data.flatMap((b: { assets: AssetDto[] }) => b.assets)).toHaveLength(4);
+  });
+
+  it('foto kondisi awal per unit dan foto contoh kelompok: append-only, maks. 5, hanya JPEG/PNG', async () => {
+    const { app } = createTestApp();
+    const admin = await loginAs(app, 'ADMIN');
+    const customer = await loginAs(app, 'CUSTOMER');
+    const { product } = await seedMaster();
+    const PNG = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+      'base64',
+    );
+    const created = await request(app)
+      .post(`${V1}/assets`)
+      .set(auth(admin))
+      .send({ productId: product.id, quantity: 2, purchaseDate: '2026-01-05' });
+    const asset = (created.body as { data: AssetDto }).data;
+    const upload = (path: string, token = admin) =>
+      request(app).post(`${V1}${path}`).set(auth(token)).set('Content-Type', 'image/png').send(PNG);
+
+    expect((await upload(`/assets/${asset.id}/photos`, customer)).status).toBe(403);
+    const first = await upload(`/assets/${asset.id}/photos`);
+    expect(first.status).toBe(201);
+    const list = await request(app).get(`${V1}/assets/${asset.id}/photos`).set(auth(admin));
+    expect(list.body.data).toHaveLength(1);
+    const image = await request(app)
+      .get(`${V1}/assets/${asset.id}/photos/${first.body.data.id}`)
+      .set(auth(admin))
+      .buffer(true)
+      .parse((res, cb) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => chunks.push(c));
+        res.on('end', () => cb(null, Buffer.concat(chunks)));
+      });
+    expect(image.headers['content-type']).toBe('image/png');
+    expect((image.body as Buffer).equals(PNG)).toBe(true);
+    expect(
+      (await request(app).get(`${V1}/assets/${asset.id}`).set(auth(admin))).body.data.photoCount,
+    ).toBe(1);
+
+    // Maksimal 5 foto per unit.
+    for (let i = 0; i < 4; i += 1)
+      expect((await upload(`/assets/${asset.id}/photos`)).status).toBe(201);
+    expect((await upload(`/assets/${asset.id}/photos`)).status).toBe(409);
+
+    // Foto tidak dapat diubah/dihapus (bukti historis).
+    await expect(db.assetPhoto.deleteMany({ where: { assetId: asset.id } })).rejects.toThrow();
+
+    // Foto kelompok muncul pada rincian per tanggal.
+    expect((await upload(`/assets/groups/${product.id}/photos?date=bukan-tanggal`)).status).toBe(
+      400,
+    );
+    const batch = await upload(`/assets/groups/${product.id}/photos?date=2026-01-05`);
+    expect(batch.status).toBe(201);
+    const batches = await request(app).get(`${V1}/assets/groups/${product.id}`).set(auth(admin));
+    expect(batches.body.data[0]).toMatchObject({ date: '2026-01-05', quantity: 2 });
+    expect(batches.body.data[0].photos).toHaveLength(1);
+    const img = await request(app)
+      .get(`${V1}/assets/groups/${product.id}/photos/${batch.body.data.id}`)
+      .set(auth(admin));
+    expect(img.status).toBe(200);
+  });
+
   it('CRUD aset: buat, ubah (lokasi tercatat), daftar dengan filter & ringkasan', async () => {
     const { app } = createTestApp();
     const admin = await loginAs(app, 'ADMIN');

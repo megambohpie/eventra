@@ -22,13 +22,15 @@ import {
 export const assetInclude = {
   product: { include: { category: true } },
   location: true,
-  receipt: { select: { number: true } },
+  receipt: { select: { number: true, receivedDate: true } },
+  _count: { select: { photos: true } },
 } satisfies Prisma.AssetInclude;
 
 type AssetRow = Asset & {
   product: Product & { category: Category };
   location: Location | null;
-  receipt: Pick<StockReceipt, 'number'> | null;
+  receipt: Pick<StockReceipt, 'number' | 'receivedDate'> | null;
+  _count: { photos: number };
 };
 
 const isoDate = (d: Date | null): string | null => (d ? d.toISOString().slice(0, 10) : null);
@@ -52,6 +54,10 @@ export function toAssetDto(a: AssetRow, canSeeCost: boolean): AssetDto {
     location: a.location ? { id: a.location.id, name: a.location.name } : null,
     supplier: a.supplier,
     purchaseDate: isoDate(a.purchaseDate),
+    acquiredDate:
+      isoDate(a.purchaseDate) ??
+      isoDate(a.receipt?.receivedDate ?? null) ??
+      a.createdAt.toISOString().slice(0, 10),
     ...(canSeeCost
       ? { purchasePrice: a.purchasePrice === null ? null : Number(a.purchasePrice) }
       : {}),
@@ -59,6 +65,7 @@ export function toAssetDto(a: AssetRow, canSeeCost: boolean): AssetDto {
     receiptNumber: a.receipt?.number ?? null,
     notes: a.notes,
     needsAttention: needsAttention(a.status, a.condition),
+    photoCount: a._count.photos,
     createdAt: a.createdAt.toISOString(),
     updatedAt: a.updatedAt.toISOString(),
   };
