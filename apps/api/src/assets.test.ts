@@ -310,6 +310,9 @@ describe('Fase 02 — aset, QR, penerimaan', () => {
       });
     expect(pdf.status).toBe(200);
     expect(pdf.headers['content-type']).toBe('application/pdf');
+    expect(pdf.headers['content-disposition']).toMatch(
+      /filename="eventra-qr-labels-\d{8}-\d{6}\.pdf"/,
+    );
     expect((pdf.body as Buffer).subarray(0, 4).toString()).toBe('%PDF');
 
     expect(

@@ -199,6 +199,9 @@ model Product {
   deposit       BigInt             @default(0)
   active        Boolean            @default(true)
   hasPhoto      Boolean            @default(false) @map("has_photo")
+  // Ukuran kabinet/panel (cm); keduanya terisi atau keduanya kosong. Dipakai menghitung luas (m²).
+  widthCm       Int?               @map("width_cm")
+  heightCm      Int?               @map("height_cm")
   createdBy     String?            @map("created_by") @db.Uuid
   createdAt     DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt     DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -274,6 +277,8 @@ model Asset {
   qrToken       String         @unique @map("qr_token")
   productId     String         @map("product_id") @db.Uuid
   serial        String?
+  brand         String?
+  batchLabel    String?        @map("batch_label")
   condition     AssetCondition @default(GOOD)
   status        AssetStatus    @default(AVAILABLE)
   locationId    String?        @map("location_id") @db.Uuid
@@ -339,6 +344,7 @@ model StockReceipt {
   status       ReceiptStatus @default(DRAFT)
   sourceRef    String?       @map("source_ref")
   supplier     String?
+  batchLabel   String?       @map("batch_label")
   locationId   String        @map("location_id") @db.Uuid
   receivedDate DateTime      @map("received_date") @db.Date
   receivedById String?       @map("received_by_id") @db.Uuid
@@ -363,6 +369,7 @@ model StockReceiptItem {
   productId String         @map("product_id") @db.Uuid
   quantity  Int
   unitCost  BigInt?        @map("unit_cost")
+  brand     String?
   condition AssetCondition @default(GOOD)
   serials   String[]
 

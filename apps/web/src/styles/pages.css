@@ -352,6 +352,37 @@
   .ev-batches {
     @apply flex flex-col gap-4;
   }
+  /* Hanya tabel yang scroll; judul, foto, dan toolbar tetap di tempat. */
+  .ev-batchdrawer {
+    @apply flex min-h-0 flex-1 flex-col gap-5;
+  }
+  .ev-batchdrawer > :not(.ev-table-wrap) {
+    @apply shrink-0;
+  }
+  .ev-batchdrawer .ev-batch__title {
+    @apply border-base-300 border-b pb-3;
+  }
+  .ev-batchdrawer .ev-photostrip {
+    @apply bg-base-200/50 rounded-box gap-3 p-4;
+  }
+  .ev-batchdrawer .ev-photostrip .ev-section-title {
+    @apply text-base;
+  }
+  .ev-batchdrawer__bar {
+    @apply flex flex-wrap items-center justify-between gap-2;
+  }
+  .ev-batchdrawer .ev-table-wrap {
+    @apply border-base-300 rounded-box min-h-0 flex-1 overflow-y-auto border;
+  }
+  .ev-batchdrawer .table {
+    @apply select-none;
+  }
+  .ev-batchdrawer .table thead th {
+    @apply bg-base-100 sticky top-0 z-10;
+  }
+  .ev-batchdrawer .table :where(th, td) {
+    @apply px-3 py-2.5;
+  }
   .ev-batch__title {
     @apply flex flex-wrap items-baseline gap-2 text-base font-semibold;
   }

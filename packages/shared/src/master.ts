@@ -39,17 +39,31 @@ export type PricingUnit = (typeof PRICING_UNITS)[number];
 /** Nominal rupiah selalu integer (TECHNICAL_SPEC §10). */
 const rupiah = z.number().int().min(0).max(100_000_000_000);
 
-export const productInputSchema = z.object({
-  name: z.string().trim().min(1).max(160),
-  sku: optionalText(40),
-  categoryId: z.uuid(),
-  pricingUnit: z.enum(PRICING_UNITS),
-  unitLabel: z.string().trim().min(1).max(30),
-  price: rupiah,
-  deposit: rupiah,
-  active: z.boolean().optional(),
-});
+export const productInputSchema = z
+  .object({
+    name: z.string().trim().min(1).max(160),
+    sku: optionalText(40),
+    categoryId: z.uuid(),
+    pricingUnit: z.enum(PRICING_UNITS),
+    unitLabel: z.string().trim().min(1).max(30),
+    price: rupiah,
+    deposit: rupiah,
+    active: z.boolean().optional(),
+    /** Ukuran kabinet/panel dalam cm; isi keduanya atau kosongkan keduanya. */
+    widthCm: z.number().int().min(1).max(10_000).nullable().optional(),
+    heightCm: z.number().int().min(1).max(10_000).nullable().optional(),
+  })
+  .refine((p) => (p.widthCm == null) === (p.heightCm == null), {
+    path: ['widthCm'],
+    message: 'Lebar dan tinggi harus diisi bersamaan',
+  });
 export type ProductInput = z.infer<typeof productInputSchema>;
+
+/** Luas satu unit dalam m² (null bila ukuran belum diisi). */
+export const unitAreaM2 = (p: {
+  widthCm: number | null;
+  heightCm: number | null;
+}): number | null => (p.widthCm && p.heightCm ? (p.widthCm * p.heightCm) / 10_000 : null);
 
 export const categoryInputSchema = z.object({ name: z.string().trim().min(1).max(80) });
 export type CategoryInput = z.infer<typeof categoryInputSchema>;
@@ -108,4 +122,6 @@ export interface ProductDto {
   active: boolean;
   /** Foto produk opsional; byte diambil lewat GET /products/:id/photo. */
   hasPhoto: boolean;
+  widthCm: number | null;
+  heightCm: number | null;
 }

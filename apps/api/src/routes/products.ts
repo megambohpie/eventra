@@ -27,6 +27,8 @@ export const toProductDto = (p: ProductWithCategory): ProductDto => ({
   deposit: Number(p.deposit),
   active: p.active,
   hasPhoto: p.hasPhoto,
+  widthCm: p.widthCm,
+  heightCm: p.heightCm,
 });
 
 const withCategory = { category: true };
@@ -71,7 +73,13 @@ export function productsRouter(db: PrismaClient): Router {
     const input = productInputSchema.parse(req.body);
     const product = await db.$transaction(async (tx) => {
       const created = await tx.product.create({
-        data: { ...input, active: input.active ?? true, createdBy: currentUser(req).id },
+        data: {
+          ...input,
+          widthCm: input.widthCm ?? null,
+          heightCm: input.heightCm ?? null,
+          active: input.active ?? true,
+          createdBy: currentUser(req).id,
+        },
         include: withCategory,
       });
       await writeAudit(tx, req, {
@@ -93,7 +101,13 @@ export function productsRouter(db: PrismaClient): Router {
       if (!before) throw new HttpError(404, 'NOT_FOUND', 'Produk tidak ditemukan');
       const updated = await tx.product.update({
         where: { id },
-        data: { ...input, sku: input.sku ?? null, active: input.active ?? before.active },
+        data: {
+          ...input,
+          sku: input.sku ?? null,
+          widthCm: input.widthCm ?? null,
+          heightCm: input.heightCm ?? null,
+          active: input.active ?? before.active,
+        },
         include: withCategory,
       });
       await writeAudit(tx, req, {

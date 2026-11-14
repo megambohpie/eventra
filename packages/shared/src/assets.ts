@@ -83,6 +83,8 @@ export const assetCreateSchema = z
   .object({
     productId: z.uuid(),
     serial: optionalText(80),
+    brand: optionalText(80),
+    batchLabel: optionalText(80),
     condition: z.enum(ASSET_CONDITIONS).default('GOOD'),
     locationId: z.uuid().optional(),
     supplier: optionalText(160),
@@ -100,6 +102,8 @@ export type AssetCreateInput = z.input<typeof assetCreateSchema>;
 
 export const assetUpdateSchema = z.object({
   serial: optionalText(80),
+  brand: optionalText(80),
+  batchLabel: optionalText(80),
   locationId: z.uuid().nullable().optional(),
   supplier: optionalText(160),
   purchaseDate: dateOnly.nullable().optional(),
@@ -145,6 +149,7 @@ export const receiptItemSchema = z
     productId: z.uuid(),
     quantity: z.number().int().min(1).max(500),
     unitCost: rupiah.optional(),
+    brand: optionalText(80),
     condition: z.enum(ASSET_CONDITIONS).default('GOOD'),
     serials: z.array(z.string().trim().min(1).max(80)).max(500).default([]),
   })
@@ -162,6 +167,7 @@ export const receiptInputSchema = z
     source: z.enum(RECEIPT_SOURCES),
     sourceRef: optionalText(120),
     supplier: optionalText(160),
+    batchLabel: optionalText(80),
     locationId: z.uuid(),
     receivedDate: dateOnly,
     note: optionalText(500),
@@ -194,6 +200,10 @@ export interface AssetDto {
   productId: string;
   product: AssetProductRef;
   serial: string | null;
+  /** Merek (mis. Dahua, Cailiang); satu jenis barang boleh berisi banyak merek. */
+  brand: string | null;
+  /** Label kelompok pembelian (mis. "Batch 1"). */
+  batchLabel: string | null;
   condition: AssetCondition;
   status: AssetStatus;
   locationId: string | null;
@@ -248,6 +258,10 @@ export interface AssetGroupDto {
 export interface AssetBatchDto {
   date: string;
   quantity: number;
+  /** Label batch yang muncul pada tanggal ini. */
+  batchLabels: string[];
+  /** Sebaran merek (brand null = tanpa merek). */
+  brands: { brand: string | null; quantity: number }[];
   assets: AssetDto[];
   /** Foto contoh kelompok ini (tanpa isi gambar). */
   photos: AssetPhotoDto[];
@@ -263,6 +277,28 @@ export const assetGroupQuerySchema = z.object({
   attention: z.enum(['true', 'false']).optional(),
 });
 export type AssetGroupQuery = z.input<typeof assetGroupQuerySchema>;
+
+/** Satu baris rekap stok: barang × label batch × merek. */
+export interface StockBreakdownRowDto {
+  productId: string;
+  productName: string;
+  batchLabel: string | null;
+  brand: string | null;
+  quantity: number;
+  /** Total luas m² (jumlah × ukuran); null bila ukuran produk belum diisi. */
+  areaM2: number | null;
+}
+
+export interface StockBreakdownDto {
+  rows: StockBreakdownRowDto[];
+  totalQuantity: number;
+}
+
+export const stockBreakdownQuerySchema = z.object({
+  q: z.string().trim().max(100).optional(),
+  productId: z.uuid().optional(),
+});
+export type StockBreakdownQuery = z.input<typeof stockBreakdownQuerySchema>;
 
 export interface AssetSummaryDto {
   total: number;
@@ -294,6 +330,7 @@ export interface ReceiptItemDto {
   quantity: number;
   /** Hanya ada bila pemanggil memiliki capability `asset.cost.read`. */
   unitCost?: number | null;
+  brand: string | null;
   condition: AssetCondition;
   serials: string[];
 }
@@ -305,6 +342,7 @@ export interface ReceiptDto {
   status: ReceiptStatus;
   sourceRef: string | null;
   supplier: string | null;
+  batchLabel: string | null;
   locationId: string;
   locationName: string;
   receivedDate: string;

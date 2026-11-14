@@ -47,6 +47,8 @@ export function ProductModal({
   const [categoryId, setCategoryId] = useState(product?.categoryId ?? categories[0]?.id ?? '');
   const [pricingUnit, setPricingUnit] = useState<PricingUnit>(product?.pricingUnit ?? 'PCS');
   const [unitLabel, setUnitLabel] = useState(product?.unitLabel ?? '');
+  const [widthCm, setWidthCm] = useState(product?.widthCm ? String(product.widthCm) : '');
+  const [heightCm, setHeightCm] = useState(product?.heightCm ? String(product.heightCm) : '');
   const [price, setPrice] = useState(String(product?.price ?? 0));
   const [deposit, setDeposit] = useState(String(product?.deposit ?? 0));
   const [active, setActive] = useState(product?.active ?? true);
@@ -69,6 +71,8 @@ export function ProductModal({
         price: Number(price),
         deposit: Number(deposit),
         active,
+        widthCm: widthCm ? Number(widthCm) : null,
+        heightCm: heightCm ? Number(heightCm) : null,
       };
       const saved = product
         ? await updateProduct(api, product.id, input)
@@ -137,6 +141,25 @@ export function ProductModal({
               onChange={(e) => setUnitLabel(e.target.value)}
             />
           </FormField>
+          <FormField label={t('products.widthCm')}>
+            <input
+              className="input ev-control"
+              inputMode="numeric"
+              required={Boolean(heightCm)}
+              value={widthCm}
+              onChange={(e) => setWidthCm(e.target.value.replace(/\D/g, '').slice(0, 5))}
+            />
+          </FormField>
+          <FormField label={t('products.heightCm')}>
+            <input
+              className="input ev-control"
+              inputMode="numeric"
+              required={Boolean(widthCm)}
+              value={heightCm}
+              onChange={(e) => setHeightCm(e.target.value.replace(/\D/g, '').slice(0, 5))}
+            />
+          </FormField>
+          <p className="ev-hint ev-form-grid__full">{t('products.sizeHint')}</p>
           <FormField label={t('products.price')}>
             <CurrencyInput required value={price} onChange={setPrice} />
           </FormField>

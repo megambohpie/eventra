@@ -9,7 +9,7 @@ import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { Loading } from '@/components/ui/Loading';
 import { Modal } from '@/components/ui/Modal';
 import { useResource } from '@/hooks/useResource';
-import { downloadBlob } from '@/lib/download';
+import { downloadBlob, timestampedFilename } from '@/lib/download';
 import { formatDate, formatDateTime, formatRupiah } from '@/lib/format';
 import { notify } from '@/lib/notifications';
 import { ReceiptStatusBadge } from './ReceiptStatusBadge';
@@ -67,7 +67,10 @@ export function ReceiptDetailModal({
     try {
       for (let i = 0; i < ids.length; i += MAX_LABELS) {
         const blob = await getAssetLabelsPdf(api, ids.slice(i, i + MAX_LABELS));
-        downloadBlob(blob, `${data?.number ?? 'receipt'}-labels-${i / MAX_LABELS + 1}.pdf`);
+        downloadBlob(
+          blob,
+          timestampedFilename(`${data?.number ?? 'receipt'}-labels-${i / MAX_LABELS + 1}`, 'pdf'),
+        );
       }
       notify('success', t('receipts.labelsDownloaded'));
     } catch {
@@ -81,6 +84,7 @@ export function ReceiptDetailModal({
         [t('receipts.source'), t(`receipts.sources.${r.source}`)],
         [t('receipts.sourceRef'), r.sourceRef ?? '-'],
         [t('receipts.supplier'), r.supplier ?? '-'],
+        [t('receipts.batchLabel'), r.batchLabel ?? '-'],
         [t('receipts.location'), r.locationName],
         [t('receipts.receivedDate'), formatDate(r.receivedDate)],
         [
@@ -125,6 +129,7 @@ export function ReceiptDetailModal({
                       <tr key={item.id}>
                         <td>
                           {item.productName}
+                          {item.brand && <span className="ev-table__hint">{item.brand}</span>}
                           {item.serials.length > 0 && (
                             <span className="ev-table__hint">{item.serials.join(', ')}</span>
                           )}

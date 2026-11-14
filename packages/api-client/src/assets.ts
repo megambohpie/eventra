@@ -14,6 +14,8 @@ import type {
   AssetStatusChangeInput,
   AssetSummaryDto,
   AssetUpdateInput,
+  StockBreakdownDto,
+  StockBreakdownQuery,
   Page,
   ReceiptDto,
   ReceiptInput,
@@ -26,6 +28,8 @@ export const listAssets = async (c: AxiosInstance, params: AssetListQuery = {}) 
   (await c.get<Envelope<Page<AssetDto>>>('/assets', { params })).data.data;
 export const getAssetSummary = async (c: AxiosInstance) =>
   (await c.get<Envelope<AssetSummaryDto>>('/assets/summary')).data.data;
+export const getStockBreakdown = async (c: AxiosInstance, params: StockBreakdownQuery = {}) =>
+  (await c.get<Envelope<StockBreakdownDto>>('/assets/breakdown', { params })).data.data;
 export const getAsset = async (c: AxiosInstance, id: string) =>
   (await c.get<Envelope<AssetDto>>(`/assets/${id}`)).data.data;
 export const createAsset = async (c: AxiosInstance, input: AssetCreateInput) =>

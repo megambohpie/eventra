@@ -36,7 +36,7 @@ import { Modal } from '@/components/ui/Modal';
 import { PhotoStrip } from '@/components/ui/PhotoStrip';
 import { PageCard } from '@/components/ui/PageCard';
 import { useResource } from '@/hooks/useResource';
-import { downloadBlob } from '@/lib/download';
+import { downloadBlob, timestampedFilename } from '@/lib/download';
 import { formatDate, formatDateTime, formatRupiah } from '@/lib/format';
 import { notify } from '@/lib/notifications';
 
@@ -150,7 +150,10 @@ export function AssetDetailView({ id, embedded = false, onChanged }: AssetDetail
 
   const downloadLabel = async () => {
     try {
-      downloadBlob(await getAssetLabelsPdf(api, [id]), `${a?.code ?? 'asset'}-label.pdf`);
+      downloadBlob(
+        await getAssetLabelsPdf(api, [id]),
+        timestampedFilename(`${a?.code ?? 'asset'}-label`, 'pdf'),
+      );
       notify('success', t('assets.labelsDownloaded'));
     } catch {
       /* error sudah tampil sebagai notifikasi */
@@ -177,6 +180,8 @@ export function AssetDetailView({ id, embedded = false, onChanged }: AssetDetail
   const info: [string, string][] = [
     [t('assets.product'), `${a.product.name} (${a.product.category.name})`],
     [t('assets.serial'), a.serial ?? '-'],
+    [t('assets.brand'), a.brand ?? '-'],
+    [t('assets.batchLabel'), a.batchLabel ?? '-'],
     [t('assets.location'), a.location?.name ?? '-'],
     [t('assets.supplier'), a.supplier ?? '-'],
     [t('assets.purchaseDate'), a.purchaseDate ? formatDate(a.purchaseDate) : '-'],

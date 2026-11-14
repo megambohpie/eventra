@@ -33,7 +33,13 @@ export function AssetBatchList({ productId, filters, onOpen }: AssetBatchListPro
           <li key={batch.date}>
             <button type="button" className="ev-batchlist__item" onClick={() => onOpen(batch)}>
               <span className="ev-batchlist__date">
+                {batch.batchLabels.length > 0 && `${batch.batchLabels.join(', ')} · `}
                 {t('assets.batch.title', { date: formatDate(batch.date) })}
+                <span className="ev-table__hint ev-table__hint--block">
+                  {batch.brands
+                    .map((b) => `${b.brand ?? t('assets.noBrand')} ×${b.quantity}`)
+                    .join(', ')}
+                </span>
               </span>
               <span className="ev-qty">{t('assets.batch.units', { count: batch.quantity })}</span>
               <span className="ev-chips">

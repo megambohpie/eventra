@@ -144,6 +144,8 @@
 
 - [x] Foto aset opsional: foto contoh per kelompok pembelian dan foto kondisi awal per unit (maks. 5, append-only), ditambahkan setelah input pembelian lewat panel kelompok / detail aset. Keputusan owner: foto selalu **opsional** (tidak pernah diwajibkan, termasuk saat checkout gudang).
 
+- [x] Merek, label batch, dan ukuran kabinet (permintaan owner, 14 Nov 2026; contoh lembar Excel LED P3.91 Dahua/Cailiang, Batch 1/3): satu jenis barang (produk) boleh dibeli berkali-kali dan berbeda merek. Migrasi aditif `20261114090000_brand_batch_dimensions`: `assets.brand`/`batch_label`, `stock_receipts.batch_label`, `stock_receipt_items.brand`, `products.width_cm/height_cm` (CHECK berpasangan). Merek + label batch diisi di penerimaan stok dan form Aset baru, diturunkan ke tiap unit. `GET /assets/breakdown` + modal **Rekap stok** di `/assets` (barang × batch × merek, jumlah unit, total luas m² = jumlah × ukuran; unit pensiun tidak dihitung); daftar kelompok menampilkan label batch dan sebaran merek. Keputusan: satu produk per ukuran/varian (bukan induk dengan varian); kabel tetap dilacak per unit (stok curah belum ada).
+
 **Selesai bila:** pesanan dapat dibuat lewat halaman Pesanan maupun kalender; stok live tampil per produk; test API/web lulus.
 
 ## Backlog Setelah MVP

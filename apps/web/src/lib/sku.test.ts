@@ -8,7 +8,10 @@ describe('suggestSku', () => {
   it('mengabaikan aksen/simbol dan kategori kosong', () => {
     expect(suggestSku('', 'Kursí Tamu', '100')).toBe('KURSIT-100');
   });
-  it('kosong bila nama kosong', () => {
-    expect(suggestSku('Tenda', '  ', '100')).toBe('');
+  it('nama kosong: usulan kategori + angka', () => {
+    expect(suggestSku('Tenda', '  ', '100')).toBe('TEN-100');
+  });
+  it('kosong bila nama dan kategori kosong', () => {
+    expect(suggestSku('', '  ', '100')).toBe('');
   });
 });

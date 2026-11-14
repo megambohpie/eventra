@@ -26,6 +26,7 @@ interface ItemDraft {
   productId: string;
   quantity: string;
   unitCost: string;
+  brand: string;
   condition: AssetCondition;
   serials: string;
 }
@@ -58,6 +59,7 @@ export function ReceiptModal({
   const [refEdited, setRefEdited] = useState(Boolean(receipt));
   const [refSuffix] = useState(randomSkuSuffix);
   const [supplier, setSupplier] = useState(receipt?.supplier ?? '');
+  const [batchLabel, setBatchLabel] = useState(receipt?.batchLabel ?? '');
   const [locationId, setLocationId] = useState(receipt?.locationId ?? activeLocations[0]?.id ?? '');
   const [receivedDate, setReceivedDate] = useState(receipt?.receivedDate ?? today());
   const [note, setNote] = useState(receipt?.note ?? '');
@@ -71,6 +73,7 @@ export function ReceiptModal({
           quantity: String(item.quantity),
           unitCost:
             item.unitCost === null || item.unitCost === undefined ? '' : String(item.unitCost),
+          brand: item.brand ?? '',
           condition: item.condition,
           serials: item.serials.join('\n'),
         }))
@@ -80,6 +83,7 @@ export function ReceiptModal({
             productId: products[0]?.id ?? '',
             quantity: '1',
             unitCost: '',
+            brand: '',
             condition: 'GOOD',
             serials: '',
           },
@@ -98,12 +102,14 @@ export function ReceiptModal({
         source,
         sourceRef,
         supplier,
+        batchLabel,
         locationId,
         receivedDate,
         note,
         items: items.map((i) => ({
           productId: i.productId,
           quantity: Number(i.quantity),
+          brand: i.brand,
           ...(canSeeCost && i.unitCost !== '' ? { unitCost: Number(i.unitCost) } : {}),
           condition: i.condition,
           serials: i.serials
@@ -163,6 +169,13 @@ export function ReceiptModal({
               onChange={(e) => setSupplier(e.target.value)}
             />
           </FormField>
+          <FormField label={t('receipts.batchLabel')}>
+            <input
+              className="input ev-control"
+              value={batchLabel}
+              onChange={(e) => setBatchLabel(e.target.value)}
+            />
+          </FormField>
           <FormField label={t('receipts.location')}>
             <SearchSelect
               ariaLabel={t('receipts.location')}
@@ -200,6 +213,13 @@ export function ReceiptModal({
                     value={item.productId}
                     onChange={(value) => patchItem(item.key, { productId: value })}
                     options={products.map((p) => ({ value: p.id, label: p.name }))}
+                  />
+                </FormField>
+                <FormField label={t('receipts.brand')}>
+                  <input
+                    className="input ev-control"
+                    value={item.brand}
+                    onChange={(e) => patchItem(item.key, { brand: e.target.value })}
                   />
                 </FormField>
                 <FormField label={t('receipts.quantity')}>
@@ -273,6 +293,7 @@ export function ReceiptModal({
                 productId: products[0]?.id ?? '',
                 quantity: '1',
                 unitCost: '',
+                brand: '',
                 condition: 'GOOD',
                 serials: '',
               },

@@ -48,6 +48,8 @@ export function toAssetDto(a: AssetRow, canSeeCost: boolean): AssetDto {
       category: { id: a.product.category.id, name: a.product.category.name },
     },
     serial: a.serial,
+    brand: a.brand,
+    batchLabel: a.batchLabel,
     condition: a.condition,
     status: a.status,
     locationId: a.locationId,

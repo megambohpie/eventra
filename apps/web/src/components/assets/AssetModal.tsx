@@ -45,6 +45,8 @@ export function AssetModal({
   // Aset baru: kolom lokasi tampil kosong sampai dipilih (kosong = tanpa lokasi).
   const [locationPicked, setLocationPicked] = useState(Boolean(asset));
   const [supplier, setSupplier] = useState(asset?.supplier ?? '');
+  const [brand, setBrand] = useState(asset?.brand ?? '');
+  const [batchLabel, setBatchLabel] = useState(asset?.batchLabel ?? '');
   const [purchaseDate, setPurchaseDate] = useState(asset?.purchaseDate ?? '');
   const [purchasePrice, setPurchasePrice] = useState(
     asset?.purchasePrice === null || asset?.purchasePrice === undefined
@@ -62,6 +64,8 @@ export function AssetModal({
         await updateAsset(api, asset.id, {
           serial,
           locationId: locationId || null,
+          brand,
+          batchLabel,
           supplier,
           purchaseDate: purchaseDate || null,
           ...(canSeeCost
@@ -76,6 +80,8 @@ export function AssetModal({
           serial: qty > 1 ? '' : serial,
           condition,
           locationId: locationId || undefined,
+          brand,
+          batchLabel,
           supplier,
           purchaseDate: purchaseDate || undefined,
           ...(canSeeCost && purchasePrice !== '' ? { purchasePrice: Number(purchasePrice) } : {}),
@@ -152,6 +158,20 @@ export function AssetModal({
                   .filter((l) => l.active || l.id === asset?.locationId)
                   .map((l) => ({ value: l.id, label: l.name })),
               ]}
+            />
+          </FormField>
+          <FormField label={t('assets.brand')}>
+            <input
+              className="input ev-control"
+              value={brand}
+              onChange={(e) => setBrand(e.target.value)}
+            />
+          </FormField>
+          <FormField label={t('assets.batchLabel')}>
+            <input
+              className="input ev-control"
+              value={batchLabel}
+              onChange={(e) => setBatchLabel(e.target.value)}
             />
           </FormField>
           <FormField label={t('assets.supplier')}>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { mdiAlertCircleOutline, mdiImageOutline, mdiPrinter } from '@mdi/js';
 import { useTranslation } from 'react-i18next';
 import {
@@ -18,7 +18,7 @@ import { Modal } from '@/components/ui/Modal';
 import { PhotoStrip } from '@/components/ui/PhotoStrip';
 import { useAuth } from '@/auth/AuthProvider';
 import { useResource } from '@/hooks/useResource';
-import { downloadBlob } from '@/lib/download';
+import { downloadBlob, timestampedFilename } from '@/lib/download';
 import { formatDate } from '@/lib/format';
 import { notify } from '@/lib/notifications';
 
@@ -51,6 +51,22 @@ export function AssetBatchDrawer({
   const ids = batch?.assets.map((a) => a.id) ?? [];
   const all = ids.length > 0 && ids.every((id) => selected.includes(id));
 
+  // Indeks centang terakhir: Shift+klik mencentang/mencabut seluruh rentang dari sana.
+  const lastIndex = useRef<number | null>(null);
+  const clickRow = (index: number, shiftKey: boolean) => {
+    const id = ids[index];
+    if (!id) return;
+    const on = !selected.includes(id);
+    if (shiftKey && lastIndex.current !== null) {
+      const from = Math.min(lastIndex.current, index);
+      const to = Math.max(lastIndex.current, index);
+      toggle(ids.slice(from, to + 1), on);
+    } else {
+      toggle([id], on);
+    }
+    lastIndex.current = index;
+  };
+
   const toggle = (list: string[], on: boolean) =>
     setSelected((prev) =>
       on ? [...new Set([...prev, ...list])] : prev.filter((x) => !list.includes(x)),
@@ -62,7 +78,10 @@ export function AssetBatchDrawer({
       return;
     }
     try {
-      downloadBlob(await getAssetLabelsPdf(api, selected), 'eventra-qr-labels.pdf');
+      downloadBlob(
+        await getAssetLabelsPdf(api, selected),
+        timestampedFilename('eventra-qr-labels', 'pdf'),
+      );
       notify('success', t('assets.labelsDownloaded'));
     } catch {
       /* error sudah tampil sebagai notifikasi */
@@ -75,7 +94,7 @@ export function AssetBatchDrawer({
         {!batch ? (
           <Loading />
         ) : (
-          <>
+          <div className="ev-batchdrawer">
             <p className="ev-batch__title">
               {t('assets.batch.title', { date: formatDate(batch.date) })}
               <span className="ev-batch__qty">
@@ -97,11 +116,17 @@ export function AssetBatchDrawer({
                   : undefined
               }
             />
-            {selected.length > 0 && (
-              <Button size="sm" variant="secondary" icon={mdiPrinter} onClick={printLabels}>
+            <div className="ev-batchdrawer__bar">
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={mdiPrinter}
+                disabled={selected.length === 0}
+                onClick={printLabels}
+              >
                 {t('assets.printLabels', { count: selected.length })}
               </Button>
-            )}
+            </div>
             <div className="ev-table-wrap">
               <table className="table table-sm">
                 <thead className="ev-table__head">
@@ -123,7 +148,7 @@ export function AssetBatchDrawer({
                   </tr>
                 </thead>
                 <tbody>
-                  {batch.assets.map((asset) => (
+                  {batch.assets.map((asset, index) => (
                     <tr
                       key={asset.id}
                       className="ev-table__row ev-table__row--click"
@@ -135,7 +160,8 @@ export function AssetBatchDrawer({
                           className="checkbox checkbox-sm"
                           aria-label={t('assets.selectAsset', { code: asset.code })}
                           checked={selected.includes(asset.id)}
-                          onChange={(e) => toggle([asset.id], e.target.checked)}
+                          onChange={() => undefined}
+                          onClick={(e) => clickRow(index, e.shiftKey)}
                         />
                       </td>
                       <td>
@@ -168,7 +194,7 @@ export function AssetBatchDrawer({
                 </tbody>
               </table>
             </div>
-          </>
+          </div>
         )}
       </Modal>
       {detail && (

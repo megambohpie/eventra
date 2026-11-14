@@ -1,5 +1,5 @@
 import { Fragment, useState } from 'react';
-import { mdiAlertCircleOutline, mdiChevronDown, mdiChevronUp, mdiPlus } from '@mdi/js';
+import { mdiAlertCircleOutline, mdiChevronDown, mdiChevronUp, mdiPlus, mdiTable } from '@mdi/js';
 import { useTranslation } from 'react-i18next';
 import { getAssetSummary, listAssetGroups, listLocations, listProducts } from '@eventra/api-client';
 import {
@@ -14,6 +14,7 @@ import { AssetModal } from '@/components/assets/AssetModal';
 import { AssetBatchDrawer } from '@/components/assets/AssetBatchDrawer';
 import { AssetBatchList } from '@/components/assets/AssetBatchList';
 import { AssetStatusBadge } from '@/components/assets/badges';
+import { StockBreakdownModal } from '@/components/assets/StockBreakdownModal';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { Loading } from '@/components/ui/Loading';
@@ -43,6 +44,7 @@ export function AssetsPage() {
     date: string;
   } | null>(null);
   const [creating, setCreating] = useState(false);
+  const [breakdown, setBreakdown] = useState(false);
 
   const filters = {
     q: q || undefined,
@@ -85,6 +87,9 @@ export function AssetsPage() {
               resetPage();
             }}
           />
+          <Button size="sm" variant="secondary" icon={mdiTable} onClick={() => setBreakdown(true)}>
+            {t('assets.breakdown.action')}
+          </Button>
           {canWrite && (
             <Button
               size="sm"
@@ -278,6 +283,8 @@ export function AssetsPage() {
           onClose={() => setDrawer(null)}
         />
       )}
+
+      {breakdown && <StockBreakdownModal onClose={() => setBreakdown(false)} />}
 
       {creating && products.data && locations.data && (
         <AssetModal

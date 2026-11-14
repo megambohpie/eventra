@@ -65,14 +65,14 @@
 
   /* ---------- Modal ---------- */
   .ev-modal__box--side {
-    @apply h-dvh max-h-dvh w-full max-w-2xl justify-self-end rounded-none;
+    @apply flex h-dvh max-h-dvh w-full max-w-2xl flex-col justify-self-end overflow-hidden rounded-none;
     animation: ev-slide-in 0.2s ease-out;
   }
   .ev-modal__box--wide {
     @apply max-w-3xl;
   }
   .ev-modal__head {
-    @apply mb-4 flex items-center justify-between;
+    @apply mb-4 flex shrink-0 items-center justify-between;
   }
   .ev-modal__title {
     @apply text-lg font-bold;

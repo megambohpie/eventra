@@ -15,6 +15,10 @@ import {
   assetUpdateSchema,
   hasCapability,
   labelIdsSchema,
+  stockBreakdownQuerySchema,
+  unitAreaM2,
+  type StockBreakdownDto,
+  type StockBreakdownRowDto,
   type AssetBatchDto,
   type AssetPhotoDto,
   type AssetCondition,
@@ -30,7 +34,7 @@ import { writeAudit } from '../audit';
 import { currentUser, requireCapability } from '../auth/middleware';
 import { HttpError } from '../errors';
 import { parseId } from '../http';
-import { buildLabelsPdf, qrPng } from '../assets/labels';
+import { buildLabelsPdf, labelsFilename, qrPng } from '../assets/labels';
 import { assertClearable } from '../incidents/service';
 import { detectImageMime } from '../warehouse/service';
 import {
@@ -79,6 +83,8 @@ export function assetsRouter(db: PrismaClient): Router {
         OR: [
           { code: { contains: query.q, mode: 'insensitive' } },
           { serial: { contains: query.q, mode: 'insensitive' } },
+          { brand: { contains: query.q, mode: 'insensitive' } },
+          { batchLabel: { contains: query.q, mode: 'insensitive' } },
           { product: { name: { contains: query.q, mode: 'insensitive' } } },
         ],
       });
@@ -225,6 +231,52 @@ export function assetsRouter(db: PrismaClient): Router {
     },
   );
 
+  /**
+   * Rekap stok seperti lembar Excel: barang × label batch × merek, dengan jumlah unit dan total
+   * luas (m²). Unit pensiun tidak dihitung. Satu jenis barang boleh memuat banyak merek/pembelian.
+   */
+  router.get('/assets/breakdown', requireCapability('asset.read'), async (req, res) => {
+    const query = stockBreakdownQuerySchema.parse(req.query);
+    const where = buildWhere({ ...query });
+    const grouped = await db.asset.groupBy({
+      by: ['productId', 'batchLabel', 'brand'],
+      where: { AND: [where, { status: { not: 'RETIRED' } }] },
+      _count: { _all: true },
+    });
+    const products = await db.product.findMany({
+      where: { id: { in: [...new Set(grouped.map((g) => g.productId))] } },
+      select: { id: true, name: true, widthCm: true, heightCm: true },
+    });
+    const byId = new Map(products.map((p) => [p.id, p]));
+    const rows: StockBreakdownRowDto[] = grouped.flatMap((g) => {
+      const product = byId.get(g.productId);
+      if (!product) return [];
+      const unit = unitAreaM2(product);
+      const quantity = g._count._all;
+      return [
+        {
+          productId: product.id,
+          productName: product.name,
+          batchLabel: g.batchLabel,
+          brand: g.brand,
+          quantity,
+          areaM2: unit === null ? null : Math.round(unit * quantity * 100) / 100,
+        },
+      ];
+    });
+    rows.sort(
+      (a, b) =>
+        a.productName.localeCompare(b.productName) ||
+        (a.batchLabel ?? '').localeCompare(b.batchLabel ?? '') ||
+        (a.brand ?? '').localeCompare(b.brand ?? ''),
+    );
+    const data: StockBreakdownDto = {
+      rows,
+      totalQuantity: rows.reduce((n, r) => n + r.quantity, 0),
+    };
+    res.json({ data });
+  });
+
   /** Rincian satu barang: unit dikelompokkan per tanggal perolehan (terbaru dulu). */
   router.get('/assets/groups/:productId', requireCapability('asset.read'), async (req, res) => {
     const productId = parseId(req.params.productId);
@@ -251,6 +303,11 @@ export function assetsRouter(db: PrismaClient): Router {
       .map(([date, assets]) => ({
         date,
         quantity: assets.length,
+        batchLabels: [...new Set(assets.flatMap((a) => (a.batchLabel ? [a.batchLabel] : [])))],
+        brands: [...new Set(assets.map((a) => a.brand))].map((brand) => ({
+          brand,
+          quantity: assets.filter((a) => a.brand === brand).length,
+        })),
         assets,
         photos: batchPhotos
           .filter((p) => p.batchDate.toISOString().slice(0, 10) === date)
@@ -284,12 +341,14 @@ export function assetsRouter(db: PrismaClient): Router {
     const byId = new Map(assets.map((a) => [a.id, a]));
     const ordered = ids.map((id) => byId.get(id));
     if (ordered.some((a) => !a)) throw new HttpError(404, 'NOT_FOUND', 'Aset tidak ditemukan');
+    const printedAt = new Date();
     const pdf = await buildLabelsPdf(
       ordered.flatMap((a) =>
         a
           ? [{ code: a.code, qrToken: a.qrToken, productName: a.product.name, serial: a.serial }]
           : [],
       ),
+      printedAt,
     );
     await writeAudit(db, req, {
       action: 'asset.labels.print',
@@ -297,7 +356,7 @@ export function assetsRouter(db: PrismaClient): Router {
       after: { count: ids.length },
     });
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'inline; filename="eventra-qr-labels.pdf"');
+    res.setHeader('Content-Disposition', `inline; filename="${labelsFilename(printedAt)}"`);
     res.setHeader('Cache-Control', 'no-store');
     res.send(pdf);
   });
@@ -350,6 +409,8 @@ export function assetsRouter(db: PrismaClient): Router {
             qrToken: newQrToken(),
             productId: input.productId,
             serial: input.serial ?? null,
+            brand: input.brand ?? null,
+            batchLabel: input.batchLabel ?? null,
             condition: input.condition,
             status,
             locationId: input.locationId ?? null,
@@ -408,6 +469,8 @@ export function assetsRouter(db: PrismaClient): Router {
       }
       const data: Prisma.AssetUncheckedUpdateInput = {
         serial: input.serial ?? null,
+        brand: input.brand ?? null,
+        batchLabel: input.batchLabel ?? null,
         supplier: input.supplier ?? null,
         notes: input.notes ?? null,
       };
@@ -421,7 +484,15 @@ export function assetsRouter(db: PrismaClient): Router {
 
       const locationChanged = asset.locationId !== before.locationId;
       const changed = (
-        ['serial', 'supplier', 'notes', 'purchaseDate', 'purchasePrice'] as const
+        [
+          'serial',
+          'brand',
+          'batchLabel',
+          'supplier',
+          'notes',
+          'purchaseDate',
+          'purchasePrice',
+        ] as const
       ).filter((k) => String(before[k] ?? '') !== String(asset[k] ?? ''));
       if (locationChanged) {
         await tx.assetStatusEvent.create({
