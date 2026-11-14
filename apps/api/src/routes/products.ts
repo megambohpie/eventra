@@ -1,11 +1,13 @@
 import express, { Router } from 'express';
 import type { Category, Prisma, PrismaClient, Product } from '@prisma/client';
 import {
+  effectiveUnitPrice,
   MAX_PHOTO_BYTES,
   PHOTO_MIME_TYPES,
   productInputSchema,
   type Page,
   type ProductDto,
+  type StockMode,
 } from '@eventra/shared';
 import { writeAudit } from '../audit';
 import { currentUser, requireCapability } from '../auth/middleware';
@@ -13,20 +15,28 @@ import { HttpError } from '../errors';
 import { parseId, parseListQuery } from '../http';
 import { detectImageMime } from '../warehouse/service';
 
-type ProductWithCategory = Product & { category: Category };
+type ProductWithCategory = Product & { category: Category | null };
 
 export const toProductDto = (p: ProductWithCategory): ProductDto => ({
   id: p.id,
   name: p.name,
   sku: p.sku,
   categoryId: p.categoryId,
-  category: { id: p.category.id, name: p.category.name },
+  category: p.category ? { id: p.category.id, name: p.category.name } : null,
   pricingUnit: p.pricingUnit,
   unitLabel: p.unitLabel,
   price: Number(p.price),
+  unitPrice: effectiveUnitPrice({
+    pricingUnit: p.pricingUnit,
+    price: Number(p.price),
+    widthCm: p.widthCm,
+    heightCm: p.heightCm,
+  }),
   deposit: Number(p.deposit),
   active: p.active,
   hasPhoto: p.hasPhoto,
+  stockMode: p.stockMode,
+  areaPoolId: p.areaPoolId,
   widthCm: p.widthCm,
   heightCm: p.heightCm,
 });
@@ -69,12 +79,76 @@ export function productsRouter(db: PrismaClient): Router {
     res.json({ data: toProductDto(product) });
   });
 
+  /**
+   * Aturan mode stok: aset ber-QR tidak boleh "hilang" dari pelacakan, anggota kelompok "per meter"
+   * harus menunjuk produk kelompok yang valid, dan kabinet yang sudah punya alokasi aktif tidak boleh
+   * pindah ke kelompok (akan terhitung ganda antara pesanan langsung dan pesanan per meter).
+   */
+  async function checkStockRules(
+    tx: Prisma.TransactionClient,
+    next: { stockMode: StockMode; areaPoolId: string | null },
+    before?: Product,
+  ): Promise<void> {
+    if (next.areaPoolId) {
+      if (next.stockMode !== 'TRACKED' || next.areaPoolId === before?.id) {
+        throw new HttpError(
+          400,
+          'VALIDATION_ERROR',
+          'Kelompok per meter tidak valid untuk produk ini',
+        );
+      }
+      const pool = await tx.product.findUnique({ where: { id: next.areaPoolId } });
+      if (!pool || pool.stockMode !== 'AREA_POOL') {
+        throw new HttpError(400, 'INVALID_REFERENCE', 'Kelompok per meter tidak ditemukan');
+      }
+      if (before && before.areaPoolId !== next.areaPoolId) {
+        const active = await tx.stockAllocation.count({
+          where: { productId: before.id, status: { in: ['HOLD', 'CONFIRMED'] } },
+        });
+        if (active > 0) {
+          throw new HttpError(
+            409,
+            'PRODUCT_HAS_ALLOCATIONS',
+            'Produk ini masih dipakai pesanan aktif; selesaikan dulu sebelum masuk kelompok per meter',
+          );
+        }
+      }
+    }
+    if (before) {
+      if (next.stockMode !== 'TRACKED' && before.stockMode === 'TRACKED') {
+        if ((await tx.asset.count({ where: { productId: before.id } })) > 0) {
+          throw new HttpError(
+            409,
+            'PRODUCT_HAS_ASSETS',
+            'Produk yang sudah punya aset tidak dapat dijadikan stok tidak terbatas / per meter',
+          );
+        }
+      }
+      if (before.stockMode === 'AREA_POOL' && next.stockMode !== 'AREA_POOL') {
+        if ((await tx.product.count({ where: { areaPoolId: before.id } })) > 0) {
+          throw new HttpError(
+            409,
+            'POOL_HAS_MEMBERS',
+            'Kelompok per meter masih punya kabinet anggota',
+          );
+        }
+      }
+    }
+  }
+
   router.post('/products', requireCapability('product.write'), async (req, res) => {
     const input = productInputSchema.parse(req.body);
     const product = await db.$transaction(async (tx) => {
+      await checkStockRules(tx, {
+        stockMode: input.stockMode ?? 'TRACKED',
+        areaPoolId: input.areaPoolId ?? null,
+      });
       const created = await tx.product.create({
         data: {
           ...input,
+          categoryId: input.categoryId ?? null,
+          stockMode: input.stockMode ?? 'TRACKED',
+          areaPoolId: input.areaPoolId ?? null,
           widthCm: input.widthCm ?? null,
           heightCm: input.heightCm ?? null,
           active: input.active ?? true,
@@ -99,10 +173,16 @@ export function productsRouter(db: PrismaClient): Router {
     const product = await db.$transaction(async (tx) => {
       const before = await tx.product.findUnique({ where: { id } });
       if (!before) throw new HttpError(404, 'NOT_FOUND', 'Produk tidak ditemukan');
+      const stockMode = input.stockMode ?? before.stockMode;
+      const areaPoolId = input.areaPoolId ?? null;
+      await checkStockRules(tx, { stockMode, areaPoolId }, before);
       const updated = await tx.product.update({
         where: { id },
         data: {
           ...input,
+          categoryId: input.categoryId ?? null,
+          stockMode,
+          areaPoolId,
           sku: input.sku ?? null,
           widthCm: input.widthCm ?? null,
           heightCm: input.heightCm ?? null,

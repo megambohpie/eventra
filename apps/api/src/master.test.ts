@@ -171,6 +171,37 @@ describe('Produk, kategori, lokasi', () => {
     expect(res.body.data).toMatchObject({ pricingUnit: 'PACKAGE', price: 900000, active: false });
   });
 
+  it('kategori opsional: produk boleh tanpa kategori, dibuat maupun dikosongkan lewat ubah', async () => {
+    const { app, auth, category } = await setup();
+    const bare = { ...product(category.id), sku: 'TANPA-KAT' } as Record<string, unknown>;
+    delete bare.categoryId;
+    const created = await request(app).post('/api/v1/products').set(auth).send(bare);
+    expect(created.status).toBe(201);
+    expect(created.body.data).toMatchObject({ categoryId: null, category: null });
+
+    // Beri kategori, lalu kosongkan lagi (null).
+    const id = created.body.data.id as string;
+    const put = (categoryId: string | null) =>
+      request(app)
+        .put(`/api/v1/products/${id}`)
+        .set(auth)
+        .send({ ...product(category.id), sku: 'TANPA-KAT', categoryId });
+    expect((await put(category.id)).body.data.category.name).toBe('LED');
+    const cleared = await put(null);
+    expect(cleared.status).toBe(200);
+    expect(cleared.body.data).toMatchObject({ categoryId: null, category: null });
+
+    // Aset produk tanpa kategori tetap bisa dibaca (kategori null).
+    const assetBare = await db.asset.create({
+      data: { code: 'AST-NOCAT1', qrToken: 'qr-nocat-0001-xxxxxxxxxxxxxxxx', productId: id },
+    });
+    const asset = await request(app).get(`/api/v1/assets/${assetBare.id}`).set(auth);
+    expect(asset.status).toBe(200);
+    expect(asset.body.data.product.category).toBeNull();
+    const groups = await request(app).get('/api/v1/assets/groups').set(auth);
+    expect(groups.body.data.items[0].categoryName).toBeNull();
+  });
+
   it('kategori yang dipakai produk tidak bisa dihapus; yang kosong bisa', async () => {
     const { app, auth, category } = await setup();
     await request(app).post('/api/v1/products').set(auth).send(product(category.id));

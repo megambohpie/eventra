@@ -353,6 +353,18 @@
     @apply flex flex-col gap-4;
   }
   /* Hanya tabel yang scroll; judul, foto, dan toolbar tetap di tempat. */
+  .ev-count__input {
+    @apply w-24;
+  }
+  .ev-count__add {
+    @apply mb-3 flex flex-wrap items-center gap-2;
+  }
+  .ev-count__add > :first-child {
+    @apply min-w-60 flex-1;
+  }
+  .ev-count__lost[data-lost='true'] {
+    @apply text-error font-semibold;
+  }
   .ev-batchdrawer {
     @apply flex min-h-0 flex-1 flex-col gap-5;
   }

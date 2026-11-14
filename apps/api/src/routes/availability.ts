@@ -34,7 +34,12 @@ export function availabilityRouter(db: PrismaClient): Router {
         orderBy: { productId: 'asc' },
         take: 200,
       });
-      productIds = rows.map((r) => r.productId);
+      // Kabinet anggota kelompok "per meter" dihitung pada produk kelompoknya (dalam m²).
+      const owners = await db.product.findMany({
+        where: { id: { in: rows.map((r) => r.productId) } },
+        select: { id: true, areaPoolId: true },
+      });
+      productIds = [...new Set(owners.map((o) => o.areaPoolId ?? o.id))];
     }
     res.json({ data: await availabilityCalendar(db, productIds, q.from, q.to) });
   });

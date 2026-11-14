@@ -18,6 +18,7 @@ import {
   newQrToken,
   nextAssetCodes,
   nextReceiptNumber,
+  assertTrackedProducts,
 } from '../assets/service';
 
 const receiptInclude = {
@@ -138,6 +139,10 @@ export function receiptsRouter(db: PrismaClient): Router {
     const user = currentUser(req);
     const cost = canSeeCost(req);
     const receipt = await db.$transaction(async (tx) => {
+      await assertTrackedProducts(
+        tx,
+        input.items.map((i) => i.productId),
+      );
       const date = dateOnlyToDate(input.receivedDate);
       const created = await tx.stockReceipt.create({
         data: {
@@ -175,6 +180,10 @@ export function receiptsRouter(db: PrismaClient): Router {
       if (before.status !== 'DRAFT') {
         throw new HttpError(409, 'RECEIPT_NOT_DRAFT', 'Hanya penerimaan draft yang dapat diubah');
       }
+      await assertTrackedProducts(
+        tx,
+        input.items.map((i) => i.productId),
+      );
       const date = dateOnlyToDate(input.receivedDate);
       // Biaya lama dipertahankan bila pengubah tidak berhak melihat biaya.
       const keepCosts = new Map(before.items.map((i) => [i.productId, i.unitCost]));
@@ -271,6 +280,7 @@ export function receiptsRouter(db: PrismaClient): Router {
         if (products.some((p) => !p.active)) {
           throw new HttpError(409, 'PRODUCT_INACTIVE', 'Penerimaan memuat produk nonaktif');
         }
+        await assertTrackedProducts(tx, productIds);
         const location = await tx.location.findUniqueOrThrow({ where: { id: draft.locationId } });
         if (!location.active) {
           throw new HttpError(409, 'LOCATION_INACTIVE', 'Lokasi penerimaan nonaktif');

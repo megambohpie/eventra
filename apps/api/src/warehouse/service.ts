@@ -4,18 +4,21 @@ import type {
   Prisma,
   PrismaClient,
 } from '@prisma/client';
-import type {
-  AssetStatus,
-  HandoverDocumentDto,
-  HandoverItemSnapshot,
-  HandoverPayload,
-  HandoverType,
-  OrderStatus,
-  PickItemDto,
-  PickLineDto,
-  PickListDto,
-  PickListSummaryDto,
-  ScanEventDto,
+import {
+  CM2_PER_M2,
+  unitAreaCm2,
+  unitAreaM2,
+  type AssetStatus,
+  type HandoverDocumentDto,
+  type HandoverItemSnapshot,
+  type HandoverPayload,
+  type HandoverType,
+  type OrderStatus,
+  type PickItemDto,
+  type PickLineDto,
+  type PickListDto,
+  type PickListSummaryDto,
+  type ScanEventDto,
 } from '@eventra/shared';
 import { HttpError } from '../errors';
 
@@ -26,10 +29,15 @@ const isoDate = (d: Date): string => d.toISOString().slice(0, 10);
 
 // ---------- Include & tipe baris ----------
 
+/** Ukuran dan kelompok "per meter" produk item pick list (untuk hitung luas kabinet). */
+export const sizeSelect = { areaPoolId: true, widthCm: true, heightCm: true } as const;
+
 export const summaryInclude = {
   order: { include: { customer: { select: { name: true } } } },
   lines: true,
-  items: { select: { status: true, productId: true } },
+  items: {
+    select: { status: true, productId: true, extra: true, product: { select: sizeSelect } },
+  },
 } satisfies Prisma.PickListInclude;
 
 export const pickListInclude = {
@@ -39,13 +47,17 @@ export const pickListInclude = {
     where: { status: { not: 'REMOVED' } },
     include: {
       asset: true,
-      product: { select: { name: true } },
+      product: { select: { name: true, ...sizeSelect } },
       photos: { select: { id: true }, orderBy: { createdAt: 'asc' } },
     },
     orderBy: { pickedAt: 'asc' },
   },
   scans: {
-    include: { asset: { select: { code: true } }, actor: { select: { name: true } } },
+    include: {
+      asset: { select: { code: true } },
+      product: { select: { name: true } },
+      actor: { select: { name: true } },
+    },
     orderBy: { createdAt: 'desc' },
     take: 100,
   },
@@ -65,8 +77,81 @@ export async function loadPickList(db: Db, id: string): Promise<PickListRow> {
 
 // ---------- DTO ----------
 
+/** Bentuk minimal item pick list untuk menghitung kelengkapan/progres baris. */
+export interface ProgressItem {
+  productId: string;
+  status: string;
+  extra: boolean;
+  product: { areaPoolId: string | null; widthCm: number | null; heightCm: number | null };
+}
+
+export interface ProgressLine {
+  productId: string;
+  quantity: number;
+  unlimited: boolean;
+  areaPool: boolean;
+  packedQty: number | null;
+}
+
+const itemAreaCm2 = (i: ProgressItem): number => unitAreaCm2(i.product) ?? 0;
+
+/** Item yang memenuhi baris: kabinet anggota (kelompok per meter), atau produk sama yang bukan tambahan. */
+const itemsOfLine = (l: ProgressLine, items: ProgressItem[]) =>
+  l.areaPool
+    ? items.filter((i) => i.product.areaPoolId === l.productId)
+    : items.filter((i) => i.productId === l.productId && !i.extra);
+
+/**
+ * Progres satu baris dalam satuan baris itu: unit (aset berQR), m² (kelompok per meter, mis. 1,75),
+ * atau jumlah dikemas (stok tidak terbatas, maksimal sebesar kebutuhan).
+ */
+export function lineProgress(
+  l: ProgressLine,
+  items: ProgressItem[],
+): { picked: number; verified: number } {
+  if (l.unlimited) {
+    const counted = Math.min(l.packedQty ?? 0, l.quantity);
+    return { picked: counted, verified: counted };
+  }
+  const mine = itemsOfLine(l, items);
+  const verified = mine.filter((i) => i.status !== 'PICKED');
+  if (l.areaPool) {
+    const m2 = (list: ProgressItem[]) => list.reduce((n, i) => n + itemAreaCm2(i), 0) / CM2_PER_M2;
+    return { picked: m2(mine), verified: m2(verified) };
+  }
+  return { picked: mine.length, verified: verified.length };
+}
+
+/**
+ * Pick list siap keluar bila semua aset terverifikasi (scan), jumlah per produk berQR terpenuhi,
+ * luas kabinet kelompok "per meter" PAS sama dengan luas dipesan, dan setiap baris stok tidak
+ * terbatas sudah dikemas minimal sebesar kebutuhannya (hitung jumlah).
+ */
+export function pickListComplete(lines: ProgressLine[], items: ProgressItem[]): boolean {
+  return (
+    items.every((i) => i.status === 'VERIFIED') &&
+    lines.every((l) => {
+      if (l.unlimited) return (l.packedQty ?? 0) >= l.quantity;
+      const mine = itemsOfLine(l, items);
+      if (l.areaPool) {
+        return mine.reduce((n, i) => n + itemAreaCm2(i), 0) === l.quantity * CM2_PER_M2;
+      }
+      return mine.length === l.quantity;
+    })
+  );
+}
+
 export function toSummaryDto(p: SummaryRow): PickListSummaryDto {
   const active = p.items.filter((i) => i.status !== 'REMOVED');
+  const progress = p.lines.map((l) => lineProgress(l, active));
+  // Aksesori tambahan di luar baris (mis. tiang) ikut dihitung sebagai item terpilih/terverifikasi.
+  const loose = active.filter(
+    (i) => !p.lines.some((l) => !l.unlimited && itemsOfLine(l, [i]).length > 0),
+  );
+  const picked = progress.reduce((n, x) => n + x.picked, 0) + loose.length;
+  const verified =
+    progress.reduce((n, x) => n + x.verified, 0) +
+    loose.filter((i) => i.status !== 'PICKED').length;
   return {
     id: p.id,
     number: p.number,
@@ -79,8 +164,8 @@ export function toSummaryDto(p: SummaryRow): PickListSummaryDto {
     endDate: isoDate(p.order.endDate),
     eventLocation: p.order.eventLocation,
     required: p.lines.reduce((n, l) => n + l.quantity, 0),
-    picked: active.length,
-    verified: active.filter((i) => i.status !== 'PICKED').length,
+    picked,
+    verified,
     dispatchedAt: p.dispatchedAt?.toISOString() ?? null,
     returnedAt: p.returnedAt?.toISOString() ?? null,
     createdAt: p.createdAt.toISOString(),
@@ -105,6 +190,8 @@ export const toItemDto = (i: ItemRow): PickItemDto => ({
   returnCondition: i.returnCondition,
   returnNote: i.returnNote,
   photoIds: i.photos.map((p) => p.id),
+  extra: i.extra,
+  areaM2: unitAreaM2(i.product),
 });
 
 function toDocumentDto(
@@ -167,13 +254,18 @@ export async function toDocumentDtos(db: Db, docs: DocumentRow[]): Promise<Hando
 export async function toPickListDto(db: Db, p: PickListRow): Promise<PickListDto> {
   const lines: PickLineDto[] = p.lines
     .map((l) => {
-      const items = p.items.filter((i) => i.productId === l.productId);
+      const { picked, verified } = lineProgress(l, p.items);
       return {
         productId: l.productId,
         productName: l.product.name,
         required: l.quantity,
-        picked: items.length,
-        verified: items.filter((i) => i.status !== 'PICKED').length,
+        picked,
+        verified,
+        unlimited: l.unlimited,
+        packed: l.unlimited ? l.packedQty : null,
+        returned: l.unlimited ? l.returnedQty : null,
+        areaPool: l.areaPool,
+        extra: l.extra,
       };
     })
     .sort((a, b) => a.productName.localeCompare(b.productName));
@@ -184,6 +276,8 @@ export async function toPickListDto(db: Db, p: PickListRow): Promise<PickListDto
     method: s.method,
     reason: s.reason,
     assetCode: s.asset?.code ?? null,
+    productName: s.product?.name ?? null,
+    quantity: s.quantity,
     condition: s.condition,
     note: s.note,
     actor: s.actor?.name ?? null,
@@ -367,7 +461,7 @@ export async function buildPayload(
         where: { status: { not: 'REMOVED' } },
         include: {
           asset: { select: { code: true, serial: true } },
-          product: { select: { name: true } },
+          product: { select: { name: true, ...sizeSelect } },
         },
         orderBy: { pickedAt: 'asc' },
       },
@@ -388,7 +482,8 @@ export async function buildPayload(
             condition: i.dispatchCondition,
             scannedAt: (i.dispatchedAt ?? i.verifiedAt)?.toISOString() ?? null,
             status: 'DISPATCHED' as const,
-            note: null,
+            note: i.extra ? 'Tambahan (include)' : null,
+            extra: i.extra,
           }
         : {
             assetCode: i.asset.code,
@@ -398,6 +493,7 @@ export async function buildPayload(
             scannedAt: i.returnedAt?.toISOString() ?? null,
             status: i.status,
             note: i.returnNote,
+            extra: i.extra,
           },
     )
     .sort((a, b) => a.assetCode.localeCompare(b.assetCode));
@@ -420,6 +516,31 @@ export async function buildPayload(
       .map((p) => ({ id: p.id, name: p.name, phone: p.phone, role: p.role })),
     lines: pick.lines
       .map((l) => ({ productName: l.product.name, quantity: l.quantity }))
+      .sort((a, b) => a.productName.localeCompare(b.productName)),
+    areaLines: pick.lines
+      .filter((l) => l.areaPool)
+      .map((l) => ({
+        productName: l.product.name,
+        orderedM2: l.quantity,
+        packedM2:
+          dispatched
+            .filter((i) => i.product.areaPoolId === l.productId)
+            .reduce((n, i) => n + (unitAreaCm2(i.product) ?? 0), 0) / CM2_PER_M2,
+      }))
+      .sort((a, b) => a.productName.localeCompare(b.productName)),
+    countedLines: pick.lines
+      .filter((l) => l.unlimited)
+      .map((l) => {
+        const packed = l.packedQty ?? 0;
+        const returned = type === 'RETURN' ? l.returnedQty : null;
+        return {
+          productName: l.product.name,
+          required: l.quantity,
+          packed,
+          returned,
+          lost: returned === null ? null : packed - returned,
+        };
+      })
       .sort((a, b) => a.productName.localeCompare(b.productName)),
     items,
     summary:

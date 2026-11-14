@@ -176,7 +176,12 @@ export interface ComponentAvailabilityDto {
   /** Sisa terkecil sepanjang rentang sewa. */
   minRemaining: number;
   total: number;
+  /** Stok tidak terbatas: tidak pernah membatasi pesanan (total/minRemaining = 0 tidak bermakna). */
+  unlimited: boolean;
 }
+
+/** Batas kuantitas item pesanan (sama dengan skema); dipakai sebagai maksimum barang stok tak terbatas. */
+export const MAX_ITEM_QUANTITY = 100_000;
 
 export interface ItemAvailabilityDto {
   productId: string;

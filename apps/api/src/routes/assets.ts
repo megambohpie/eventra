@@ -39,6 +39,7 @@ import { assertClearable } from '../incidents/service';
 import { detectImageMime } from '../warehouse/service';
 import {
   QR_TOKEN_PATTERN,
+  assertTrackedProducts,
   assetInclude,
   dateOnlyToDate,
   eventInclude,
@@ -139,7 +140,7 @@ export function assetsRouter(db: PrismaClient): Router {
         productId: p.id,
         productName: p.name,
         sku: p.sku,
-        categoryName: p.category.name,
+        categoryName: p.category?.name ?? null,
         total,
         attention: attention.find((a) => a.productId === p.id)?._count._all ?? 0,
         byStatus: statuses,
@@ -399,6 +400,7 @@ export function assetsRouter(db: PrismaClient): Router {
     const input = assetCreateSchema.parse(req.body);
     const user = currentUser(req);
     const created = await db.$transaction(async (tx) => {
+      await assertTrackedProducts(tx, [input.productId]);
       const codes = await nextAssetCodes(tx, input.quantity);
       const status = initialStatus(input.condition);
       const assets = [];

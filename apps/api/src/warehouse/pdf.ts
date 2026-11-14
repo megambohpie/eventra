@@ -126,6 +126,14 @@ export async function buildHandoverPdf(input: HandoverPdfInput): Promise<Buffer>
   for (const l of payload.lines) {
     doc.text(`• ${l.quantity} × ${l.productName}`, MARGIN + 6, doc.y);
   }
+  // Kelompok "per meter": luas dipesan vs luas kabinet yang benar-benar disiapkan.
+  for (const a of payload.areaLines ?? []) {
+    doc.text(
+      `  Luas ${a.productName}: dipesan ${a.orderedM2} m², disiapkan ${a.packedM2} m²`,
+      MARGIN + 6,
+      doc.y,
+    );
+  }
   const s = payload.summary;
   doc.moveDown(0.3);
   doc.text(
@@ -197,6 +205,62 @@ export async function buildHandoverPdf(input: HandoverPdfInput): Promise<Buffer>
     }
   });
   doc.fillColor('#000000');
+
+  // Barang stok tidak terbatas (mis. kabel): dibuktikan dengan hitung jumlah, bukan scan QR.
+  const counted = payload.countedLines ?? [];
+  if (counted.length > 0) {
+    const isReturn = payload.type === 'RETURN';
+    const widths = isReturn ? [210, 75, 75, 75, 80] : [285, 105, 105];
+    const titles = isReturn
+      ? ['Barang (hitung jumlah)', 'Dibutuhkan', 'Dikeluarkan', 'Kembali', 'Selisih']
+      : ['Barang (hitung jumlah)', 'Dibutuhkan', 'Dikeluarkan'];
+    ensure(40 + counted.length * 16);
+    doc.moveDown(0.8);
+    doc.font('Helvetica-Bold').fontSize(10.5).fillColor('#000000');
+    doc.text('Barang tanpa QR (dihitung)', MARGIN, doc.y);
+    doc.moveDown(0.3);
+    const headY = doc.y;
+    doc.rect(MARGIN, headY - 2, CONTENT_W, 16).fill('#e5e7eb');
+    doc.fillColor('#000000').font('Helvetica-Bold').fontSize(8.5);
+    let hx = MARGIN;
+    titles.forEach((title, i) => {
+      doc.text(title, hx + 2, headY + 1, { width: (widths[i] ?? 80) - 4, lineBreak: false });
+      hx += widths[i] ?? 80;
+    });
+    doc.y = headY + 18;
+    for (const line of counted) {
+      const y = doc.y;
+      const cells = isReturn
+        ? [
+            line.productName,
+            String(line.required),
+            String(line.packed),
+            line.returned === null ? '-' : String(line.returned),
+            line.lost === null ? '-' : String(line.lost),
+          ]
+        : [line.productName, String(line.required), String(line.packed)];
+      let x = MARGIN;
+      doc
+        .font('Helvetica')
+        .fontSize(8.5)
+        .fillColor(line.lost && line.lost > 0 ? '#b91c1c' : '#000000');
+      cells.forEach((cell, i) => {
+        doc.text(cell, x + 2, y, {
+          width: (widths[i] ?? 80) - 4,
+          lineBreak: false,
+          ellipsis: true,
+        });
+        x += widths[i] ?? 80;
+      });
+      doc
+        .moveTo(MARGIN, y + 13)
+        .lineTo(MARGIN + CONTENT_W, y + 13)
+        .lineWidth(0.3)
+        .stroke('#cccccc');
+      doc.y = y + 15;
+    }
+    doc.fillColor('#000000');
+  }
 
   if (payload.note) {
     doc.moveDown(0.6);

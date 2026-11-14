@@ -2,6 +2,8 @@ import express, { Router, type Request } from 'express';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import {
   ACTIVE_PICK_ITEM_STATUSES,
+  CM2_PER_M2,
+  unitAreaCm2,
   MAX_RETURN_PHOTOS,
   MAX_PHOTO_BYTES,
   MAX_SIGNATURE_BYTES,
@@ -9,6 +11,7 @@ import {
   PICKABLE_ORDER_STATUSES,
   RETURNABLE_ASSET_STATUSES,
   checkoutSchema,
+  countSchema,
   documentReviseSchema,
   documentSignSchema,
   pickListCreateSchema,
@@ -43,7 +46,9 @@ import {
   lockPickList,
   moveAsset,
   nextPickListNumber,
+  pickListComplete,
   pickListInclude,
+  sizeSelect,
   recordAssetEvent,
   releaseItem,
   summaryInclude,
@@ -201,16 +206,27 @@ export function warehouseRouter(db: PrismaClient): Router {
         tx,
         order.items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
       );
+      const unlimitedIds = new Set(
+        plans.flatMap((p) => p.components.filter((c) => c.unlimited).map((c) => c.productId)),
+      );
+      const areaPoolIds = new Set(
+        plans.flatMap((p) => p.components.filter((c) => c.areaPool).map((c) => c.productId)),
+      );
       const pick = await tx.pickList.create({
         data: {
           number: await nextPickListNumber(tx),
           orderId,
           createdBy: user.id,
           lines: {
-            create: [...requirements(plans).entries()].map(([productId, quantity]) => ({
-              productId,
-              quantity,
-            })),
+            // Baris stok tidak terbatas ikut dicatat (dibuktikan dengan hitung jumlah, bukan scan).
+            create: [...requirements(plans, { includeUnlimited: true }).entries()].map(
+              ([productId, quantity]) => ({
+                productId,
+                quantity,
+                unlimited: unlimitedIds.has(productId),
+                areaPool: areaPoolIds.has(productId),
+              }),
+            ),
           },
         },
         include: { lines: true },
@@ -266,7 +282,13 @@ export function warehouseRouter(db: PrismaClient): Router {
         const orderStatus = await lockPickList(tx, id);
         const pick = await tx.pickList.findUniqueOrThrow({
           where: { id },
-          include: { lines: true, items: { where: { status: { in: ACTIVE } } } },
+          include: {
+            lines: true,
+            items: {
+              where: { status: { in: ACTIVE } },
+              include: { product: { select: sizeSelect } },
+            },
+          },
         });
         if (pick.status !== 'OPEN' && pick.status !== 'VERIFIED') {
           throw new HttpError(
@@ -289,20 +311,54 @@ export function warehouseRouter(db: PrismaClient): Router {
               asset.id,
             );
           }
-          const line = pick.lines.find((l) => l.productId === asset.productId);
-          if (!line) {
-            throw new ScanRejected(
-              'SCAN_PRODUCT_NOT_REQUIRED',
-              'Produk aset ini tidak dibutuhkan pesanan',
-              asset.id,
+          const extra = input.extra === true;
+          const product = await tx.product.findUniqueOrThrow({
+            where: { id: asset.productId },
+            select: sizeSelect,
+          });
+          const areaLine = pick.lines.find((l) => l.areaPool && l.productId === product.areaPoolId);
+          if (extra) {
+            // Aksesori tambahan (include) di luar kebutuhan pesanan; kabinet kelompok meter tidak boleh.
+            if (product.areaPoolId) {
+              throw new ScanRejected(
+                'SCAN_EXTRA_POOLED',
+                'Kabinet kelompok per meter tidak dapat ditambahkan sebagai aksesori',
+                asset.id,
+              );
+            }
+          } else if (areaLine) {
+            // Kelompok "per meter": ukuran kabinet bebas, tetapi total luas tidak boleh melebihi pesanan.
+            const used = pick.items
+              .filter((i) => i.product.areaPoolId === areaLine.productId)
+              .reduce((n, i) => n + (unitAreaCm2(i.product) ?? 0), 0);
+            if (used + (unitAreaCm2(product) ?? 0) > areaLine.quantity * CM2_PER_M2) {
+              throw new ScanRejected(
+                'SCAN_AREA_EXCEEDED',
+                `Luas kabinet melebihi pesanan (${areaLine.quantity} m²)`,
+                asset.id,
+              );
+            }
+          } else {
+            const line = pick.lines.find(
+              (l) => l.productId === asset.productId && !l.areaPool && !l.unlimited,
             );
-          }
-          if (pick.items.filter((i) => i.productId === asset.productId).length >= line.quantity) {
-            throw new ScanRejected(
-              'SCAN_QUANTITY_FULL',
-              'Jumlah produk ini sudah terpenuhi',
-              asset.id,
-            );
+            if (!line) {
+              throw new ScanRejected(
+                'SCAN_PRODUCT_NOT_REQUIRED',
+                'Produk aset ini tidak dibutuhkan pesanan',
+                asset.id,
+              );
+            }
+            if (
+              pick.items.filter((i) => i.productId === asset.productId && !i.extra).length >=
+              line.quantity
+            ) {
+              throw new ScanRejected(
+                'SCAN_QUANTITY_FULL',
+                'Jumlah produk ini sudah terpenuhi',
+                asset.id,
+              );
+            }
           }
           if (asset.condition === 'DAMAGED') {
             throw new ScanRejected(
@@ -320,8 +376,12 @@ export function warehouseRouter(db: PrismaClient): Router {
           }
           await moveAsset(tx, asset, 'RESERVED', user.id, `Dipilih untuk ${pick.number}`);
           const item = await tx.pickListItem.create({
-            data: { pickListId: id, assetId: asset.id, productId: asset.productId },
+            data: { pickListId: id, assetId: asset.id, productId: asset.productId, extra },
           });
+          // Item baru belum terverifikasi: pick list yang sudah siap keluar kembali OPEN.
+          if (pick.status === 'VERIFIED') {
+            await tx.pickList.update({ where: { id }, data: { status: 'OPEN' } });
+          }
           await tx.scanEvent.create({
             data: {
               action: 'PICK',
@@ -338,7 +398,7 @@ export function warehouseRouter(db: PrismaClient): Router {
             action: 'pick_list.pick',
             entity: 'pick_list',
             entityId: id,
-            after: { assetId: asset.id, assetCode: asset.code, method },
+            after: { assetId: asset.id, assetCode: asset.code, method, extra },
           });
           return item.id;
         }
@@ -383,12 +443,9 @@ export function warehouseRouter(db: PrismaClient): Router {
         });
         const items = await tx.pickListItem.findMany({
           where: { pickListId: id, status: { in: ACTIVE } },
+          include: { product: { select: sizeSelect } },
         });
-        const complete =
-          items.every((i) => i.status === 'VERIFIED') &&
-          pick.lines.every(
-            (l) => items.filter((i) => i.productId === l.productId).length === l.quantity,
-          );
+        const complete = pickListComplete(pick.lines, items);
         if (complete && pick.status === 'OPEN') {
           await tx.pickList.update({ where: { id }, data: { status: 'VERIFIED' } });
         }
@@ -402,6 +459,128 @@ export function warehouseRouter(db: PrismaClient): Router {
       },
     );
     res.json({ data: await outcome(id, itemId) });
+  });
+
+  /**
+   * Hitung jumlah barang stok tidak terbatas (tanpa QR), sebagai bukti keluar/kembali:
+   * OUT = jumlah dikemas sebelum checkout (harus ≥ kebutuhan agar pick list siap keluar);
+   * RETURN = jumlah yang kembali (≤ dikemas). Selisih dicatat, tidak memblokir pengembalian.
+   * Setiap hitungan menjadi scan event append-only (COUNT_OUT/COUNT_RETURN).
+   */
+  router.post('/pick-lists/:id/count', requireCapability('warehouse.write'), async (req, res) => {
+    const id = parseId(req.params.id);
+    const input = countSchema.parse(req.body);
+    const user = currentUser(req);
+    await db.$transaction(async (tx) => {
+      const orderStatus = await lockPickList(tx, id);
+      const pick = await tx.pickList.findUniqueOrThrow({
+        where: { id },
+        include: { lines: true },
+      });
+      let line = pick.lines.find((l) => l.productId === input.productId);
+      if (!line && input.extra && input.action === 'OUT') {
+        // Aksesori tambahan (include) di luar pesanan, mis. kabel: baris baru dengan kebutuhan 0.
+        const product = await tx.product.findUnique({ where: { id: input.productId } });
+        if (!product) throw new HttpError(404, 'NOT_FOUND', 'Produk tidak ditemukan');
+        if (product.stockMode !== 'UNLIMITED') {
+          throw new HttpError(
+            409,
+            'COUNT_NOT_APPLICABLE',
+            'Hanya barang stok tidak terbatas yang dihitung jumlahnya',
+          );
+        }
+        line = await tx.pickListLine.create({
+          data: {
+            pickListId: id,
+            productId: input.productId,
+            quantity: 0,
+            unlimited: true,
+            extra: true,
+          },
+        });
+      }
+      if (!line) throw new HttpError(404, 'NOT_FOUND', 'Barang tidak ada di pick list ini');
+      if (!line.unlimited) {
+        throw new HttpError(
+          409,
+          'COUNT_NOT_APPLICABLE',
+          'Barang ini dibuktikan dengan scan QR, bukan hitung jumlah',
+        );
+      }
+      if (input.action === 'OUT') {
+        if (pick.status !== 'OPEN' && pick.status !== 'VERIFIED') {
+          throw new HttpError(
+            409,
+            'PICK_LIST_CLOSED',
+            'Pick list sudah tidak menerima hitungan keluar',
+          );
+        }
+        if (!PICKABLE_ORDER_STATUSES.includes(orderStatus)) {
+          throw new HttpError(
+            409,
+            'INVALID_ORDER_STATE',
+            'Status pesanan tidak mengizinkan hitungan',
+          );
+        }
+        await tx.pickListLine.update({
+          where: { id: line.id },
+          data: { packedQty: input.quantity },
+        });
+        // Status siap-keluar mengikuti hitungan terbaru (naik bila lengkap, turun bila dikurangi).
+        const [lines, items] = await Promise.all([
+          tx.pickListLine.findMany({ where: { pickListId: id } }),
+          tx.pickListItem.findMany({
+            where: { pickListId: id, status: { in: ACTIVE } },
+            include: { product: { select: sizeSelect } },
+          }),
+        ]);
+        const complete = pickListComplete(lines, items);
+        if (complete && pick.status === 'OPEN') {
+          await tx.pickList.update({ where: { id }, data: { status: 'VERIFIED' } });
+        } else if (!complete && pick.status === 'VERIFIED') {
+          await tx.pickList.update({ where: { id }, data: { status: 'OPEN' } });
+        }
+      } else {
+        if (pick.status !== 'DISPATCHED' && pick.status !== 'RETURN_ISSUE') {
+          throw new HttpError(
+            409,
+            'PICK_LIST_CLOSED',
+            'Pick list tidak sedang menunggu pengembalian',
+          );
+        }
+        if (input.quantity > (line.packedQty ?? 0)) {
+          throw new HttpError(
+            409,
+            'COUNT_EXCEEDS_PACKED',
+            `Jumlah kembali melebihi yang dikeluarkan (${line.packedQty ?? 0})`,
+          );
+        }
+        await tx.pickListLine.update({
+          where: { id: line.id },
+          data: { returnedQty: input.quantity },
+        });
+      }
+      await tx.scanEvent.create({
+        data: {
+          action: input.action === 'OUT' ? 'COUNT_OUT' : 'COUNT_RETURN',
+          result: 'OK',
+          method: 'MANUAL',
+          pickListId: id,
+          orderId: pick.orderId,
+          productId: input.productId,
+          quantity: input.quantity,
+          note: input.note ?? null,
+          actorId: user.id,
+        },
+      });
+      await writeAudit(tx, req, {
+        action: 'pick_list.count',
+        entity: 'pick_list',
+        entityId: id,
+        after: { countAction: input.action, productId: input.productId, quantity: input.quantity },
+      });
+    });
+    res.json({ data: await respond(id) });
   });
 
   /** Lepas aset yang salah dipilih (sebelum keluar gudang); riwayat tetap tersimpan. */
@@ -452,7 +631,10 @@ export function warehouseRouter(db: PrismaClient): Router {
           where: { id },
           include: {
             lines: { include: { product: { select: { name: true } } } },
-            items: { where: { status: { in: ACTIVE } }, include: { asset: true } },
+            items: {
+              where: { status: { in: ACTIVE } },
+              include: { asset: true, product: { select: sizeSelect } },
+            },
           },
         });
         if (pick.status !== 'VERIFIED') {
@@ -472,8 +654,24 @@ export function warehouseRouter(db: PrismaClient): Router {
         // Verifikasi ulang terhadap pick list: jumlah per produk dan kondisi aset saat ini.
         const problems: string[] = [];
         for (const l of pick.lines) {
+          if (l.unlimited) {
+            if ((l.packedQty ?? 0) < l.quantity) {
+              problems.push(`${l.product.name}: ${l.packedQty ?? 0}/${l.quantity}`);
+            }
+            continue;
+          }
+          if (l.areaPool) {
+            // Kelompok "per meter": luas kabinet terverifikasi harus pas dengan luas dipesan.
+            const cm2 = pick.items
+              .filter((i) => i.product.areaPoolId === l.productId && i.status === 'VERIFIED')
+              .reduce((n, i) => n + (unitAreaCm2(i.product) ?? 0), 0);
+            if (cm2 !== l.quantity * CM2_PER_M2) {
+              problems.push(`${l.product.name}: ${cm2 / CM2_PER_M2}/${l.quantity} m²`);
+            }
+            continue;
+          }
           const verified = pick.items.filter(
-            (i) => i.productId === l.productId && i.status === 'VERIFIED',
+            (i) => i.productId === l.productId && !i.extra && i.status === 'VERIFIED',
           ).length;
           if (verified !== l.quantity) {
             problems.push(`${l.product.name}: ${verified}/${l.quantity}`);
@@ -515,6 +713,22 @@ export function warehouseRouter(db: PrismaClient): Router {
               orderId: pick.orderId,
               assetId: item.assetId,
               condition: item.asset.condition,
+              note: note ?? null,
+              actorId: user.id,
+            },
+          });
+        }
+        // Bukti keluar barang stok tidak terbatas: jumlah yang dibawa tercatat per baris.
+        for (const l of pick.lines.filter((x) => x.unlimited)) {
+          await tx.scanEvent.create({
+            data: {
+              action: 'CHECKOUT',
+              result: 'OK',
+              method: 'MANUAL',
+              pickListId: id,
+              orderId: pick.orderId,
+              productId: l.productId,
+              quantity: l.packedQty,
               note: note ?? null,
               actorId: user.id,
             },
@@ -698,6 +912,7 @@ export function warehouseRouter(db: PrismaClient): Router {
         const pick = await tx.pickList.findUniqueOrThrow({
           where: { id },
           include: {
+            lines: { include: { product: { select: { name: true } } } },
             items: { where: { status: { in: [...ACTIVE, 'RETURNED'] } }, include: { asset: true } },
           },
         });
@@ -708,6 +923,21 @@ export function warehouseRouter(db: PrismaClient): Router {
             'Pick list tidak sedang menunggu pengembalian',
           );
         }
+        // Barang stok tidak terbatas wajib dihitung saat kembali (0 = semua tidak kembali).
+        // Selisih (dikemas − kembali) hanya dicatat; tidak memblokir dan tidak membuat status ISSUE.
+        const uncounted = pick.lines.filter((l) => l.unlimited && l.returnedQty === null);
+        if (uncounted.length > 0) {
+          const names = uncounted.map((l) => l.product.name);
+          throw new HttpError(
+            409,
+            'RETURN_COUNT_REQUIRED',
+            `Hitung jumlah kembali dulu: ${names.join(', ')}`,
+            { items: names },
+          );
+        }
+        const lostCounted = pick.lines
+          .filter((l) => l.unlimited && (l.packedQty ?? 0) > (l.returnedQty ?? 0))
+          .map((l) => `${l.product.name} −${(l.packedQty ?? 0) - (l.returnedQty ?? 0)}`);
         const unresolved = pick.items.filter((i) => i.status === 'DISPATCHED');
         if (unresolved.length > 0 && !input.acceptMissing) {
           const codes = unresolved.map((i) => i.asset.code);
@@ -761,7 +991,12 @@ export function warehouseRouter(db: PrismaClient): Router {
             from,
             target,
             user.id,
-            missing === 0 ? 'Semua aset kembali' : `Selisih ${missing} aset`,
+            [
+              missing === 0 ? 'Semua aset kembali' : `Selisih ${missing} aset`,
+              lostCounted.length > 0 ? `Barang hitung kurang: ${lostCounted.join(', ')}` : null,
+            ]
+              .filter(Boolean)
+              .join('; '),
           );
         }
         const doc = await createHandoverDocument(tx, {
@@ -779,6 +1014,7 @@ export function warehouseRouter(db: PrismaClient): Router {
           after: {
             status: missing === 0 ? 'RETURNED' : 'RETURN_ISSUE',
             missing,
+            lostCounted,
             document: `${doc.number} v${doc.version}`,
           },
         });

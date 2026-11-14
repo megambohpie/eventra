@@ -178,7 +178,10 @@ export function AssetDetailView({ id, embedded = false, onChanged }: AssetDetail
 
   const retired = a.status === 'RETIRED';
   const info: [string, string][] = [
-    [t('assets.product'), `${a.product.name} (${a.product.category.name})`],
+    [
+      t('assets.product'),
+      a.product.category ? `${a.product.name} (${a.product.category.name})` : a.product.name,
+    ],
     [t('assets.serial'), a.serial ?? '-'],
     [t('assets.brand'), a.brand ?? '-'],
     [t('assets.batchLabel'), a.batchLabel ?? '-'],

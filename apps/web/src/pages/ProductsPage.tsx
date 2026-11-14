@@ -59,12 +59,6 @@ export function ProductsPage() {
             </Button>
           )}
         </PageHeader>
-        {canWrite && categories.data?.length === 0 && (
-          <div role="alert" className="alert alert-info ev-notice">
-            <span>{t('products.needCategory')}</span>
-          </div>
-        )}
-
         {loading && !data ? (
           <Loading />
         ) : (
@@ -92,13 +86,27 @@ export function ProductsPage() {
                         version={photoVersion}
                       />
                     </td>
-                    <td>{product.name}</td>
-                    <td>{product.sku ?? '-'}</td>
-                    <td>{product.category.name}</td>
                     <td>
-                      {formatRupiah(product.price)} / {product.unitLabel}
+                      {product.name}
+                      {(product.stockMode !== 'TRACKED' || product.areaPoolId) && (
+                        <span className="ev-table__hint ev-table__hint--block">
+                          {product.areaPoolId
+                            ? t('products.poolMemberBadge', {
+                                name:
+                                  allProducts.data?.items.find((p) => p.id === product.areaPoolId)
+                                    ?.name ?? '',
+                              })
+                            : t(`products.stockModes.${product.stockMode}`)}
+                        </span>
+                      )}
+                    </td>
+                    <td>{product.sku ?? '-'}</td>
+                    <td>{product.category?.name ?? '-'}</td>
+                    <td>
+                      {formatRupiah(product.unitPrice)} / {product.unitLabel}
                       <span className="ev-table__hint">
-                        ({t(`products.units.${product.pricingUnit}`)})
+                        ({t(`products.units.${product.pricingUnit}`)}
+                        {product.pricingUnit === 'AREA' ? `: ${formatRupiah(product.price)}` : ''})
                       </span>
                     </td>
                     <td>{formatRupiah(product.deposit)}</td>
@@ -147,6 +155,7 @@ export function ProductsPage() {
           key={selected === 'new' ? 'new' : selected.id}
           product={selected === 'new' ? undefined : selected}
           categories={categories.data}
+          pools={(allProducts.data?.items ?? []).filter((p) => p.stockMode === 'AREA_POOL')}
           readOnly={!canWrite}
           onClose={() => setSelected(null)}
           onChanged={() => {

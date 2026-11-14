@@ -40,9 +40,11 @@ enum CustomerType {
   COMPANY
 }
 
+// AREA = harga per m²: harga satu unit = tarif × (lebar × tinggi) / 10.000.
 enum PricingUnit {
   PCS
   PACKAGE
+  AREA
 }
 
 // Capability per role didefinisikan di @eventra/shared (rbac.ts), bukan di tabel.
@@ -187,25 +189,40 @@ model Location {
   @@map("locations")
 }
 
+// TRACKED = aset per-unit dengan QR (stok terbatas). UNLIMITED = tanpa aset/QR, stok tidak membatasi
+// pesanan (mis. kabel jumper yang bisa dibuat kapan saja); dihitung jumlahnya saat keluar/kembali.
+// AREA_POOL = produk "per meter" (mis. Videotron per m²): tanpa aset sendiri, dipesan dalam m²;
+// stoknya = total luas kabinet anggota (Product.areaPoolId menunjuk produk ini).
+enum StockMode {
+  TRACKED
+  UNLIMITED
+  AREA_POOL
+}
+
 // Nominal rupiah disimpan sebagai integer.
 model Product {
   id            String             @id @default(uuid()) @db.Uuid
   name          String
   sku           String?            @unique
-  categoryId    String             @map("category_id") @db.Uuid
+  categoryId    String?            @map("category_id") @db.Uuid
   pricingUnit   PricingUnit        @map("pricing_unit")
   unitLabel     String             @map("unit_label")
   price         BigInt
   deposit       BigInt             @default(0)
   active        Boolean            @default(true)
   hasPhoto      Boolean            @default(false) @map("has_photo")
+  stockMode     StockMode          @default(TRACKED) @map("stock_mode")
+  // Kabinet anggota kelompok "per meter": dipesan hanya lewat produk AREA_POOL, bukan langsung.
+  areaPoolId    String?            @map("area_pool_id") @db.Uuid
+  areaPool      Product?           @relation("AreaPool", fields: [areaPoolId], references: [id])
+  poolMembers   Product[]          @relation("AreaPool")
   // Ukuran kabinet/panel (cm); keduanya terisi atau keduanya kosong. Dipakai menghitung luas (m²).
   widthCm       Int?               @map("width_cm")
   heightCm      Int?               @map("height_cm")
   createdBy     String?            @map("created_by") @db.Uuid
   createdAt     DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt     DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
-  category      Category           @relation(fields: [categoryId], references: [id])
+  category      Category?          @relation(fields: [categoryId], references: [id])
   photo         ProductPhoto?
   batchPhotos   AssetBatchPhoto[]
   assets        Asset[]
@@ -216,6 +233,7 @@ model Product {
   allocations   StockAllocation[]
   pickListLines PickListLine[]
   pickListItems PickListItem[]
+  scanEvents    ScanEvent[]
 
   @@index([categoryId])
   @@map("products")
@@ -599,6 +617,8 @@ enum ScanAction {
   REPLACEMENT_VERIFY
   REPLACEMENT_DISPATCH
   REPLACEMENT_RECEIVE
+  COUNT_OUT
+  COUNT_RETURN
 }
 
 enum ScanResult {
@@ -646,10 +666,18 @@ model PickList {
 
 // Kebutuhan fisik per produk pemenuhan (hasil konversi paket saat pick list dibuat).
 model PickListLine {
-  id         String @id @default(uuid()) @db.Uuid
-  pickListId String @map("pick_list_id") @db.Uuid
-  productId  String @map("product_id") @db.Uuid
-  quantity   Int
+  id          String  @id @default(uuid()) @db.Uuid
+  pickListId  String  @map("pick_list_id") @db.Uuid
+  productId   String  @map("product_id") @db.Uuid
+  quantity    Int
+  // Snapshot saat pick list dibuat: baris stok tidak terbatas dibuktikan dengan hitung jumlah, bukan scan.
+  unlimited   Boolean @default(false)
+  packedQty   Int?    @map("packed_qty")
+  returnedQty Int?    @map("returned_qty")
+  // Baris kelompok "per meter": quantity = m² dipesan; terpenuhi oleh kabinet anggota (luas harus pas).
+  areaPool    Boolean @default(false) @map("area_pool")
+  // Aksesori tambahan (include) yang ditambahkan gudang di luar kebutuhan pesanan (quantity 0).
+  extra       Boolean @default(false)
 
   pickList PickList @relation(fields: [pickListId], references: [id], onDelete: Cascade)
   product  Product  @relation(fields: [productId], references: [id])
@@ -665,6 +693,8 @@ model PickListItem {
   assetId           String          @map("asset_id") @db.Uuid
   productId         String          @map("product_id") @db.Uuid
   status            PickItemStatus  @default(PICKED)
+  // Aksesori tambahan (include) di luar kebutuhan pesanan.
+  extra             Boolean         @default(false)
   pickedAt          DateTime        @default(now()) @map("picked_at") @db.Timestamptz(3)
   verifiedAt        DateTime?       @map("verified_at") @db.Timestamptz(3)
   dispatchedAt      DateTime?       @map("dispatched_at") @db.Timestamptz(3)
@@ -698,8 +728,12 @@ model ScanEvent {
   actorId           String?         @map("actor_id") @db.Uuid
   incidentId        String?         @map("incident_id") @db.Uuid
   replacementTaskId String?         @map("replacement_task_id") @db.Uuid
+  // Hanya untuk event hitung jumlah barang stok tidak terbatas (COUNT_OUT/COUNT_RETURN/CHECKOUT).
+  productId         String?         @map("product_id") @db.Uuid
+  quantity          Int?
   createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
 
+  product         Product?         @relation(fields: [productId], references: [id])
   pickList        PickList?        @relation(fields: [pickListId], references: [id])
   asset           Asset?           @relation(fields: [assetId], references: [id])
   actor           User?            @relation(fields: [actorId], references: [id])

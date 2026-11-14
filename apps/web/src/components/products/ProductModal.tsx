@@ -8,10 +8,13 @@ import {
   uploadProductPhoto,
 } from '@eventra/api-client';
 import {
+  effectiveUnitPrice,
   PRICING_UNITS,
+  STOCK_MODES,
   type CategoryDto,
   type PricingUnit,
   type ProductDto,
+  type StockMode,
 } from '@eventra/shared';
 import { api } from '@/api';
 import { ProductPhotoField } from '@/components/products/ProductPhotoField';
@@ -21,11 +24,14 @@ import { FormField } from '@/components/ui/FormField';
 import { randomSkuSuffix, suggestSku } from '@/lib/sku';
 import { Modal } from '@/components/ui/Modal';
 import { SearchSelect } from '@/components/ui/SearchSelect';
+import { formatRupiah } from '@/lib/format';
 import { notify } from '@/lib/notifications';
 
 interface ProductModalProps {
   product?: ProductDto;
   categories: CategoryDto[];
+  /** Produk kelompok "per meter" yang dapat menjadi tujuan kabinet anggota. */
+  pools: ProductDto[];
   readOnly: boolean;
   onClose: () => void;
   onChanged: () => void;
@@ -34,6 +40,7 @@ interface ProductModalProps {
 export function ProductModal({
   product,
   categories,
+  pools,
   readOnly,
   onClose,
   onChanged,
@@ -44,7 +51,8 @@ export function ProductModal({
   // Produk baru: SKU diusulkan otomatis sampai pengguna mengetiknya sendiri.
   const [skuEdited, setSkuEdited] = useState(Boolean(product));
   const [skuSuffix] = useState(randomSkuSuffix);
-  const [categoryId, setCategoryId] = useState(product?.categoryId ?? categories[0]?.id ?? '');
+  // Kategori opsional: kosong = produk tanpa kategori.
+  const [categoryId, setCategoryId] = useState(product?.categoryId ?? '');
   const [pricingUnit, setPricingUnit] = useState<PricingUnit>(product?.pricingUnit ?? 'PCS');
   const [unitLabel, setUnitLabel] = useState(product?.unitLabel ?? '');
   const [widthCm, setWidthCm] = useState(product?.widthCm ? String(product.widthCm) : '');
@@ -52,6 +60,10 @@ export function ProductModal({
   const [price, setPrice] = useState(String(product?.price ?? 0));
   const [deposit, setDeposit] = useState(String(product?.deposit ?? 0));
   const [active, setActive] = useState(product?.active ?? true);
+  const [stockMode, setStockMode] = useState<StockMode>(product?.stockMode ?? 'TRACKED');
+  const [areaPoolId, setAreaPoolId] = useState(product?.areaPoolId ?? '');
+  // Ukuran dipakai kabinet berQR (dan harga per m²); produk kelompok/tak terbatas tidak butuh ukuran.
+  const showSize = stockMode === 'TRACKED' || pricingUnit === 'AREA';
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoRemoved, setPhotoRemoved] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -65,14 +77,16 @@ export function ProductModal({
       const input = {
         name,
         sku: sku || undefined,
-        categoryId,
+        categoryId: categoryId || null,
         pricingUnit,
         unitLabel,
         price: Number(price),
         deposit: Number(deposit),
         active,
-        widthCm: widthCm ? Number(widthCm) : null,
-        heightCm: heightCm ? Number(heightCm) : null,
+        stockMode,
+        areaPoolId: stockMode === 'TRACKED' && areaPoolId ? areaPoolId : null,
+        widthCm: showSize && widthCm ? Number(widthCm) : null,
+        heightCm: showSize && heightCm ? Number(heightCm) : null,
       };
       const saved = product
         ? await updateProduct(api, product.id, input)
@@ -117,7 +131,10 @@ export function ProductModal({
               ariaLabel={t('products.category')}
               value={categoryId}
               onChange={setCategoryId}
-              options={categories.map((c) => ({ value: c.id, label: c.name }))}
+              options={[
+                { value: '', label: t('products.noCategory') },
+                ...categories.map((c) => ({ value: c.id, label: c.name })),
+              ]}
             />
           </FormField>
           <FormField label={t('products.pricingUnit')}>
@@ -141,28 +158,53 @@ export function ProductModal({
               onChange={(e) => setUnitLabel(e.target.value)}
             />
           </FormField>
-          <FormField label={t('products.widthCm')}>
-            <input
-              className="input ev-control"
-              inputMode="numeric"
-              required={Boolean(heightCm)}
-              value={widthCm}
-              onChange={(e) => setWidthCm(e.target.value.replace(/\D/g, '').slice(0, 5))}
-            />
-          </FormField>
-          <FormField label={t('products.heightCm')}>
-            <input
-              className="input ev-control"
-              inputMode="numeric"
-              required={Boolean(widthCm)}
-              value={heightCm}
-              onChange={(e) => setHeightCm(e.target.value.replace(/\D/g, '').slice(0, 5))}
-            />
-          </FormField>
-          <p className="ev-hint ev-form-grid__full">{t('products.sizeHint')}</p>
-          <FormField label={t('products.price')}>
+          {showSize && (
+            <div className="ev-form-grid__full">
+              {/* Panjang (widthCm) dan lebar (heightCm) kabinet dalam satu baris. */}
+              <div className="ev-form-grid">
+                <FormField label={t('products.widthCm')}>
+                  <input
+                    className="input ev-control"
+                    inputMode="numeric"
+                    required={Boolean(heightCm) || pricingUnit === 'AREA' || Boolean(areaPoolId)}
+                    value={widthCm}
+                    onChange={(e) => setWidthCm(e.target.value.replace(/\D/g, '').slice(0, 5))}
+                  />
+                </FormField>
+                <FormField label={t('products.heightCm')}>
+                  <input
+                    className="input ev-control"
+                    inputMode="numeric"
+                    required={Boolean(widthCm) || pricingUnit === 'AREA' || Boolean(areaPoolId)}
+                    value={heightCm}
+                    onChange={(e) => setHeightCm(e.target.value.replace(/\D/g, '').slice(0, 5))}
+                  />
+                </FormField>
+              </div>
+              <p className="ev-hint">{t('products.sizeHint')}</p>
+            </div>
+          )}
+          <FormField label={pricingUnit === 'AREA' ? t('products.priceArea') : t('products.price')}>
             <CurrencyInput required value={price} onChange={setPrice} />
           </FormField>
+          {pricingUnit === 'AREA' && (
+            <p className="ev-hint ev-form-grid__full">
+              {widthCm && heightCm
+                ? t('products.unitPricePreview', {
+                    price: formatRupiah(
+                      effectiveUnitPrice({
+                        pricingUnit,
+                        price: Number(price),
+                        widthCm: Number(widthCm),
+                        heightCm: Number(heightCm),
+                      }),
+                    ),
+                    width: widthCm,
+                    height: heightCm,
+                  })
+                : t('products.needSizeForArea')}
+            </p>
+          )}
           <FormField label={t('products.deposit')}>
             <CurrencyInput required value={deposit} onChange={setDeposit} />
           </FormField>
@@ -175,6 +217,42 @@ export function ProductModal({
             onFile={setPhoto}
             onRemove={setPhotoRemoved}
           />
+          <div className="ev-form-grid__full">
+            <FormField label={t('products.stockModeLabel')}>
+              <select
+                className="select ev-control"
+                value={stockMode}
+                onChange={(e) => {
+                  const next = e.target.value as StockMode;
+                  setStockMode(next);
+                  if (next !== 'TRACKED') setAreaPoolId('');
+                }}
+              >
+                {STOCK_MODES.map((m) => (
+                  <option key={m} value={m}>
+                    {t(`products.stockModes.${m}`)}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+            <p className="ev-hint">{t(`products.stockModeHints.${stockMode}`)}</p>
+          </div>
+          {stockMode === 'TRACKED' && pools.length > 0 && (
+            <div className="ev-form-grid__full">
+              <FormField label={t('products.areaPool')}>
+                <SearchSelect
+                  ariaLabel={t('products.areaPool')}
+                  value={areaPoolId}
+                  onChange={setAreaPoolId}
+                  options={[
+                    { value: '', label: t('products.areaPoolNone') },
+                    ...pools.map((p) => ({ value: p.id, label: p.name })),
+                  ]}
+                />
+              </FormField>
+              <p className="ev-hint">{t('products.areaPoolHint')}</p>
+            </div>
+          )}
           <label className="label ev-toggle-row">
             <input
               type="checkbox"
@@ -187,13 +265,7 @@ export function ProductModal({
         </fieldset>
         {!readOnly && (
           <div className="modal-action">
-            <Button
-              type="submit"
-              variant="primary"
-              icon={mdiContentSave}
-              loading={saving}
-              disabled={!categoryId}
-            >
+            <Button type="submit" variant="primary" icon={mdiContentSave} loading={saving}>
               {t('common.save')}
             </Button>
           </div>

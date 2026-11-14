@@ -46,6 +46,8 @@ export const SCAN_ACTIONS = [
   'REPLACEMENT_VERIFY',
   'REPLACEMENT_DISPATCH',
   'REPLACEMENT_RECEIVE',
+  'COUNT_OUT',
+  'COUNT_RETURN',
 ] as const;
 export type ScanAction = (typeof SCAN_ACTIONS)[number];
 export type ScanResult = 'OK' | 'REJECTED';
@@ -127,6 +129,8 @@ export const pickScanSchema = z
     action: z.enum(['PICK', 'VERIFY']),
     qrToken: qrToken.optional(),
     assetCode: assetCode.optional(),
+    /** PICK saja: aksesori tambahan (include) di luar kebutuhan pesanan, mis. tiang/katrol. */
+    extra: z.boolean().optional(),
   })
   .refine((v) => Boolean(v.qrToken) !== Boolean(v.assetCode), {
     path: ['qrToken'],
@@ -152,6 +156,22 @@ export const returnCompleteSchema = z.object({
   note: optionalText(500),
 });
 export type ReturnCompleteInput = z.input<typeof returnCompleteSchema>;
+
+export const MAX_COUNT_QUANTITY = 100_000;
+
+/**
+ * Hitung jumlah barang stok tidak terbatas (tanpa QR). OUT = jumlah dikemas sebelum keluar
+ * (minimal sebesar kebutuhan); RETURN = jumlah yang kembali (maksimal sebesar yang dikemas).
+ */
+export const countSchema = z.object({
+  action: z.enum(['OUT', 'RETURN']),
+  productId: z.uuid(),
+  quantity: z.number().int().min(0).max(MAX_COUNT_QUANTITY),
+  /** OUT saja: tambahkan barang stok tidak terbatas di luar kebutuhan pesanan (aksesori include). */
+  extra: z.boolean().optional(),
+  note: optionalText(500),
+});
+export type CountInput = z.input<typeof countSchema>;
 
 export const checkoutSchema = z.object({ note: optionalText(500) });
 export type CheckoutInput = z.input<typeof checkoutSchema>;
@@ -198,6 +218,19 @@ export interface PickLineDto {
   required: number;
   picked: number;
   verified: number;
+  /** Stok tidak terbatas: dibuktikan dengan hitung jumlah (bukan scan QR). */
+  unlimited: boolean;
+  /** Jumlah dikemas (null = belum dihitung); hanya untuk baris unlimited. */
+  packed: number | null;
+  /** Jumlah kembali (null = belum dihitung); hanya untuk baris unlimited. */
+  returned: number | null;
+  /**
+   * Baris kelompok "per meter": `required` = m² dipesan, `picked`/`verified` = m² kabinet yang sudah
+   * dipilih/diverifikasi (pas dengan `required` agar siap keluar).
+   */
+  areaPool: boolean;
+  /** Aksesori tambahan (include) di luar kebutuhan pesanan. */
+  extra: boolean;
 }
 
 export interface PickItemDto {
@@ -218,6 +251,10 @@ export interface PickItemDto {
   returnCondition: AssetCondition | null;
   returnNote: string | null;
   photoIds: string[];
+  /** Aksesori tambahan (include) di luar kebutuhan pesanan. */
+  extra: boolean;
+  /** Luas unit ini (m²) bila produknya berukuran; dipakai pada kabinet kelompok "per meter". */
+  areaM2: number | null;
 }
 
 export interface ScanEventDto {
@@ -227,6 +264,9 @@ export interface ScanEventDto {
   method: ScanMethod;
   reason: string | null;
   assetCode: string | null;
+  /** Barang stok tidak terbatas pada event hitung/keluar. */
+  productName: string | null;
+  quantity: number | null;
   condition: AssetCondition | null;
   note: string | null;
   actor: string | null;
@@ -250,6 +290,8 @@ export interface HandoverItemSnapshot {
   scannedAt: string | null;
   status: PickItemStatus;
   note: string | null;
+  /** Aksesori tambahan (include) di luar kebutuhan pesanan. Tidak ada pada dokumen lama. */
+  extra?: boolean;
 }
 
 /** Snapshot isi dokumen; dibekukan saat dokumen dibuat dan tidak pernah diubah. */
@@ -266,6 +308,20 @@ export interface HandoverPayload {
   warehousePic: { id: string; name: string; phone: string | null } | null;
   counterpartPics: { id: string; name: string; phone: string | null; role: string }[];
   lines: { productName: string; quantity: number }[];
+  /** Kelompok "per meter": luas dipesan vs luas kabinet yang disiapkan (m²). Tidak ada pada dokumen lama. */
+  areaLines?: { productName: string; orderedM2: number; packedM2: number }[];
+  /**
+   * Barang stok tidak terbatas (dihitung, tanpa QR). `returned`/`lost` hanya terisi di berita acara
+   * pengembalian; `lost` = dikemas − kembali (dicatat sebagai selisih, tidak memblokir pengembalian).
+   * Tidak ada pada dokumen lama.
+   */
+  countedLines?: {
+    productName: string;
+    required: number;
+    packed: number;
+    returned: number | null;
+    lost: number | null;
+  }[];
   items: HandoverItemSnapshot[];
   summary: { expected: number; returned: number; missing: number };
   note: string | null;

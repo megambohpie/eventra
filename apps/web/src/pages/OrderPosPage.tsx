@@ -10,7 +10,13 @@ import {
   listProducts,
   updateOrder,
 } from '@eventra/api-client';
-import { rentalDays, type LatLng, type OrderDto, type ProductDto } from '@eventra/shared';
+import {
+  MAX_ITEM_QUANTITY,
+  rentalDays,
+  type LatLng,
+  type OrderDto,
+  type ProductDto,
+} from '@eventra/shared';
 import { api } from '@/api';
 import { CustomerModal } from '@/components/customers/CustomerModal';
 import { ProductThumb } from '@/components/products/ProductThumb';
@@ -107,7 +113,9 @@ function PosForm({ order, initialStart, products, customers, reloadCustomers }: 
 
   const categories = useMemo(() => {
     const map = new Map<string, string>();
-    for (const p of products) map.set(p.categoryId, p.category.name);
+    // Produk tanpa kategori tidak punya filter kategori sendiri; tetap tampil di "semua kategori".
+    for (const p of products)
+      if (p.categoryId && p.category) map.set(p.categoryId, p.category.name);
     return [...map.entries()].map(([value, label]) => ({ value, label }));
   }, [products]);
 
@@ -233,14 +241,25 @@ function PosForm({ order, initialStart, products, customers, reloadCustomers }: 
                   </span>
                   <span className="ev-pos__name">{p.name}</span>
                   <span className="ev-pos__price">
-                    {formatRupiah(p.price)} / {p.unitLabel}
+                    {p.unitPrice === 0
+                      ? t('orders.pos.included')
+                      : `${formatRupiah(p.unitPrice)} / ${p.unitLabel}`}
+                    {p.pricingUnit === 'AREA' && (
+                      <span className="ev-table__hint ev-table__hint--block">
+                        {t('orders.pos.perArea', { price: formatRupiah(p.price) })}
+                      </span>
+                    )}
                   </span>
                   <span className="ev-pos__stock">
                     {max === undefined ? (
                       <span className="ev-dots" />
                     ) : (
                       <Badge variant={soldOut ? 'error' : 'success'}>
-                        {soldOut ? t('orders.pos.soldOut') : t('orders.pos.stock', { count: max })}
+                        {soldOut
+                          ? t('orders.pos.soldOut')
+                          : p.stockMode === 'UNLIMITED' || max >= MAX_ITEM_QUANTITY
+                            ? t('orders.pos.unlimited')
+                            : t('orders.pos.stock', { count: max })}
                       </Badge>
                     )}
                   </span>
@@ -334,7 +353,7 @@ function PosForm({ order, initialStart, products, customers, reloadCustomers }: 
                 <span>
                   {p.name} × {cart[p.id]}
                 </span>
-                <span>{formatRupiah(p.price * (cart[p.id] ?? 0) * totals.days)}</span>
+                <span>{formatRupiah(p.unitPrice * (cart[p.id] ?? 0) * totals.days)}</span>
               </li>
             ))}
           </ul>
@@ -342,6 +361,12 @@ function PosForm({ order, initialStart, products, customers, reloadCustomers }: 
         <dl className="ev-pos__totals">
           <dt>{t('orders.days', { count: totals.days })}</dt>
           <dd>{t('orders.pos.units', { count: totals.units })}</dd>
+          {totals.areaM2 > 0 && (
+            <>
+              <dt>{t('orders.pos.totalArea')}</dt>
+              <dd>{totals.areaM2} m²</dd>
+            </>
+          )}
           <dt>{t('orders.subtotal')}</dt>
           <dd>{formatRupiah(totals.subtotal)}</dd>
           <dt>{t('orders.deposit')}</dt>
@@ -390,7 +415,8 @@ export function OrderPosPage() {
   const products = useResource(() => listProducts(api, { pageSize: 100 }), 'pos-products');
 
   if ((editing && order.loading) || customers.loading || products.loading) return <Loading />;
-  const activeProducts = (products.data?.items ?? []).filter((p) => p.active);
+  // Kabinet anggota kelompok "per meter" tidak dipesan per buah; gudang memilihnya saat menyiapkan.
+  const activeProducts = (products.data?.items ?? []).filter((p) => p.active && !p.areaPoolId);
   const orderData = order.data;
   if (editing && !orderData) return <Loading />;
 

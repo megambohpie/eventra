@@ -1,6 +1,7 @@
 import type { AxiosInstance } from 'axios';
 import type {
   CheckoutInput,
+  CountInput,
   DocumentReviseInput,
   DocumentSignInput,
   HandoverDocumentDto,
@@ -33,6 +34,9 @@ export const scanPickList = async (c: AxiosInstance, id: string, input: PickScan
   (await c.post<Envelope<ScanOutcomeDto>>(`/pick-lists/${id}/scan`, input)).data.data;
 export const removePickItem = async (c: AxiosInstance, id: string, itemId: string) =>
   (await c.delete<Envelope<PickListDto>>(`/pick-lists/${id}/items/${itemId}`)).data.data;
+/** Hitung jumlah barang stok tidak terbatas (tanpa QR): OUT sebelum keluar, RETURN saat kembali. */
+export const countPickList = async (c: AxiosInstance, id: string, input: CountInput) =>
+  (await c.post<Envelope<PickListDto>>(`/pick-lists/${id}/count`, input)).data.data;
 export const checkoutPickList = async (c: AxiosInstance, id: string, input: CheckoutInput = {}) =>
   (await c.post<Envelope<PickListDto>>(`/pick-lists/${id}/checkout`, input)).data.data;
 

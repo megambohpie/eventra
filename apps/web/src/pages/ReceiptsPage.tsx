@@ -48,8 +48,12 @@ export function ReceiptsPage() {
   const locations = useResource(() => listLocations(api), 'locations');
 
   const hasLocation = (locations.data ?? []).some((l) => l.active);
-  const hasProduct = (products.data?.items ?? []).some((p) => p.active);
-  const activeProducts = (products.data?.items ?? []).filter((p) => p.active);
+  const hasProduct = (products.data?.items ?? []).some(
+    (p) => p.active && p.stockMode === 'TRACKED',
+  );
+  const activeProducts = (products.data?.items ?? []).filter(
+    (p) => p.active && p.stockMode === 'TRACKED',
+  );
 
   return (
     <>

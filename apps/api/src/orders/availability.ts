@@ -1,5 +1,8 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 import {
+  CM2_PER_M2,
+  MAX_ITEM_QUANTITY,
+  unitAreaCm2,
   NON_ALLOCATABLE_STATUSES,
   eachDate,
   type AvailabilityDayDto,
@@ -17,6 +20,10 @@ export interface PlanComponent {
   productName: string;
   /** Aset fisik per 1 satuan sewa. */
   perUnit: number;
+  /** Stok tidak terbatas: tidak dialokasikan dan tidak membatasi ketersediaan. */
+  unlimited: boolean;
+  /** Kelompok "per meter": kuantitas dalam m², stok = total luas kabinet anggota. */
+  areaPool: boolean;
 }
 
 export interface ItemPlan {
@@ -44,7 +51,9 @@ export async function planItems(
   const ids = [...new Set(items.map((i) => i.productId))];
   const products = await db.product.findMany({
     where: { id: { in: ids } },
-    include: { bundleOf: { include: { component: { select: { id: true, name: true } } } } },
+    include: {
+      bundleOf: { include: { component: { select: { id: true, name: true, stockMode: true } } } },
+    },
   });
   const byId = new Map(products.map((p) => [p.id, p]));
   return items.map((item) => {
@@ -55,14 +64,32 @@ export async function planItems(
     if (opts.requireActive && !product.active) {
       throw new HttpError(409, 'PRODUCT_INACTIVE', `Produk ${product.name} nonaktif`);
     }
+    if (opts.requireActive && product.areaPoolId) {
+      // Kabinet anggota kelompok "per meter" hanya dipesan lewat produk kelompoknya (dalam m²).
+      throw new HttpError(
+        409,
+        'PRODUCT_POOLED',
+        `${product.name} dipesan lewat produk "per meter", bukan langsung`,
+      );
+    }
     const components: PlanComponent[] =
       product.bundleOf.length > 0
         ? product.bundleOf.map((b) => ({
             productId: b.component.id,
             productName: b.component.name,
             perUnit: b.quantity,
+            unlimited: b.component.stockMode === 'UNLIMITED',
+            areaPool: b.component.stockMode === 'AREA_POOL',
           }))
-        : [{ productId: product.id, productName: product.name, perUnit: 1 }];
+        : [
+            {
+              productId: product.id,
+              productName: product.name,
+              perUnit: 1,
+              unlimited: product.stockMode === 'UNLIMITED',
+              areaPool: product.stockMode === 'AREA_POOL',
+            },
+          ];
     return {
       productId: product.id,
       productName: product.name,
@@ -73,25 +100,59 @@ export async function planItems(
   });
 }
 
-/** Total aset fisik yang dibutuhkan per produk pemenuhan, per hari. */
-export function requirements(plans: ItemPlan[]): Map<string, number> {
+/**
+ * Total kebutuhan fisik per produk pemenuhan, per hari. Komponen stok tidak terbatas tidak ikut
+ * (tidak dialokasikan) kecuali `includeUnlimited` (dipakai pick list untuk menghitung jumlahnya).
+ */
+export function requirements(
+  plans: ItemPlan[],
+  opts: { includeUnlimited?: boolean } = {},
+): Map<string, number> {
   const need = new Map<string, number>();
   for (const plan of plans) {
     for (const c of plan.components) {
+      if (c.unlimited && !opts.includeUnlimited) continue;
       need.set(c.productId, (need.get(c.productId) ?? 0) + plan.quantity * c.perUnit);
     }
   }
   return need;
 }
 
-/** Stok total = aset yang boleh dialokasikan (bukan servis/karantina/pensiun/masalah). */
+/**
+ * Stok total = aset yang boleh dialokasikan (bukan servis/karantina/pensiun/masalah). Untuk produk
+ * kelompok "per meter" (AREA_POOL) stok = total luas (m²) kabinet anggota yang boleh dialokasikan,
+ * sehingga dapat berupa pecahan; alokasinya dicatat dalam m² pada produk kelompok itu.
+ */
 export async function stockTotals(db: Db, productIds: string[]): Promise<Map<string, number>> {
   const rows = await db.asset.groupBy({
     by: ['productId'],
     where: { productId: { in: productIds }, status: { notIn: [...NON_ALLOCATABLE_STATUSES] } },
     _count: { _all: true },
   });
-  return new Map(rows.map((r) => [r.productId, r._count._all]));
+  const totals = new Map<string, number>(rows.map((r) => [r.productId, r._count._all]));
+
+  const pools = await db.product.findMany({
+    where: { id: { in: productIds }, stockMode: 'AREA_POOL' },
+    select: { id: true, poolMembers: { select: { id: true, widthCm: true, heightCm: true } } },
+  });
+  if (pools.length > 0) {
+    const memberIds = pools.flatMap((p) => p.poolMembers.map((m) => m.id));
+    const memberRows = await db.asset.groupBy({
+      by: ['productId'],
+      where: { productId: { in: memberIds }, status: { notIn: [...NON_ALLOCATABLE_STATUSES] } },
+      _count: { _all: true },
+    });
+    const count = new Map(memberRows.map((r) => [r.productId, r._count._all]));
+    for (const pool of pools) {
+      // Dijumlah dalam cm² (bilangan bulat) lalu diubah ke m² agar tidak ada galat pecahan.
+      const cm2 = pool.poolMembers.reduce(
+        (sum, m) => sum + (count.get(m.id) ?? 0) * (unitAreaCm2(m) ?? 0),
+        0,
+      );
+      totals.set(pool.id, cm2 / CM2_PER_M2);
+    }
+  }
+  return totals;
 }
 
 export interface DayUsage {
@@ -166,6 +227,21 @@ export async function checkAvailability(
   const result: ItemAvailabilityDto[] = plans.map((plan) => {
     const components = plan.components.map((c) => {
       const required = plan.quantity * c.perUnit;
+      if (c.unlimited) {
+        // Stok tidak terbatas tidak pernah membatasi; hanya dibatasi batas kuantitas item pesanan.
+        return {
+          c,
+          dto: {
+            productId: c.productId,
+            productName: c.productName,
+            required,
+            minRemaining: 0,
+            total: 0,
+            unlimited: true,
+          },
+          maxUnits: MAX_ITEM_QUANTITY,
+        };
+      }
       const others = (need.get(c.productId) ?? 0) - required;
       const free = (minRemaining.get(c.productId) ?? 0) - others;
       return {
@@ -176,6 +252,7 @@ export async function checkAvailability(
           required,
           minRemaining: minRemaining.get(c.productId) ?? 0,
           total: totals.get(c.productId) ?? 0,
+          unlimited: false,
         },
         maxUnits: Math.max(0, Math.floor(free / c.perUnit)),
       };
@@ -259,7 +336,11 @@ export async function availabilityCalendar(
 ): Promise<AvailabilityDayDto[]> {
   if (productIds.length === 0) return [];
   const [products, totals, usage] = await Promise.all([
-    db.product.findMany({ where: { id: { in: productIds } }, orderBy: { name: 'asc' } }),
+    // Barang stok tidak terbatas tidak punya kalender stok (tidak pernah habis).
+    db.product.findMany({
+      where: { id: { in: productIds }, stockMode: { not: 'UNLIMITED' } },
+      orderBy: { name: 'asc' },
+    }),
     stockTotals(db, productIds),
     allocationUsage(db, productIds, from, to, now),
   ]);

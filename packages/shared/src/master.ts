@@ -33,8 +33,18 @@ export const customerUpdateSchema = customerBase.extend({ active: z.boolean().op
 export type CustomerCreateInput = z.infer<typeof customerCreateSchema>;
 export type CustomerUpdateInput = z.infer<typeof customerUpdateSchema>;
 
-export const PRICING_UNITS = ['PCS', 'PACKAGE'] as const;
+/** AREA = tarif per m²; harga satu unit dihitung dari ukuran (lihat `effectiveUnitPrice`). */
+export const PRICING_UNITS = ['PCS', 'PACKAGE', 'AREA'] as const;
 export type PricingUnit = (typeof PRICING_UNITS)[number];
+
+/**
+ * TRACKED = aset per-unit ber-QR dengan stok terbatas. UNLIMITED = tanpa aset/QR; stok tidak
+ * membatasi pesanan (mis. kabel jumper yang bisa dibuat kapan saja) dan dihitung jumlahnya.
+ * AREA_POOL = produk "per meter" (mis. Videotron per m²): dipesan dalam m², tanpa aset sendiri;
+ * stoknya total luas kabinet anggota (`areaPoolId`), dan gudang bebas memilih ukuran kabinet.
+ */
+export const STOCK_MODES = ['TRACKED', 'UNLIMITED', 'AREA_POOL'] as const;
+export type StockMode = (typeof STOCK_MODES)[number];
 
 /** Nominal rupiah selalu integer (TECHNICAL_SPEC §10). */
 const rupiah = z.number().int().min(0).max(100_000_000_000);
@@ -43,27 +53,67 @@ export const productInputSchema = z
   .object({
     name: z.string().trim().min(1).max(160),
     sku: optionalText(40),
-    categoryId: z.uuid(),
+    /** Kategori opsional: produk boleh tanpa kategori. */
+    categoryId: z.uuid().nullable().optional(),
     pricingUnit: z.enum(PRICING_UNITS),
     unitLabel: z.string().trim().min(1).max(30),
     price: rupiah,
     deposit: rupiah,
     active: z.boolean().optional(),
+    stockMode: z.enum(STOCK_MODES).optional(),
+    /** Kabinet anggota kelompok "per meter": id produk AREA_POOL tujuannya (null = bukan anggota). */
+    areaPoolId: z.uuid().nullable().optional(),
     /** Ukuran kabinet/panel dalam cm; isi keduanya atau kosongkan keduanya. */
     widthCm: z.number().int().min(1).max(10_000).nullable().optional(),
     heightCm: z.number().int().min(1).max(10_000).nullable().optional(),
   })
   .refine((p) => (p.widthCm == null) === (p.heightCm == null), {
     path: ['widthCm'],
-    message: 'Lebar dan tinggi harus diisi bersamaan',
+    message: 'Panjang dan lebar harus diisi bersamaan',
+  })
+  .refine((p) => p.pricingUnit !== 'AREA' || (p.widthCm != null && p.heightCm != null), {
+    path: ['widthCm'],
+    message: 'Harga per m² membutuhkan ukuran (panjang dan lebar)',
+  })
+  .refine((p) => !p.areaPoolId || (p.widthCm != null && p.heightCm != null), {
+    path: ['widthCm'],
+    message: 'Kabinet anggota kelompok per meter membutuhkan ukuran (panjang dan lebar)',
+  })
+  .refine((p) => !p.areaPoolId || (p.stockMode ?? 'TRACKED') === 'TRACKED', {
+    path: ['areaPoolId'],
+    message: 'Hanya produk berstok terlacak (QR) yang dapat menjadi anggota kelompok per meter',
   });
 export type ProductInput = z.infer<typeof productInputSchema>;
+
+/** Luas satu unit dalam cm² (bilangan bulat, aman untuk menjumlah); null bila ukuran kosong. */
+export const unitAreaCm2 = (p: {
+  widthCm: number | null;
+  heightCm: number | null;
+}): number | null => (p.widthCm && p.heightCm ? p.widthCm * p.heightCm : null);
+
+/** 1 m² = 10.000 cm². */
+export const CM2_PER_M2 = 10_000;
 
 /** Luas satu unit dalam m² (null bila ukuran belum diisi). */
 export const unitAreaM2 = (p: {
   widthCm: number | null;
   heightCm: number | null;
 }): number | null => (p.widthCm && p.heightCm ? (p.widthCm * p.heightCm) / 10_000 : null);
+
+/**
+ * Harga sewa satu unit per hari. PCS/PACKAGE: harga apa adanya. AREA: tarif per m² × luas satu unit,
+ * dibulatkan ke rupiah (mis. tarif 500.000/m²: kabinet 100×50 = 250.000, 50×50 = 125.000).
+ */
+export const effectiveUnitPrice = (p: {
+  pricingUnit: PricingUnit;
+  price: number;
+  widthCm: number | null;
+  heightCm: number | null;
+}): number => {
+  if (p.pricingUnit !== 'AREA') return p.price;
+  const area = unitAreaM2(p);
+  return area === null ? 0 : Math.round(p.price * area);
+};
 
 export const categoryInputSchema = z.object({ name: z.string().trim().min(1).max(80) });
 export type CategoryInput = z.infer<typeof categoryInputSchema>;
@@ -113,15 +163,21 @@ export interface ProductDto {
   id: string;
   name: string;
   sku: string | null;
-  categoryId: string;
-  category: CategoryDto;
+  categoryId: string | null;
+  category: CategoryDto | null;
   pricingUnit: PricingUnit;
   unitLabel: string;
+  /** Harga yang diinput: harga per unit, atau tarif per m² bila `pricingUnit` = AREA. */
   price: number;
+  /** Harga sewa satu unit per hari yang benar-benar ditagihkan (AREA: tarif × luas satu unit). */
+  unitPrice: number;
   deposit: number;
   active: boolean;
   /** Foto produk opsional; byte diambil lewat GET /products/:id/photo. */
   hasPhoto: boolean;
+  stockMode: StockMode;
+  /** Kelompok "per meter" tempat kabinet ini menjadi anggota; tidak bisa dipesan langsung bila terisi. */
+  areaPoolId: string | null;
   widthCm: number | null;
   heightCm: number | null;
 }

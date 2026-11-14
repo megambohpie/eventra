@@ -191,7 +191,7 @@ export interface AssetProductRef {
   id: string;
   name: string;
   sku: string | null;
-  category: CategoryDto;
+  category: CategoryDto | null;
 }
 
 export interface AssetDto {
@@ -248,7 +248,7 @@ export interface AssetGroupDto {
   productId: string;
   productName: string;
   sku: string | null;
-  categoryName: string;
+  categoryName: string | null;
   total: number;
   attention: number;
   byStatus: Partial<Record<AssetStatus, number>>;

@@ -14,6 +14,7 @@ import {
   orderCalendarQuerySchema,
   orderInputSchema,
   orderListQuerySchema,
+  effectiveUnitPrice,
   orderNoteSchema,
   picInputSchema,
   quoteInputSchema,
@@ -83,7 +84,15 @@ export function ordersRouter(db: PrismaClient): Router {
       return {
         productId: i.productId,
         quantity: i.quantity,
-        unitPrice: p.price,
+        // Snapshot harga per unit; produk "per m²" dihitung dari tarif × luas satu unit.
+        unitPrice: BigInt(
+          effectiveUnitPrice({
+            pricingUnit: p.pricingUnit,
+            price: Number(p.price),
+            widthCm: p.widthCm,
+            heightCm: p.heightCm,
+          }),
+        ),
         unitDeposit: p.deposit,
       };
     });

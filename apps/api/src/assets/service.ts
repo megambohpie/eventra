@@ -5,6 +5,7 @@ import type {
   Category,
   Location,
   Prisma,
+  PrismaClient,
   Product,
   StockReceipt,
   User,
@@ -18,6 +19,7 @@ import {
   type AssetScanDto,
   type AssetStatus,
 } from '@eventra/shared';
+import { HttpError } from '../errors';
 
 export const assetInclude = {
   product: { include: { category: true } },
@@ -27,7 +29,7 @@ export const assetInclude = {
 } satisfies Prisma.AssetInclude;
 
 type AssetRow = Asset & {
-  product: Product & { category: Category };
+  product: Product & { category: Category | null };
   location: Location | null;
   receipt: Pick<StockReceipt, 'number' | 'receivedDate'> | null;
   _count: { photos: number };
@@ -45,7 +47,9 @@ export function toAssetDto(a: AssetRow, canSeeCost: boolean): AssetDto {
       id: a.product.id,
       name: a.product.name,
       sku: a.product.sku,
-      category: { id: a.product.category.id, name: a.product.category.name },
+      category: a.product.category
+        ? { id: a.product.category.id, name: a.product.category.name }
+        : null,
     },
     serial: a.serial,
     brand: a.brand,
@@ -137,6 +141,27 @@ export async function nextAssetCodes(tx: Tx, count: number): Promise<string[]> {
 export async function nextReceiptNumber(tx: Tx, date: Date): Promise<string> {
   const rows = await tx.$queryRaw<{ n: bigint }[]>`SELECT nextval('stock_receipt_number_seq') AS n`;
   return `RCV-${date.getUTCFullYear()}-${String(rows[0]?.n ?? 0).padStart(6, '0')}`;
+}
+
+/**
+ * Produk stok tidak terbatas atau kelompok "per meter" tidak memakai aset ber-QR sendiri: tolak
+ * pembuatan aset/penerimaannya (kabinet anggota kelompok tetap produk TRACKED biasa).
+ */
+export async function assertTrackedProducts(
+  db: Tx | PrismaClient,
+  productIds: string[],
+): Promise<void> {
+  const unlimited = await db.product.findMany({
+    where: { id: { in: [...new Set(productIds)] }, stockMode: { not: 'TRACKED' } },
+    select: { name: true },
+  });
+  if (unlimited.length > 0) {
+    throw new HttpError(
+      409,
+      'PRODUCT_UNLIMITED',
+      `Produk ini tidak memakai aset/QR sendiri (stok tidak terbatas / per meter): ${unlimited.map((p) => p.name).join(', ')}`,
+    );
+  }
 }
 
 export const dateOnlyToDate = (value: string): Date => new Date(`${value}T00:00:00.000Z`);

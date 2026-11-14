@@ -108,7 +108,9 @@ export function AssetModal({
               disabled={Boolean(asset)}
               value={productId}
               onChange={setProductId}
-              options={products.map((p) => ({ value: p.id, label: p.name }))}
+              options={products
+                .filter((p) => p.stockMode === 'TRACKED' || p.id === asset?.productId)
+                .map((p) => ({ value: p.id, label: p.name }))}
             />
           </FormField>
           {!asset && (

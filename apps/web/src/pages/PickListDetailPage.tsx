@@ -21,6 +21,7 @@ import { FormField } from '@/components/ui/FormField';
 import { Loading } from '@/components/ui/Loading';
 import { PageCard, PageHeader } from '@/components/ui/PageCard';
 import { DocumentsPanel } from '@/components/warehouse/DocumentsPanel';
+import { CountedLines } from '@/components/warehouse/CountedLines';
 import { ItemPhotos } from '@/components/warehouse/ItemPhotos';
 import { ReturnPanel } from '@/components/warehouse/ReturnPanel';
 import { PickItemStatusBadge, PickListStatusBadge } from '@/components/warehouse/badges';
@@ -65,6 +66,8 @@ function Detail({ pick, canWrite, canSign, reload }: DetailProps) {
   const input = useRef<HTMLInputElement>(null);
   const [mode, setMode] = useState<Mode>('PICK');
   const [value, setValue] = useState('');
+  // Aksesori tambahan (include): aset di luar kebutuhan pesanan, mis. tiang sangga atau katrol.
+  const [extra, setExtra] = useState(false);
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<{ ok: boolean; text: string } | null>(null);
   const [dialog, setDialog] = useState<Dialog>(null);
@@ -84,6 +87,7 @@ function Detail({ pick, canWrite, canSign, reload }: DetailProps) {
       const out = await scanPickList(api, pick.id, {
         action: mode,
         ...(manual ? { assetCode: raw.toUpperCase() } : { qrToken: raw }),
+        ...(mode === 'PICK' && extra ? { extra: true } : {}),
       });
       setFeedback({
         ok: true,
@@ -212,10 +216,22 @@ function Detail({ pick, canWrite, canSign, reload }: DetailProps) {
             <tbody>
               {pick.lines.map((l) => (
                 <tr key={l.productId} className="ev-table__row">
-                  <td>{l.productName}</td>
-                  <td>{l.required}</td>
-                  <td>{l.picked}</td>
-                  <td>{l.verified}</td>
+                  <td>
+                    {l.productName}
+                    {l.unlimited && (
+                      <span className="ev-table__hint ev-table__hint--block">
+                        {t('warehouse.count.badge')}
+                      </span>
+                    )}
+                    {l.areaPool && (
+                      <span className="ev-table__hint ev-table__hint--block">
+                        {t('warehouse.detail.areaBadge')}
+                      </span>
+                    )}
+                  </td>
+                  <td>{l.areaPool ? `${l.required} m²` : l.required}</td>
+                  <td>{l.areaPool ? `${Number(l.picked.toFixed(2))} m²` : l.picked}</td>
+                  <td>{l.areaPool ? `${Number(l.verified.toFixed(2))} m²` : l.verified}</td>
                   <td className="ev-progress-cell">
                     <progress
                       className="progress progress-primary"
@@ -228,6 +244,7 @@ function Detail({ pick, canWrite, canSign, reload }: DetailProps) {
             </tbody>
           </table>
         </div>
+        <CountedLines pick={pick} canWrite={canWrite} onChanged={reload} />
       </PageCard>
 
       {canWrite && preparing && (
@@ -255,6 +272,20 @@ function Detail({ pick, canWrite, canSign, reload }: DetailProps) {
               mode === 'PICK' ? 'warehouse.detail.scanHintPick' : 'warehouse.detail.scanHintVerify',
             )}
           </p>
+          {mode === 'PICK' && (
+            <>
+              <label className="label ev-toggle-row">
+                <input
+                  type="checkbox"
+                  className="toggle toggle-primary toggle-sm"
+                  checked={extra}
+                  onChange={(e) => setExtra(e.target.checked)}
+                />
+                {t('warehouse.detail.extraToggle')}
+              </label>
+              <p className="ev-hint">{t('warehouse.detail.extraHint')}</p>
+            </>
+          )}
           <form className="ev-scan__form" onSubmit={submitScan}>
             <FormField label={t('warehouse.detail.scanLabel')}>
               <input
@@ -309,7 +340,9 @@ function Detail({ pick, canWrite, canSign, reload }: DetailProps) {
                     </Link>
                     <span className="ev-table__hint ev-table__hint--block">
                       {item.productName}
+                      {item.areaM2 !== null && ` · ${item.areaM2} m²`}
                       {item.serial && ` · SN ${item.serial}`}
+                      {item.extra && ` · ${t('warehouse.detail.extraBadge')}`}
                     </span>
                   </td>
                   <td>
@@ -411,7 +444,12 @@ function Detail({ pick, canWrite, canSign, reload }: DetailProps) {
                       {t(`warehouse.detail.methods.${s.method}`)}
                     </span>
                   </td>
-                  <td>{s.assetCode ?? '-'}</td>
+                  <td>
+                    {s.assetCode ??
+                      (s.productName && s.quantity !== null
+                        ? `${s.productName} × ${s.quantity}`
+                        : '-')}
+                  </td>
                   <td>
                     <Badge variant={s.result === 'OK' ? 'success' : 'error'}>
                       {t(`warehouse.detail.results.${s.result}`)}
