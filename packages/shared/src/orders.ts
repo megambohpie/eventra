@@ -212,9 +212,17 @@ export interface AvailabilityDayDto {
 
 // ---------- Pesanan ----------
 
+export const ORDER_PRICING_MODES = ['LINE', 'LUMP'] as const;
+export type OrderPricingMode = (typeof ORDER_PRICING_MODES)[number];
+
+/** Batas nominal harga (rupiah) agar aman sebagai angka JS dan BIGINT. */
+export const MAX_ORDER_PRICE = 999_999_999_999;
+
 export const orderItemInputSchema = z.object({
   productId: z.uuid(),
   quantity: z.number().int().min(1).max(100_000),
+  /** Harga final per unit per hari hasil negosiasi; kosong = harga default produk. Diabaikan pada borongan. */
+  unitPrice: z.number().int().min(0).max(MAX_ORDER_PRICE).nullish(),
 });
 
 export const orderInputSchema = z
@@ -229,9 +237,17 @@ export const orderInputSchema = z
     eventLat: z.number().min(-90).max(90).nullish(),
     eventLng: z.number().min(-180).max(180).nullish(),
     note: optionalText(1000),
+    /** LINE = harga per baris (default); LUMP = borongan, satu total untuk seluruh pesanan. */
+    pricingMode: z.enum(ORDER_PRICING_MODES).default('LINE'),
+    /** Total borongan seluruh sewa (tidak dikali hari); wajib bila LUMP, harus kosong bila LINE. */
+    lumpTotal: z.number().int().min(0).max(MAX_ORDER_PRICE).nullish(),
     items: z.array(orderItemInputSchema).min(1).max(50),
   })
   .refine(dateRange, dateRangeMessage)
+  .refine((o) => (o.pricingMode === 'LUMP') === (o.lumpTotal != null), {
+    path: ['lumpTotal'],
+    message: 'Total borongan wajib diisi pada harga borongan dan kosong pada harga per baris',
+  })
   .refine((o) => (o.eventLat == null) === (o.eventLng == null), {
     path: ['eventLat'],
     message: 'Latitude dan longitude harus diisi bersamaan',
@@ -283,7 +299,10 @@ export interface OrderItemDto {
   productName: string;
   unitLabel: string;
   quantity: number;
+  /** Harga final per unit per hari (0 pada borongan). 0 dan `pricesHidden` bila pengguna tak berhak melihat harga. */
   unitPrice: number;
+  /** Harga default produk saat pesanan dibuat; pembanding negosiasi saja. */
+  listPrice: number;
   unitDeposit: number;
   lineTotal: number;
   lineDeposit: number;
@@ -321,11 +340,18 @@ export interface OrderSummaryDto {
   eventLocation: string;
   subtotal: number;
   depositTotal: number;
+  pricingMode: OrderPricingMode;
+  /** Total borongan; null pada harga per baris. */
+  lumpTotal: number | null;
+  /** True bila pengguna tidak punya `order.price.read`: semua nominal harga dikosongkan (0). */
+  pricesHidden: boolean;
   holdExpiresAt: string | null;
   createdAt: string;
 }
 
 export interface OrderDto extends OrderSummaryDto {
+  /** Total sewa menurut harga default produk (Σ harga default × qty × hari); pembanding negosiasi. */
+  listSubtotal: number;
   eventAddress: string | null;
   eventLat: number | null;
   eventLng: number | null;

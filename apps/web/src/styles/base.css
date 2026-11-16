@@ -71,6 +71,9 @@
   .ev-modal__box--wide {
     @apply max-w-3xl;
   }
+  .ev-modal__box--huge {
+    @apply w-11/12 max-w-6xl;
+  }
   .ev-modal__head {
     @apply mb-4 flex shrink-0 items-center justify-between;
   }

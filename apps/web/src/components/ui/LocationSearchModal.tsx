@@ -62,7 +62,7 @@ export function LocationSearchModal({
   };
 
   return (
-    <Modal open={open} title={t('orders.map.title')} onClose={onClose} wide>
+    <Modal open={open} title={t('orders.map.title')} onClose={onClose} huge>
       <div className="ev-mapdialog">
         <label className="input ev-control">
           <Icon path={mdiMagnify} />

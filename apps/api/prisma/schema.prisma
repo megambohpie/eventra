@@ -400,6 +400,12 @@ model StockReceiptItem {
 
 // ---------- Fase 03: paket, ketersediaan, pesanan ----------
 
+// Cara harga pesanan dihitung: per baris (harga final per unit) atau borongan (satu total).
+enum OrderPricingMode {
+  LINE
+  LUMP
+}
+
 enum OrderStatus {
   DRAFT
   PENDING_REVIEW
@@ -466,6 +472,9 @@ model Order {
   note          String?
   subtotal      BigInt      @default(0)
   depositTotal  BigInt      @default(0) @map("deposit_total")
+  pricingMode   OrderPricingMode @default(LINE) @map("pricing_mode")
+  // Total borongan (seluruh sewa, tidak dikali hari); terisi hanya bila pricingMode = LUMP. `subtotal` = nilai ini.
+  lumpTotal     BigInt?     @map("lump_total")
   holdExpiresAt DateTime?   @map("hold_expires_at") @db.Timestamptz(3)
   confirmedAt   DateTime?   @map("confirmed_at") @db.Timestamptz(3)
   createdBy     String?     @map("created_by") @db.Uuid
@@ -495,7 +504,10 @@ model OrderItem {
   orderId     String @map("order_id") @db.Uuid
   productId   String @map("product_id") @db.Uuid
   quantity    Int
+  // Harga final per unit per hari (hasil negosiasi admin); 0 pada pesanan borongan.
   unitPrice   BigInt @map("unit_price")
+  // Snapshot harga default produk saat pesanan dibuat; hanya pembanding negosiasi.
+  listPrice   BigInt @default(0) @map("list_price")
   unitDeposit BigInt @default(0) @map("unit_deposit")
 
   order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)

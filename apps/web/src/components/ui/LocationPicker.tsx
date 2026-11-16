@@ -1,20 +1,12 @@
 import { useState } from 'react';
-import { mdiCrosshairsGps, mdiMagnify, mdiMapMarkerOff, mdiOpenInNew } from '@mdi/js';
+import { mdiMagnify, mdiOpenInNew } from '@mdi/js';
 import { useTranslation } from 'react-i18next';
-import {
-  formatCoordinates,
-  googleMapsUrl,
-  parseCoordinates,
-  roundCoord,
-  type LatLng,
-} from '@eventra/shared';
-import { Button } from '@/components/ui/Button';
+import { formatCoordinates, googleMapsUrl, parseCoordinates, type LatLng } from '@eventra/shared';
 import { Icon } from '@/components/ui/Icon';
 import { FormField } from '@/components/ui/FormField';
 import { LocationSearchModal } from '@/components/ui/LocationSearchModal';
 import { Modal } from '@/components/ui/Modal';
 import { MapCanvasLazy } from '@/components/ui/MapCanvasLazy';
-import { notify } from '@/lib/notifications';
 
 interface LocationPickerProps {
   value: LatLng | null;
@@ -45,26 +37,6 @@ export function LocationPicker({ value, onChange }: LocationPickerProps) {
     }
   };
 
-  const useMyLocation = () =>
-    new Promise<void>((resolve) => {
-      if (!navigator.geolocation) {
-        notify('error', t('orders.map.geoUnavailable'));
-        resolve();
-        return;
-      }
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          onChange({ lat: roundCoord(pos.coords.latitude), lng: roundCoord(pos.coords.longitude) });
-          resolve();
-        },
-        () => {
-          notify('error', t('orders.map.geoDenied'));
-          resolve();
-        },
-        { enableHighAccuracy: true, timeout: 10_000 },
-      );
-    });
-
   return (
     <div className="ev-location">
       <FormField label={t('orders.map.paste')}>
@@ -93,27 +65,19 @@ export function LocationPicker({ value, onChange }: LocationPickerProps) {
       </button>
       <p className="ev-hint">{value ? formatCoordinates(value) : t('orders.map.hint')}</p>
 
-      <div className="ev-location__actions">
-        <Button size="sm" variant="ghost" icon={mdiCrosshairsGps} onClick={useMyLocation}>
-          {t('orders.map.myLocation')}
-        </Button>
-        {value && (
-          <>
-            <a
-              className="btn btn-ghost btn-sm"
-              href={googleMapsUrl(value)}
-              target="_blank"
-              rel="noreferrer"
-            >
-              <Icon path={mdiOpenInNew} />
-              {t('orders.map.openGoogle')}
-            </a>
-            <Button size="sm" variant="ghost" icon={mdiMapMarkerOff} onClick={() => onChange(null)}>
-              {t('orders.map.clear')}
-            </Button>
-          </>
-        )}
-      </div>
+      {value && (
+        <div className="ev-location__actions">
+          <a
+            className="btn btn-ghost btn-sm"
+            href={googleMapsUrl(value)}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <Icon path={mdiOpenInNew} />
+            {t('orders.map.openGoogle')}
+          </a>
+        </div>
+      )}
       <LocationSearchModal
         key={String(dialog)}
         open={dialog}
@@ -147,7 +111,7 @@ export function LocationView({ point, address }: { point: LatLng; address?: stri
         </span>
       </button>
       <p className="ev-hint">{formatCoordinates(point)}</p>
-      <Modal open={open} title={t('orders.map.title')} onClose={() => setOpen(false)} wide>
+      <Modal open={open} title={t('orders.map.title')} onClose={() => setOpen(false)} huge>
         <div className="ev-mapdialog">
           {address && <p>{address}</p>}
           <MapCanvasLazy large navigable value={point} ariaLabel={t('orders.map.title')} />

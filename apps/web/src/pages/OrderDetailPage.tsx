@@ -80,6 +80,7 @@ export function OrderDetailPage() {
   };
 
   const s = order.status;
+  const showLinePrices = !order.pricesHidden && order.pricingMode === 'LINE';
   const takenRoles = order.pics.filter((p) => SINGLE_PIC_ROLES.includes(p.role)).map((p) => p.role);
   const picEditable = canWrite && !PIC_LOCKED.includes(s);
   const closeDialog = () => setDialog(null);
@@ -185,14 +186,38 @@ export function OrderDetailPage() {
               </dd>
             </div>
           )}
-          <div className="ev-dl__row">
-            <dt className="ev-dl__term">{t('orders.subtotal')}</dt>
-            <dd className="ev-dl__desc">{formatRupiah(order.subtotal)}</dd>
-          </div>
-          <div className="ev-dl__row">
-            <dt className="ev-dl__term">{t('orders.deposit')}</dt>
-            <dd className="ev-dl__desc">{formatRupiah(order.depositTotal)}</dd>
-          </div>
+          {order.pricesHidden ? (
+            <div className="ev-dl__row">
+              <dt className="ev-dl__term">{t('orders.pricing.mode')}</dt>
+              <dd className="ev-dl__desc">{t('orders.pricing.hiddenHint')}</dd>
+            </div>
+          ) : (
+            <>
+              <div className="ev-dl__row">
+                <dt className="ev-dl__term">{t('orders.pricing.mode')}</dt>
+                <dd className="ev-dl__desc">
+                  {order.pricingMode === 'LUMP'
+                    ? t('orders.pricing.modeLump')
+                    : t('orders.pricing.modeLine')}
+                </dd>
+              </div>
+              <div className="ev-dl__row">
+                <dt className="ev-dl__term">{t('orders.subtotal')}</dt>
+                <dd className="ev-dl__desc">
+                  {formatRupiah(order.subtotal)}
+                  {order.listSubtotal > 0 && order.listSubtotal !== order.subtotal && (
+                    <span className="ev-table__hint ev-table__hint--block">
+                      {t('orders.pricing.listTotal', { total: formatRupiah(order.listSubtotal) })}
+                    </span>
+                  )}
+                </dd>
+              </div>
+              <div className="ev-dl__row">
+                <dt className="ev-dl__term">{t('orders.deposit')}</dt>
+                <dd className="ev-dl__desc">{formatRupiah(order.depositTotal)}</dd>
+              </div>
+            </>
+          )}
           {order.note && (
             <div className="ev-dl__row">
               <dt className="ev-dl__term">{t('common.note')}</dt>
@@ -208,8 +233,8 @@ export function OrderDetailPage() {
               <tr>
                 <th>{t('orders.product')}</th>
                 <th>{t('orders.quantity')}</th>
-                <th>{t('orders.unitPrice')}</th>
-                <th>{t('orders.lineTotal')}</th>
+                {showLinePrices && <th>{t('orders.unitPrice')}</th>}
+                {showLinePrices && <th>{t('orders.lineTotal')}</th>}
                 <th>{t('orders.physicalUnits')}</th>
               </tr>
             </thead>
@@ -220,8 +245,8 @@ export function OrderDetailPage() {
                   <td>
                     {item.quantity} {item.unitLabel}
                   </td>
-                  <td>{formatRupiah(item.unitPrice)}</td>
-                  <td>{formatRupiah(item.lineTotal)}</td>
+                  {showLinePrices && <td>{formatRupiah(item.unitPrice)}</td>}
+                  {showLinePrices && <td>{formatRupiah(item.lineTotal)}</td>}
                   <td>
                     {item.components.map((c) => (
                       <div key={c.productId}>

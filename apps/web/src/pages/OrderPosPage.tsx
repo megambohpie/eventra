@@ -24,6 +24,7 @@ import { CustomerModal } from '@/components/customers/CustomerModal';
 import { ProductThumb } from '@/components/products/ProductThumb';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { CurrencyInput } from '@/components/ui/CurrencyInput';
 import { FormField } from '@/components/ui/FormField';
 import { LocationPicker } from '@/components/ui/LocationPicker';
 import { Loading } from '@/components/ui/Loading';
@@ -33,7 +34,7 @@ import { SearchSelect } from '@/components/ui/SearchSelect';
 import { useResource } from '@/hooks/useResource';
 import { formatRupiah } from '@/lib/format';
 import { notify } from '@/lib/notifications';
-import { cartTotals, clampQty, setCartQty, type Cart } from '@/lib/pos';
+import { cartTotals, clampQty, priceDiffPercent, setCartQty, type Cart } from '@/lib/pos';
 
 const CHUNK = 50;
 const todayKey = () => new Date().toISOString().slice(0, 10);
@@ -85,6 +86,20 @@ function PosForm({ order, initialStart, products, customers, reloadCustomers }: 
   const [cart, setCart] = useState<Cart>(
     Object.fromEntries((order?.items ?? []).map((i) => [i.productId, i.quantity])),
   );
+  // Harga final per produk hasil negosiasi (digit; kosong/tidak ada = harga default produk).
+  const [prices, setPrices] = useState<Record<string, string>>(() =>
+    order?.pricingMode === 'LINE'
+      ? Object.fromEntries(
+          order.items
+            .filter((i) => i.unitPrice !== i.listPrice)
+            .map((i) => [i.productId, String(i.unitPrice)]),
+        )
+      : {},
+  );
+  const [lump, setLump] = useState(order?.pricingMode === 'LUMP');
+  const [lumpTotal, setLumpTotal] = useState(
+    order?.lumpTotal != null ? String(order.lumpTotal) : '',
+  );
   const [q, setQ] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [stockFilter, setStockFilter] = useState<StockMode | ''>('');
@@ -134,7 +149,19 @@ function PosForm({ order, initialStart, products, customers, reloadCustomers }: 
     items: visible.filter((p) => p.stockMode === mode),
   })).filter((g) => g.items.length > 0);
 
-  const totals = cartTotals(products, cart, startDate, endDate);
+  const priceNums: Record<string, number> = Object.fromEntries(
+    Object.entries(prices)
+      .filter(([, v]) => v !== '')
+      .map(([id, v]) => [id, Number(v)]),
+  );
+  const totals = cartTotals(products, cart, startDate, endDate, {
+    prices: priceNums,
+    lumpTotal: lump ? Number(lumpTotal || 0) : null,
+  });
+  const totalDiff =
+    totals.subtotal === totals.listSubtotal
+      ? null
+      : priceDiffPercent(totals.subtotal, totals.listSubtotal);
   const cartLines = products.filter((p) => (cart[p.id] ?? 0) > 0);
   const overStock = stock ? cartLines.some((p) => (cart[p.id] ?? 0) > (stock[p.id] ?? 0)) : false;
 
@@ -154,7 +181,13 @@ function PosForm({ order, initialStart, products, customers, reloadCustomers }: 
         eventLat: point?.lat ?? null,
         eventLng: point?.lng ?? null,
         note,
-        items: cartLines.map((p) => ({ productId: p.id, quantity: cart[p.id] ?? 0 })),
+        pricingMode: lump ? ('LUMP' as const) : ('LINE' as const),
+        lumpTotal: lump ? Number(lumpTotal || 0) : null,
+        items: cartLines.map((p) => ({
+          productId: p.id,
+          quantity: cart[p.id] ?? 0,
+          unitPrice: !lump && priceNums[p.id] !== undefined ? priceNums[p.id] : null,
+        })),
       };
       const saved = order
         ? await updateOrder(api, order.id, payload)
@@ -173,6 +206,7 @@ function PosForm({ order, initialStart, products, customers, reloadCustomers }: 
     eventLocation.trim().length > 0 &&
     validDates &&
     cartLines.length > 0 &&
+    (!lump || lumpTotal !== '') &&
     !overStock;
 
   return (
@@ -328,92 +362,174 @@ function PosForm({ order, initialStart, products, customers, reloadCustomers }: 
         </div>
       </PageCard>
 
-      <PageCard className="ev-pos__cart">
-        <h2 id="pos-cart" className="ev-section-title">
-          {t('orders.pos.cart')}
-        </h2>
-        <FormField label={t('orders.customer')}>
-          <SearchSelect
-            ariaLabel={t('orders.customer')}
-            value={customerId}
-            onChange={setCustomerId}
-            options={customers.map((c) => ({ value: c.id, label: c.name }))}
-          />
-        </FormField>
-        <Button
-          size="sm"
-          variant="ghost"
-          icon={mdiAccountPlus}
-          onClick={() => setNewCustomer(true)}
-        >
-          {t('orders.pos.newCustomer')}
-        </Button>
-        <FormField label={t('orders.eventLocation')}>
-          <input
-            className="input ev-control"
-            required
-            value={eventLocation}
-            onChange={(e) => setEventLocation(e.target.value)}
-          />
-        </FormField>
-        <FormField label={t('orders.eventAddress')}>
-          <textarea
-            className="textarea ev-control"
-            rows={2}
-            placeholder={t('orders.eventAddressPlaceholder')}
-            value={eventAddress}
-            onChange={(e) => setEventAddress(e.target.value)}
-          />
-        </FormField>
-        <LocationPicker value={point} onChange={setPoint} />
-        <FormField label={t('common.note')}>
-          <textarea
-            className="textarea ev-control"
-            rows={2}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-          />
-        </FormField>
+      <aside className="card ev-card ev-pos__cart">
+        <header className="ev-pos__cart-head">
+          <h2 id="pos-cart" className="ev-section-title">
+            {t('orders.pos.cart')}
+          </h2>
+          <span className="badge badge-primary badge-soft">
+            {t('orders.pos.units', { count: totals.units })}
+          </span>
+        </header>
+        <div className="ev-pos__cart-body">
+          <div className="ev-pos__customer">
+            <FormField label={t('orders.customer')}>
+              <SearchSelect
+                ariaLabel={t('orders.customer')}
+                value={customerId}
+                onChange={setCustomerId}
+                options={customers.map((c) => ({ value: c.id, label: c.name }))}
+              />
+            </FormField>
+            <Button
+              size="sm"
+              variant="ghost"
+              icon={mdiAccountPlus}
+              onClick={() => setNewCustomer(true)}
+            >
+              {t('orders.pos.newCustomer')}
+            </Button>
+          </div>
+          <details className="collapse collapse-arrow ev-pos__section" open>
+            <summary className="collapse-title ev-pos__section-title">
+              {t('orders.pos.eventDetails')}
+            </summary>
+            <div className="collapse-content ev-pos__section-body">
+              <FormField label={t('orders.eventLocation')}>
+                <input
+                  className="input ev-control"
+                  required
+                  value={eventLocation}
+                  onChange={(e) => setEventLocation(e.target.value)}
+                />
+              </FormField>
+              <FormField label={t('orders.eventAddress')}>
+                <textarea
+                  className="textarea ev-control"
+                  rows={2}
+                  placeholder={t('orders.eventAddressPlaceholder')}
+                  value={eventAddress}
+                  onChange={(e) => setEventAddress(e.target.value)}
+                />
+              </FormField>
+              <LocationPicker value={point} onChange={setPoint} />
+              <FormField label={t('common.note')}>
+                <textarea
+                  className="textarea ev-control"
+                  rows={2}
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                />
+              </FormField>
+            </div>
+          </details>
 
-        {cartLines.length === 0 ? (
-          <p className="ev-hint">{t('orders.pos.cartEmpty')}</p>
-        ) : (
-          <ul className="ev-pos__lines">
-            {cartLines.map((p) => (
-              <li key={p.id} className="ev-pos__line">
-                <span>
-                  {p.name} × {cart[p.id]}
-                </span>
-                <span>{formatRupiah(p.unitPrice * (cart[p.id] ?? 0) * totals.days)}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-        <dl className="ev-pos__totals">
-          <dt>{t('orders.days', { count: totals.days })}</dt>
-          <dd>{t('orders.pos.units', { count: totals.units })}</dd>
-          {totals.areaM2 > 0 && (
-            <>
-              <dt>{t('orders.pos.totalArea')}</dt>
-              <dd>{totals.areaM2} m²</dd>
-            </>
+          {cartLines.length === 0 ? (
+            <p className="ev-hint">{t('orders.pos.cartEmpty')}</p>
+          ) : (
+            <ul className="ev-pos__lines">
+              {cartLines.map((p) => {
+                const price = priceNums[p.id] ?? p.unitPrice;
+                const diff = price === p.unitPrice ? null : priceDiffPercent(price, p.unitPrice);
+                return (
+                  <li key={p.id} className="ev-pos__line">
+                    <div className="ev-pos__line-head">
+                      <span>
+                        {p.name} × {cart[p.id]}
+                      </span>
+                      {!lump && (
+                        <span>{formatRupiah(price * (cart[p.id] ?? 0) * totals.days)}</span>
+                      )}
+                    </div>
+                    {!lump && (
+                      <div className="ev-pos__line-price">
+                        <CurrencyInput
+                          ariaLabel={t('orders.pricing.linePrice', { name: p.name })}
+                          value={prices[p.id] ?? String(p.unitPrice)}
+                          onChange={(digits) => setPrices((prev) => ({ ...prev, [p.id]: digits }))}
+                        />
+                        <span className="ev-hint">
+                          {t('orders.pricing.default', { price: formatRupiah(p.unitPrice) })}
+                          {diff !== null && (
+                            <span className="ev-pos__diff" data-tone={diff < 0 ? 'down' : 'up'}>
+                              {' '}
+                              {diff > 0 ? '+' : ''}
+                              {diff}%
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
           )}
-          <dt>{t('orders.subtotal')}</dt>
-          <dd>{formatRupiah(totals.subtotal)}</dd>
-          <dt>{t('orders.deposit')}</dt>
-          <dd>{formatRupiah(totals.deposit)}</dd>
-        </dl>
-        <p className="ev-hint">{t('orders.pos.estimateHint')}</p>
-        <Button
-          type="submit"
-          variant="primary"
-          icon={mdiCheck}
-          loading={saving}
-          disabled={!canSave}
-        >
-          {t('common.save')}
-        </Button>
-      </PageCard>
+
+          <fieldset className="ev-pos__pricing">
+            <label className="label ev-pos__lump-toggle">
+              <input
+                type="checkbox"
+                className="toggle toggle-primary"
+                checked={lump}
+                onChange={(e) => setLump(e.target.checked)}
+              />
+              <span>{t('orders.pricing.lump')}</span>
+            </label>
+            {lump && (
+              <>
+                <FormField label={t('orders.pricing.lumpTotal')}>
+                  <CurrencyInput
+                    required
+                    ariaLabel={t('orders.pricing.lumpTotal')}
+                    value={lumpTotal}
+                    onChange={setLumpTotal}
+                  />
+                </FormField>
+                <p className="ev-hint">{t('orders.pricing.lumpHint')}</p>
+              </>
+            )}
+            {totals.listSubtotal > 0 && (
+              <p className="ev-hint">
+                {t('orders.pricing.listTotal', { total: formatRupiah(totals.listSubtotal) })}
+                {totalDiff !== null && (
+                  <span className="ev-pos__diff" data-tone={totalDiff < 0 ? 'down' : 'up'}>
+                    {' '}
+                    ({totalDiff > 0 ? '+' : ''}
+                    {totalDiff}%)
+                  </span>
+                )}
+              </p>
+            )}
+          </fieldset>
+        </div>
+        <footer className="ev-pos__cart-foot">
+          <dl className="ev-pos__totals">
+            <dt>{t('orders.days', { count: totals.days })}</dt>
+            <dd>{t('orders.pos.units', { count: totals.units })}</dd>
+            {totals.areaM2 > 0 && (
+              <>
+                <dt>{t('orders.pos.totalArea')}</dt>
+                <dd>{totals.areaM2} m²</dd>
+              </>
+            )}
+            <dt>{t('orders.subtotal')}</dt>
+            <dd>{formatRupiah(totals.subtotal)}</dd>
+            <dt>{t('orders.deposit')}</dt>
+            <dd>{formatRupiah(totals.deposit)}</dd>
+          </dl>
+          <p className="ev-hint">{t('orders.pos.estimateHint')}</p>
+          <Button
+            type="submit"
+            variant="primary"
+            icon={mdiCheck}
+            loading={saving}
+            disabled={!canSave}
+          >
+            {t('common.save')}
+          </Button>
+        </footer>
+      </aside>
 
       <a href="#pos-cart" className="ev-pos__bar">
         <span>{t('orders.pos.units', { count: totals.units })}</span>

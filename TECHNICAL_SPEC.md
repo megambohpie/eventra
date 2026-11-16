@@ -63,8 +63,8 @@ Tabel memakai `id` UUID, `created_at`, `updated_at`; entitas operasional juga me
 | `assets` | kode aset, QR token, produk, serial, tanggal/biaya perolehan, sumber penerimaan, kondisi, status, lokasi terakhir. |
 | `stock_receipts` / `stock_receipt_items` | penerimaan stok/aset dari pembelian, transfer, hibah, titipan, produksi, atau sumber lain; referensi dokumen, sumber, penerima, produk, jumlah, dan biaya perolehan opsional. |
 | `asset_status_events` | perubahan status/lokasi/kondisi aset; append-only. |
-| `orders` | penyewa, periode, lokasi, status, nilai total, status pembayaran. |
-| `order_items` | produk, qty satuan sewa, harga, total. |
+| `orders` | penyewa, periode, lokasi, status, nilai total, status pembayaran, `pricing_mode` (`LINE`/`LUMP`) dan `lump_total` (total borongan; `subtotal` = nilai ini bila `LUMP`). |
+| `order_items` | produk, qty satuan sewa, `unit_price` (harga final per unit per hari, hasil negosiasi admin; 0 pada borongan), `list_price` (snapshot harga default produk, hanya pembanding), deposit. |
 | `stock_allocations` | pesanan, produk/aset, tanggal, qty, status hold/confirmed/released. |
 | `order_pics` | PIC per pesanan (rental atau customer): peran, kontak, sumber PIC, penyetuju. PIC tidak disimpan di `customers`. |
 | `pick_lists` / `pick_list_items` | kebutuhan fisik, aset terpilih, hasil persiapan. |
@@ -115,6 +115,15 @@ Setiap transisi harus divalidasi pada backend dan direkam sebagai event.
 7. Prioritas adalah hold aktif paling awal, kemudian waktu konfirmasi. Jangan menentukan prioritas dari urutan tampilan frontend.
 
 Contoh konfigurasi: produk LED `1 meter` memiliki rasio `4 panel`. Pesanan 4 meter membutuhkan 16 aset panel; kuota dan pick list dihitung terhadap 16 panel tersebut.
+
+### Harga pesanan (negosiasi dan borongan)
+
+1. Harga produk adalah **harga default**: saran awal dan pembanding negosiasi, bukan harga final. Tawar-menawar terjadi di luar sistem; admin lalu menetapkan hasilnya di POS tanpa persetujuan pelanggan.
+2. `LINE`: `unit_price` per baris boleh diubah admin (kosong = harga default); subtotal = Σ `unit_price × qty × hari`.
+3. `LUMP` (borongan, berlaku untuk seluruh pesanan): satu `lump_total` untuk seluruh sewa, **tidak dikali hari**; `unit_price` baris = 0. Baris barang tetap wajib karena membatasi gudang dan menjadi dasar alokasi stok. Deposit tetap per unit. CHECK DB: `LUMP` ⇔ `lump_total` terisi.
+4. Invoice menyalin `orders.subtotal` (jadi total borongan pada pesanan borongan). Harga hanya dapat diubah pada pesanan DRAFT (revisi setelah itu lewat pesanan/penawaran baru, tercatat audit); penawaran ulang mempertahankan harga negosiasi dan hanya menyegarkan baris yang masih berharga default.
+5. Capability `order.price.read` (Owner, Admin, Koordinator) mengatur siapa melihat nominal harga/deposit/borongan. DTO untuk pemohon tanpa izin (mis. Gudang) memuat `pricesHidden: true` dan semua nominal 0/null; jumlah barang tetap terlihat.
+6. Pesanan lama tetap `LINE` dengan harga lama (`list_price` diisi dari `unit_price` saat migrasi); laporan pendapatan per produk tidak mencakup pesanan borongan.
 
 ## 7. API REST v1
 

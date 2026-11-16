@@ -178,7 +178,7 @@ export function warehouseRouter(db: PrismaClient): Router {
         orderBy: [{ startDate: 'asc' }, { number: 'asc' }],
         take: 100,
       });
-      const data: OrderSummaryDto[] = rows.map(toOrderSummary);
+      const data: OrderSummaryDto[] = rows.map((r) => toOrderSummary(r, false));
       res.json({ data });
     },
   );

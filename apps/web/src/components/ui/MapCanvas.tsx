@@ -43,7 +43,8 @@ export default function MapCanvas({
   useEffect(() => {
     if (!host.current) return;
     const instance = L.map(host.current, {
-      scrollWheelZoom: false,
+      // Zoom dengan scroll hanya pada peta yang bisa dinavigasi; pratinjau tidak menangkap scroll halaman.
+      scrollWheelZoom: interactive || navigable,
       ...(interactive || navigable
         ? {}
         : {
@@ -62,7 +63,20 @@ export default function MapCanvas({
       instance.on('click', (e: L.LeafletMouseEvent) => change.current?.(toPoint(e.latlng)));
     }
     map.current = instance;
+    // Belum ada titik: pusatkan peta ke lokasi perangkat (bila diizinkan); jika ditolak tetap di pusat awal.
+    let cancelled = false;
+    if (interactive && !value && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          if (!cancelled && map.current)
+            map.current.setView([pos.coords.latitude, pos.coords.longitude], 16);
+        },
+        () => undefined,
+        { enableHighAccuracy: true, timeout: 10_000 },
+      );
+    }
     return () => {
+      cancelled = true;
       instance.remove();
       map.current = null;
       marker.current = null;

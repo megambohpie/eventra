@@ -99,7 +99,7 @@ export function OrdersPage() {
                     {order.endDate !== order.startDate && ` – ${formatDate(order.endDate)}`}
                   </td>
                   <td>{order.eventLocation}</td>
-                  <td>{formatRupiah(order.subtotal)}</td>
+                  <td>{order.pricesHidden ? '—' : formatRupiah(order.subtotal)}</td>
                   <td>
                     <OrderStatusBadge status={order.status} />
                   </td>

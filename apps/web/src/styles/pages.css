@@ -417,7 +417,7 @@
     @apply border-base-300 relative z-0 h-48 w-full overflow-hidden rounded-lg border;
   }
   .ev-map[data-large='true'] {
-    @apply h-[50vh] min-h-72;
+    @apply h-[65vh] min-h-80;
   }
   .ev-map__canvas {
     @apply h-full w-full;
@@ -512,7 +512,28 @@
     @apply grid items-start gap-4 pb-16 lg:grid-cols-[minmax(0,1fr)_22rem] lg:pb-0;
   }
   .ev-pos__cart {
-    @apply lg:sticky lg:top-4;
+    @apply overflow-hidden lg:sticky lg:top-4 lg:max-h-[calc(100dvh-2rem)];
+  }
+  .ev-pos__cart-head {
+    @apply from-primary/10 flex items-center justify-between gap-2 bg-gradient-to-r to-transparent px-5 py-4;
+  }
+  .ev-pos__cart-body {
+    @apply grid flex-1 content-start gap-4 overflow-y-auto px-5 py-4 lg:min-h-0;
+  }
+  .ev-pos__cart-foot {
+    @apply border-base-300 bg-base-200/50 grid gap-3 border-t px-5 py-4;
+  }
+  .ev-pos__customer {
+    @apply grid gap-1;
+  }
+  .ev-pos__section {
+    @apply border-base-300 bg-base-200/40 rounded-2xl border;
+  }
+  .ev-pos__section-title {
+    @apply min-h-0 py-3 text-sm font-semibold;
+  }
+  .ev-pos__section-body {
+    @apply grid gap-3;
   }
   .ev-pos__toolbar {
     @apply grid gap-2 sm:grid-cols-3;
@@ -591,10 +612,35 @@
     @apply grid gap-1 text-sm;
   }
   .ev-pos__line {
+    @apply border-base-300 bg-base-100 grid gap-1 rounded-xl border p-3;
+  }
+  .ev-pos__line-head {
     @apply flex justify-between gap-2;
   }
+  .ev-pos__line-price {
+    @apply grid gap-1;
+  }
+  .ev-pos__pricing {
+    @apply grid gap-2 border-t border-base-300 pt-2;
+  }
+  .ev-pos__lump-toggle {
+    @apply cursor-pointer justify-start gap-3;
+  }
+  .ev-pos__diff {
+    @apply font-semibold;
+  }
+  .ev-pos__diff[data-tone='down'] {
+    @apply text-success;
+  }
+  .ev-pos__diff[data-tone='up'] {
+    @apply text-warning;
+  }
   .ev-pos__totals {
-    @apply grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 border-t border-base-300 pt-2 text-sm;
+    @apply grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-sm;
+  }
+  .ev-pos__totals dt:nth-last-of-type(2),
+  .ev-pos__totals dd:nth-last-of-type(2) {
+    @apply text-base font-bold;
   }
   .ev-pos__totals dd {
     @apply text-right font-semibold;

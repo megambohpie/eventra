@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { mdiClose } from '@mdi/js';
 import { useTranslation } from 'react-i18next';
 import { Button } from './Button';
@@ -9,23 +10,34 @@ interface ModalProps {
   onClose: () => void;
   /** Lebar besar untuk form dengan banyak kolom/tabel. */
   wide?: boolean;
+  /** Lebih lebar lagi dari `wide` (mis. peta besar). */
+  huge?: boolean;
   /** Panel yang menggeser masuk dari sisi kanan layar (daftar panjang). */
   side?: boolean;
   children: ReactNode;
 }
 
 /** Dialog DaisyUI standar; isi dirender hanya saat terbuka sehingga state form selalu segar. */
-export function Modal({ open, title, onClose, wide = false, side = false, children }: ModalProps) {
+export function Modal({
+  open,
+  title,
+  onClose,
+  wide = false,
+  huge = false,
+  side = false,
+  children,
+}: ModalProps) {
   const { t } = useTranslation();
   if (!open) return null;
-  return (
+  // Portal ke body: dialog harus di atas sidebar/navbar yang berada di konteks susunan lain.
+  return createPortal(
     <dialog
       className={`modal modal-open${side ? ' modal-end' : ''}`}
       aria-label={title}
       onCancel={onClose}
     >
       <div
-        className={`modal-box ${wide ? 'ev-modal__box--wide' : ''} ${side ? 'ev-modal__box--side' : ''}`.trim()}
+        className={`modal-box ${wide ? 'ev-modal__box--wide' : ''} ${huge ? 'ev-modal__box--huge' : ''} ${side ? 'ev-modal__box--side' : ''}`.trim()}
       >
         <div className="ev-modal__head">
           <h2 className="ev-modal__title">{title}</h2>
@@ -40,6 +52,7 @@ export function Modal({ open, title, onClose, wide = false, side = false, childr
         {children}
       </div>
       <div className="modal-backdrop" aria-hidden onClick={onClose} />
-    </dialog>
+    </dialog>,
+    document.body,
   );
 }

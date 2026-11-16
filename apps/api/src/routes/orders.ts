@@ -71,8 +71,18 @@ export function ordersRouter(db: PrismaClient): Router {
   const items = (o: { items: { productId: string; quantity: number }[] }) =>
     o.items.map((i) => ({ productId: i.productId, quantity: i.quantity }));
 
-  /** Snapshot harga/deposit produk saat ini untuk baris pesanan. */
-  async function priceItems(tx: Tx, input: { productId: string; quantity: number }[]) {
+  /** Boleh melihat nominal harga pesanan; gudang tidak (DTO dikosongkan, `pricesHidden`). */
+  const canSeePrices = (req: Request) => hasCapability(currentUser(req).role, 'order.price.read');
+
+  /**
+   * Snapshot harga/deposit untuk baris pesanan. `listPrice` = harga default produk (pembanding);
+   * `unitPrice` = harga final: override negosiasi admin, atau harga default; 0 pada borongan.
+   */
+  async function priceItems(
+    tx: Tx,
+    input: { productId: string; quantity: number; unitPrice?: number | null }[],
+    mode: 'LINE' | 'LUMP' = 'LINE',
+  ) {
     await planItems(tx, input, { requireActive: true });
     const products = await tx.product.findMany({
       where: { id: { in: input.map((i) => i.productId) } },
@@ -81,18 +91,20 @@ export function ordersRouter(db: PrismaClient): Router {
     return input.map((i) => {
       const p = byId.get(i.productId);
       if (!p) throw new HttpError(400, 'INVALID_REFERENCE', 'Produk tidak ditemukan');
+      // Harga default per unit; produk "per m²" dihitung dari tarif × luas satu unit.
+      const listPrice = BigInt(
+        effectiveUnitPrice({
+          pricingUnit: p.pricingUnit,
+          price: Number(p.price),
+          widthCm: p.widthCm,
+          heightCm: p.heightCm,
+        }),
+      );
       return {
         productId: i.productId,
         quantity: i.quantity,
-        // Snapshot harga per unit; produk "per m²" dihitung dari tarif × luas satu unit.
-        unitPrice: BigInt(
-          effectiveUnitPrice({
-            pricingUnit: p.pricingUnit,
-            price: Number(p.price),
-            widthCm: p.widthCm,
-            heightCm: p.heightCm,
-          }),
-        ),
+        listPrice,
+        unitPrice: mode === 'LUMP' ? 0n : i.unitPrice != null ? BigInt(i.unitPrice) : listPrice,
         unitDeposit: p.deposit,
       };
     });
@@ -104,8 +116,8 @@ export function ordersRouter(db: PrismaClient): Router {
     if (!customer.active) throw new HttpError(409, 'CUSTOMER_INACTIVE', 'Pelanggan nonaktif');
   }
 
-  async function respond(id: string) {
-    return toOrderDto(db, await loadOrder(db, id));
+  async function respond(id: string, req: Request) {
+    return toOrderDto(db, await loadOrder(db, id), canSeePrices(req));
   }
 
   // ---------- Daftar & detail ----------
@@ -138,7 +150,7 @@ export function ordersRouter(db: PrismaClient): Router {
       db.order.count({ where }),
     ]);
     const data: Page<OrderSummaryDto> = {
-      items: rows.map(toSummaryDto),
+      items: rows.map((r) => toSummaryDto(r, canSeePrices(req))),
       total,
       page: q.page,
       pageSize: q.pageSize,
@@ -147,7 +159,7 @@ export function ordersRouter(db: PrismaClient): Router {
   });
 
   router.get('/orders/:id', requireCapability('order.read'), async (req, res) => {
-    res.json({ data: await respond(parseId(req.params.id)) });
+    res.json({ data: await respond(parseId(req.params.id), req) });
   });
 
   // ---------- Buat / ubah draft ----------
@@ -156,8 +168,11 @@ export function ordersRouter(db: PrismaClient): Router {
     const input = orderInputSchema.parse(req.body);
     const id = await db.$transaction(async (tx) => {
       await assertCustomerActive(tx, input.customerId);
-      const priced = await priceItems(tx, input.items);
-      const totals = computeTotals(priced, rentalDays(input.startDate, input.endDate));
+      const priced = await priceItems(tx, input.items, input.pricingMode);
+      const totals = computeTotals(priced, rentalDays(input.startDate, input.endDate), {
+        mode: input.pricingMode,
+        lumpTotal: input.lumpTotal == null ? null : BigInt(input.lumpTotal),
+      });
       const start = dateOnlyToDate(input.startDate);
       const order = await tx.order.create({
         data: {
@@ -172,6 +187,8 @@ export function ordersRouter(db: PrismaClient): Router {
           note: input.note ?? null,
           subtotal: totals.subtotal,
           depositTotal: totals.depositTotal,
+          pricingMode: input.pricingMode,
+          lumpTotal: input.lumpTotal == null ? null : BigInt(input.lumpTotal),
           createdBy: currentUser(req).id,
           items: { create: priced },
         },
@@ -185,7 +202,7 @@ export function ordersRouter(db: PrismaClient): Router {
       });
       return order.id;
     });
-    res.status(201).json({ data: await respond(id) });
+    res.status(201).json({ data: await respond(id, req) });
   });
 
   router.put('/orders/:id', requireCapability('order.write'), async (req, res) => {
@@ -197,8 +214,11 @@ export function ordersRouter(db: PrismaClient): Router {
         throw new HttpError(409, 'ORDER_NOT_DRAFT', 'Hanya pesanan draft yang dapat diubah');
       }
       await assertCustomerActive(tx, input.customerId);
-      const priced = await priceItems(tx, input.items);
-      const totals = computeTotals(priced, rentalDays(input.startDate, input.endDate));
+      const priced = await priceItems(tx, input.items, input.pricingMode);
+      const totals = computeTotals(priced, rentalDays(input.startDate, input.endDate), {
+        mode: input.pricingMode,
+        lumpTotal: input.lumpTotal == null ? null : BigInt(input.lumpTotal),
+      });
       await tx.orderItem.deleteMany({ where: { orderId: id } });
       const updated = await tx.order.update({
         where: { id },
@@ -213,6 +233,8 @@ export function ordersRouter(db: PrismaClient): Router {
           note: input.note ?? null,
           subtotal: totals.subtotal,
           depositTotal: totals.depositTotal,
+          pricingMode: input.pricingMode,
+          lumpTotal: input.lumpTotal == null ? null : BigInt(input.lumpTotal),
           items: { create: priced },
         },
       });
@@ -224,7 +246,7 @@ export function ordersRouter(db: PrismaClient): Router {
         after: { ...updated, items: priced },
       });
     });
-    res.json({ data: await respond(id) });
+    res.json({ data: await respond(id, req) });
   });
 
   // ---------- Alur status ----------
@@ -256,7 +278,7 @@ export function ordersRouter(db: PrismaClient): Router {
         after: { status: 'PENDING_REVIEW' },
       });
     });
-    res.json({ data: await respond(id) });
+    res.json({ data: await respond(id, req) });
   });
 
   /** Penawaran: harga diambil ulang dari produk lalu disimpan sebagai versi baru (append-only). */
@@ -280,8 +302,26 @@ export function ordersRouter(db: PrismaClient): Router {
       });
       if (!availability.ok) throw insufficientStock(availability);
 
-      const priced = await priceItems(tx, items(order));
-      const totals = computeTotals(priced, rentalDays(start, end));
+      // Harga hasil negosiasi dipertahankan; hanya baris yang masih memakai harga default yang
+      // disegarkan dari produk. Borongan: total tetap, harga baris 0.
+      const negotiated = new Map(
+        order.items
+          .filter((i) => i.unitPrice !== i.listPrice)
+          .map((i) => [i.productId, Number(i.unitPrice)] as const),
+      );
+      const priced = await priceItems(
+        tx,
+        order.items.map((i) => ({
+          productId: i.productId,
+          quantity: i.quantity,
+          unitPrice: negotiated.get(i.productId) ?? null,
+        })),
+        order.pricingMode,
+      );
+      const totals = computeTotals(priced, rentalDays(start, end), {
+        mode: order.pricingMode,
+        lumpTotal: order.lumpTotal,
+      });
       await tx.orderItem.deleteMany({ where: { orderId: id } });
       await tx.orderItem.createMany({ data: priced.map((p) => ({ ...p, orderId: id })) });
       const last = await tx.orderQuote.aggregate({
@@ -320,7 +360,7 @@ export function ordersRouter(db: PrismaClient): Router {
         },
       });
     });
-    res.json({ data: await respond(id) });
+    res.json({ data: await respond(id, req) });
   });
 
   /** Hold pembayaran: stok ditahan sementara (`expires_at`) sampai konfirmasi atau kadaluarsa. */
@@ -352,7 +392,7 @@ export function ordersRouter(db: PrismaClient): Router {
         after: { status: 'AWAITING_PAYMENT', holdExpiresAt: expiresAt },
       });
     });
-    res.json({ data: await respond(id) });
+    res.json({ data: await respond(id, req) });
   });
 
   /**
@@ -394,7 +434,7 @@ export function ordersRouter(db: PrismaClient): Router {
         after: { status: 'CONFIRMED' },
       });
     });
-    res.json({ data: await respond(id) });
+    res.json({ data: await respond(id, req) });
   });
 
   router.post('/orders/:id/reject', requireCapability('order.approve'), async (req, res) => {
@@ -411,7 +451,7 @@ export function ordersRouter(db: PrismaClient): Router {
         after: { status: 'REJECTED', note },
       });
     });
-    res.json({ data: await respond(id) });
+    res.json({ data: await respond(id, req) });
   });
 
   /** Batal: stok dilepas segera. Pesanan yang sudah menahan stok hanya dapat dibatalkan `order.approve`. */
@@ -449,7 +489,7 @@ export function ordersRouter(db: PrismaClient): Router {
         after: { status: 'CANCELLED', releasedAllocations: released, note },
       });
     });
-    res.json({ data: await respond(id) });
+    res.json({ data: await respond(id, req) });
   });
 
   /** Jadwalkan: PIC gudang keluar, gudang kembali, dan lapangan wajib sudah ditetapkan. */
@@ -473,7 +513,7 @@ export function ordersRouter(db: PrismaClient): Router {
         after: { status: 'SCHEDULED' },
       });
     });
-    res.json({ data: await respond(id) });
+    res.json({ data: await respond(id, req) });
   });
 
   // ---------- PIC pesanan ----------
@@ -521,7 +561,7 @@ export function ordersRouter(db: PrismaClient): Router {
   }
 
   router.get('/orders/:id/pics', requireCapability('order.read'), async (req, res) => {
-    const order = await toOrderDto(db, await loadOrder(db, parseId(req.params.id)));
+    const order = await toOrderDto(db, await loadOrder(db, parseId(req.params.id)), false);
     res.json({ data: order.pics });
   });
 
@@ -543,7 +583,7 @@ export function ordersRouter(db: PrismaClient): Router {
         after: pic,
       });
     });
-    res.status(201).json({ data: (await respond(id)).pics });
+    res.status(201).json({ data: (await respond(id, req)).pics });
   });
 
   router.put('/orders/:id/pics/:picId', requireCapability('order.write'), async (req, res) => {
@@ -584,7 +624,7 @@ export function ordersRouter(db: PrismaClient): Router {
         after: updated,
       });
     });
-    res.json({ data: (await respond(id)).pics });
+    res.json({ data: (await respond(id, req)).pics });
   });
 
   router.delete('/orders/:id/pics/:picId', requireCapability('order.write'), async (req, res) => {
@@ -609,7 +649,7 @@ export function ordersRouter(db: PrismaClient): Router {
         before,
       });
     });
-    res.json({ data: (await respond(id)).pics });
+    res.json({ data: (await respond(id, req)).pics });
   });
 
   // ---------- Kalender stok keluar / kembali ----------

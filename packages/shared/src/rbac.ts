@@ -27,6 +27,8 @@ export const CAPABILITIES = [
   'order.read',
   'order.write',
   'order.approve',
+  /** Melihat harga/total/borongan pesanan; gudang tidak memilikinya. */
+  'order.price.read',
   'availability.read',
   'warehouse.read',
   'warehouse.write',
@@ -58,6 +60,7 @@ export const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
     'receipt.read',
     'order.read',
     'order.write',
+    'order.price.read',
     'availability.read',
     'warehouse.read',
     // Review insiden dan tiket servis (TECHNICAL_SPEC §3: koordinator menangani insiden/penggantian).

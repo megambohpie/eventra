@@ -26,7 +26,8 @@ type SummaryRow = Prisma.OrderGetPayload<{ include: { customer: { select: { name
 
 export const isoDate = (d: Date): string => d.toISOString().slice(0, 10);
 
-export function toSummaryDto(o: SummaryRow): OrderSummaryDto {
+/** `showPrices` wajib eksplisit: pemanggil menentukan dari capability `order.price.read` (gudang tanpa harga). */
+export function toSummaryDto(o: SummaryRow, showPrices: boolean): OrderSummaryDto {
   const startDate = isoDate(o.startDate);
   const endDate = isoDate(o.endDate);
   return {
@@ -39,8 +40,11 @@ export function toSummaryDto(o: SummaryRow): OrderSummaryDto {
     endDate,
     days: rentalDays(startDate, endDate),
     eventLocation: o.eventLocation,
-    subtotal: Number(o.subtotal),
-    depositTotal: Number(o.depositTotal),
+    subtotal: showPrices ? Number(o.subtotal) : 0,
+    depositTotal: showPrices ? Number(o.depositTotal) : 0,
+    pricingMode: o.pricingMode,
+    lumpTotal: showPrices && o.lumpTotal != null ? Number(o.lumpTotal) : null,
+    pricesHidden: !showPrices,
     holdExpiresAt: o.holdExpiresAt?.toISOString() ?? null,
     createdAt: o.createdAt.toISOString(),
   };
@@ -68,7 +72,7 @@ export async function loadOrder(db: Db, id: string): Promise<OrderRow> {
   return order;
 }
 
-export async function toOrderDto(db: Db, o: OrderRow): Promise<OrderDto> {
+export async function toOrderDto(db: Db, o: OrderRow, showPrices: boolean): Promise<OrderDto> {
   const plans = await planItems(
     db,
     o.items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
@@ -88,7 +92,11 @@ export async function toOrderDto(db: Db, o: OrderRow): Promise<OrderDto> {
   const names = new Map(users.map((u) => [u.id, u.name]));
 
   return {
-    ...toSummaryDto(o),
+    ...toSummaryDto(o, showPrices),
+    listSubtotal: showPrices
+      ? o.items.reduce((n, i) => n + Number(i.listPrice) * i.quantity, 0) *
+        rentalDays(isoDate(o.startDate), isoDate(o.endDate))
+      : 0,
     eventAddress: o.eventAddress,
     eventLat: o.eventLat,
     eventLng: o.eventLng,
@@ -96,8 +104,8 @@ export async function toOrderDto(db: Db, o: OrderRow): Promise<OrderDto> {
     confirmedAt: o.confirmedAt?.toISOString() ?? null,
     items: o.items.map((i) => {
       const plan = planById.get(i.productId);
-      const unitPrice = Number(i.unitPrice);
-      const unitDeposit = Number(i.unitDeposit);
+      const unitPrice = showPrices ? Number(i.unitPrice) : 0;
+      const unitDeposit = showPrices ? Number(i.unitDeposit) : 0;
       const days = rentalDays(isoDate(o.startDate), isoDate(o.endDate));
       return {
         id: i.id,
@@ -106,6 +114,7 @@ export async function toOrderDto(db: Db, o: OrderRow): Promise<OrderDto> {
         unitLabel: plan?.unitLabel ?? '',
         quantity: i.quantity,
         unitPrice,
+        listPrice: showPrices ? Number(i.listPrice) : 0,
         unitDeposit,
         lineTotal: unitPrice * i.quantity * days,
         lineDeposit: unitDeposit * i.quantity,
@@ -121,8 +130,8 @@ export async function toOrderDto(db: Db, o: OrderRow): Promise<OrderDto> {
     quotes: o.quotes.map((q) => ({
       id: q.id,
       version: q.version,
-      subtotal: Number(q.subtotal),
-      depositTotal: Number(q.depositTotal),
+      subtotal: showPrices ? Number(q.subtotal) : 0,
+      depositTotal: showPrices ? Number(q.depositTotal) : 0,
       note: q.note,
       createdBy: q.createdBy ? (names.get(q.createdBy) ?? null) : null,
       createdAt: q.createdAt.toISOString(),
@@ -138,10 +147,14 @@ export async function toOrderDto(db: Db, o: OrderRow): Promise<OrderDto> {
   };
 }
 
-/** Subtotal sewa = harga × qty × hari; deposit tidak dikalikan hari. */
+/**
+ * Subtotal sewa: per baris = harga final × qty × hari; borongan = total borongan apa adanya (sudah
+ * seluruh sewa, tidak dikali hari). Deposit selalu per unit dan tidak dikalikan hari.
+ */
 export function computeTotals(
   items: { quantity: number; unitPrice: bigint; unitDeposit: bigint }[],
   days: number,
+  pricing: { mode: 'LINE' | 'LUMP'; lumpTotal?: bigint | null } = { mode: 'LINE' },
 ): { subtotal: bigint; depositTotal: bigint } {
   let subtotal = 0n;
   let depositTotal = 0n;
@@ -149,6 +162,7 @@ export function computeTotals(
     subtotal += i.unitPrice * BigInt(i.quantity) * BigInt(days);
     depositTotal += i.unitDeposit * BigInt(i.quantity);
   }
+  if (pricing.mode === 'LUMP') subtotal = pricing.lumpTotal ?? 0n;
   return { subtotal, depositTotal };
 }
 

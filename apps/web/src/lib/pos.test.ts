@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cartTotals, clampQty, setCartQty } from './pos';
+import { cartTotals, clampQty, priceDiffPercent, setCartQty } from './pos';
 
 describe('pos', () => {
   it('clampQty: ketikan dibersihkan dan dibatasi stok', () => {
@@ -27,6 +27,7 @@ describe('pos', () => {
       days: 3,
       units: 3,
       subtotal: 2 * 100_000 * 3 + 10_000 * 3,
+      listSubtotal: 2 * 100_000 * 3 + 10_000 * 3,
       deposit: 100_000,
       areaM2: 0,
     });
@@ -47,5 +48,38 @@ describe('pos', () => {
     );
     // 8 × 0,5 + 4 × 0,25 = 5 m²; 5 m² × 500.000 × 2 hari = 5.000.000
     expect(totals).toMatchObject({ areaM2: 5, subtotal: 5_000_000, units: 42 });
+  });
+
+  it('cartTotals: harga negosiasi per baris; default tetap sebagai pembanding', () => {
+    const products = [
+      { id: 'a', unitPrice: 100_000, deposit: 0, widthCm: null, heightCm: null },
+      { id: 'b', unitPrice: 10_000, deposit: 0, widthCm: null, heightCm: null },
+    ];
+    const t = cartTotals(products, { a: 2, b: 1 }, '2026-12-03', '2026-12-04', {
+      prices: { a: 80_000 },
+    });
+    expect(t.subtotal).toBe((2 * 80_000 + 10_000) * 2);
+    expect(t.listSubtotal).toBe((2 * 100_000 + 10_000) * 2);
+  });
+
+  it('cartTotals: borongan menggantikan subtotal tanpa dikali hari; deposit tetap per unit', () => {
+    const products = [
+      { id: 'a', unitPrice: 100_000, deposit: 25_000, widthCm: null, heightCm: null },
+    ];
+    const t = cartTotals(products, { a: 2 }, '2026-12-03', '2026-12-07', {
+      prices: { a: 1 },
+      lumpTotal: 3_000_000,
+    });
+    expect(t).toMatchObject({
+      subtotal: 3_000_000,
+      listSubtotal: 2 * 100_000 * 5,
+      deposit: 50_000,
+    });
+  });
+
+  it('priceDiffPercent: diskon negatif, markup positif, tanpa pembanding null', () => {
+    expect(priceDiffPercent(80_000, 100_000)).toBe(-20);
+    expect(priceDiffPercent(110_000, 100_000)).toBe(10);
+    expect(priceDiffPercent(5, 0)).toBeNull();
   });
 });

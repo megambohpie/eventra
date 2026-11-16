@@ -28,28 +28,60 @@ interface Priced {
   heightCm: number | null;
 }
 
+/** Harga hasil negosiasi (per produk, rupiah per unit per hari) dan/atau total borongan. */
+export interface CartPricing {
+  /** Override harga final per unit per hari; produk tanpa entri memakai harga default. */
+  prices?: Record<string, number>;
+  /** Total borongan seluruh sewa (tidak dikali hari); bila ada, menggantikan harga per baris. */
+  lumpTotal?: number | null;
+}
+
+/** Selisih harga final terhadap harga default dalam persen bulat (negatif = diskon); null bila default 0. */
+export function priceDiffPercent(final: number, list: number): number | null {
+  if (list <= 0) return null;
+  return Math.round(((final - list) / list) * 100);
+}
+
 /**
  * Perkiraan total (harga satuan × qty × hari; deposit tidak dikali hari) — sama dengan aturan
- * backend. `areaM2` = total luas barang berukuran di keranjang (untuk layar LED).
+ * backend. `areaM2` = total luas barang berukuran di keranjang (untuk layar LED). `listSubtotal` =
+ * total menurut harga default (pembanding negosiasi). Borongan menggantikan subtotal apa adanya.
  */
 export function cartTotals(
   products: Priced[],
   cart: Cart,
   startDate: string,
   endDate: string,
-): { days: number; units: number; subtotal: number; deposit: number; areaM2: number } {
+  pricing: CartPricing = {},
+): {
+  days: number;
+  units: number;
+  subtotal: number;
+  listSubtotal: number;
+  deposit: number;
+  areaM2: number;
+} {
   const days = Math.max(0, rentalDays(startDate, endDate));
   let units = 0;
   let subtotal = 0;
+  let listSubtotal = 0;
   let deposit = 0;
   let area = 0;
   for (const p of products) {
     const qty = cart[p.id] ?? 0;
     if (qty <= 0) continue;
     units += qty;
-    subtotal += p.unitPrice * qty * days;
+    listSubtotal += p.unitPrice * qty * days;
+    subtotal += (pricing.prices?.[p.id] ?? p.unitPrice) * qty * days;
     deposit += p.deposit * qty;
     area += (unitAreaM2(p) ?? 0) * qty;
   }
-  return { days, units, subtotal, deposit, areaM2: Math.round(area * 100) / 100 };
+  return {
+    days,
+    units,
+    subtotal: pricing.lumpTotal != null ? pricing.lumpTotal : subtotal,
+    listSubtotal,
+    deposit,
+    areaM2: Math.round(area * 100) / 100,
+  };
 }

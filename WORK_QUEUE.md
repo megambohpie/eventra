@@ -154,6 +154,8 @@
 
 - [x] Kategori produk opsional (permintaan owner, 14 Nov 2026): produk boleh tanpa kategori. Migrasi aditif `20261114200000_product_category_optional` (`products.category_id` nullable); `ProductDto.category`/`categoryId` dan `AssetProductRef.category`/`AssetGroupDto.categoryName` kini dapat `null`. Form Produk: opsi "Tanpa kategori" (default kosong untuk produk baru), peringatan "buat kategori dulu" dihapus.
 
+- [x] Harga negosiasi dan borongan (permintaan owner, 16 Nov 2026): harga produk hanya **harga default/pembanding**; admin menetapkan harga final per baris di POS (tanpa persetujuan pelanggan) atau memilih **harga borongan** satu total untuk seluruh pesanan (tidak dikali hari). Migrasi aditif `20261116090000_order_negotiated_lump_price`: `orders.pricing_mode`/`lump_total` (+CHECK), `order_items.list_price` (diisi dari harga lama untuk pesanan existing). `orderInputSchema` menerima `pricingMode`, `lumpTotal`, dan `items[].unitPrice`; invoice menyalin total borongan; penawaran ulang mempertahankan harga negosiasi. Capability baru `order.price.read` (Owner, Admin, Koordinator): Gudang menerima DTO `pricesHidden` tanpa nominal (detail, daftar, dan ringkasan pesanan di modul gudang). POS: input harga per baris (`CurrencyInput`) dengan selisih % terhadap default, toggle borongan, pembanding total default. Aturan batas gudang (luas m², jumlah scan ≤ pesanan) tidak berubah dan sudah ada sejak item videotron per meter. Test: `orderPricing.test.ts` (5), `pos.test.ts`.
+
 **Selesai bila:** pesanan dapat dibuat lewat halaman Pesanan maupun kalender; stok live tampil per produk; test API/web lulus.
 
 ## Backlog Setelah MVP
