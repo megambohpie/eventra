@@ -5,6 +5,7 @@ export interface LabelData {
   code: string;
   qrToken: string;
   productName: string;
+  categoryName?: string | null;
   serial: string | null;
 }
 
@@ -19,7 +20,7 @@ const LABEL_W = 63 * MM;
 const LABEL_H = 33 * MM;
 const MARGIN_X = (210 * MM - COLS * LABEL_W) / 2;
 const MARGIN_Y = (297 * MM - ROWS * LABEL_H) / 2;
-const QR_SIZE = 26 * MM;
+const QR_SIZE = 24 * MM;
 
 /** Tanggal + jam cetak (WIB) untuk label, mis. "14/11/2026 09:15". */
 export const formatPrintedAt = (date: Date): string =>
@@ -85,19 +86,39 @@ export async function buildLabelsPdf(
     const textX = x + 4 * MM + QR_SIZE + 2 * MM;
     const textW = LABEL_W - (textX - x) - 3 * MM;
     doc.fillColor('#000000').font('Helvetica-Bold').fontSize(10);
-    doc.text(label.code, textX, y + 8 * MM, { width: textW, lineBreak: false });
-    doc.font('Helvetica').fontSize(7.5);
-    doc.text(label.productName, textX, y + 13 * MM, { width: textW, height: 16, ellipsis: true });
+    doc.text(label.code, textX, y + 4 * MM, { width: textW, lineBreak: false });
+    let nextY = y + 8 * MM;
+    if (label.categoryName) {
+      doc.font('Helvetica-Oblique').fontSize(6.5).fillColor('#444444');
+      doc.text(label.categoryName, textX, nextY, {
+        width: textW,
+        lineBreak: false,
+        ellipsis: true,
+      });
+      nextY += 3.2 * MM;
+    }
+    // Nama produk tidak dipotong: dibungkus beberapa baris, font mengecil bila masih terlalu panjang.
+    const nameBottom = y + (label.serial ? 23 : 26) * MM;
+    const nameMaxH = nameBottom - nextY;
+    let nameSize = 7.5;
+    doc.font('Helvetica').fillColor('#000000');
+    while (
+      nameSize > 4.5 &&
+      doc.fontSize(nameSize).heightOfString(label.productName, { width: textW }) > nameMaxH
+    ) {
+      nameSize -= 0.5;
+    }
+    doc.fontSize(nameSize).text(label.productName, textX, nextY, { width: textW });
     if (label.serial) {
       doc.fontSize(7).fillColor('#444444');
-      doc.text(`SN ${label.serial}`, textX, y + 21 * MM, {
+      doc.text(`SN ${label.serial}`, textX, y + 23.5 * MM, {
         width: textW,
         lineBreak: false,
         ellipsis: true,
       });
     }
     doc.font('Helvetica').fontSize(6.5).fillColor('#444444');
-    doc.text(printedText, textX, y + 25.5 * MM, { width: textW, lineBreak: false });
+    doc.text(printedText, textX, y + 27 * MM, { width: textW, lineBreak: false });
   });
 
   doc.end();

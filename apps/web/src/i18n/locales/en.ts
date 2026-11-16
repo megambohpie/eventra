@@ -380,6 +380,7 @@ export const en = {
       invalidDates: 'End date must be on or after the start date.',
       category: 'Category',
       allCategories: 'All categories',
+      allStockModes: 'All stock types',
       stock: 'Stock: {{count}}',
       soldOut: 'Sold out',
       unlimited: 'Unlimited',

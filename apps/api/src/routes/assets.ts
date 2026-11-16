@@ -337,7 +337,7 @@ export function assetsRouter(db: PrismaClient): Router {
     const ids = labelIdsSchema.parse(req.query.ids);
     const assets = await db.asset.findMany({
       where: { id: { in: ids } },
-      include: { product: { select: { name: true } } },
+      include: { product: { select: { name: true, category: { select: { name: true } } } } },
     });
     const byId = new Map(assets.map((a) => [a.id, a]));
     const ordered = ids.map((id) => byId.get(id));
@@ -346,7 +346,15 @@ export function assetsRouter(db: PrismaClient): Router {
     const pdf = await buildLabelsPdf(
       ordered.flatMap((a) =>
         a
-          ? [{ code: a.code, qrToken: a.qrToken, productName: a.product.name, serial: a.serial }]
+          ? [
+              {
+                code: a.code,
+                qrToken: a.qrToken,
+                productName: a.product.name,
+                categoryName: a.product.category?.name ?? null,
+                serial: a.serial,
+              },
+            ]
           : [],
       ),
       printedAt,

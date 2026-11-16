@@ -515,13 +515,47 @@
     @apply lg:sticky lg:top-4;
   }
   .ev-pos__toolbar {
-    @apply grid gap-2 sm:grid-cols-2;
+    @apply grid gap-2 sm:grid-cols-3;
+  }
+  .ev-pos__groups {
+    @apply grid gap-5;
+  }
+  .ev-pos__group {
+    @apply grid gap-2;
+  }
+  .ev-pos__group-title {
+    @apply flex items-center gap-2 border-l-8 pl-2 text-base font-bold;
+  }
+  .ev-pos__group-count {
+    @apply badge badge-sm badge-ghost;
+  }
+  /* Warna per jenis stok (sengaja tegas berbeda): terlacak = biru, tak terbatas = oranye, per meter = ungu. */
+  .ev-pos__group[data-mode='TRACKED'] .ev-pos__group-title {
+    @apply border-primary text-primary;
+  }
+  .ev-pos__group[data-mode='UNLIMITED'] .ev-pos__group-title {
+    @apply border-warning text-warning;
+  }
+  .ev-pos__group[data-mode='AREA_POOL'] .ev-pos__group-title {
+    border-color: var(--ev-mode-pool);
+    color: var(--ev-mode-pool);
   }
   .ev-pos__grid {
     @apply grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4;
   }
   .ev-pos__card {
     @apply flex flex-col overflow-hidden rounded-2xl border border-base-300 bg-base-100 transition-colors;
+  }
+  .ev-pos__card[data-mode='TRACKED'] {
+    @apply border-t-4 border-t-primary;
+  }
+  .ev-pos__card[data-mode='UNLIMITED'] {
+    @apply border-t-4 border-t-warning bg-warning/10;
+  }
+  .ev-pos__card[data-mode='AREA_POOL'] {
+    border-top-width: 4px;
+    border-top-color: var(--ev-mode-pool);
+    background-color: color-mix(in oklab, var(--ev-mode-pool) 10%, transparent);
   }
   .ev-pos__card[data-selected='true'] {
     @apply border-primary bg-primary/5 ring-1 ring-primary;
@@ -545,10 +579,13 @@
     @apply mt-auto pt-1;
   }
   .ev-pos__qty {
-    @apply flex items-center justify-between gap-1 border-t border-base-300 p-1;
+    @apply grid grid-cols-[2rem_minmax(0,1fr)_2rem] items-center gap-1 border-t border-base-300 p-1.5;
+  }
+  .ev-pos__qty .btn {
+    @apply h-8 min-h-8 w-8 min-w-8 p-0;
   }
   .ev-pos__qty-input {
-    @apply w-14 text-center;
+    @apply w-full min-w-0 px-1 text-center;
   }
   .ev-pos__lines {
     @apply grid gap-1 text-sm;

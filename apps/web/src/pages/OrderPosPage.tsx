@@ -13,9 +13,11 @@ import {
 import {
   MAX_ITEM_QUANTITY,
   rentalDays,
+  STOCK_MODES,
   type LatLng,
   type OrderDto,
   type ProductDto,
+  type StockMode,
 } from '@eventra/shared';
 import { api } from '@/api';
 import { CustomerModal } from '@/components/customers/CustomerModal';
@@ -85,6 +87,7 @@ function PosForm({ order, initialStart, products, customers, reloadCustomers }: 
   );
   const [q, setQ] = useState('');
   const [categoryId, setCategoryId] = useState('');
+  const [stockFilter, setStockFilter] = useState<StockMode | ''>('');
   const [newCustomer, setNewCustomer] = useState(false);
   const [saving, setSaving] = useState(false);
   const [stockState, setStockState] = useState<{ key: string; stock: StockMap } | null>(null);
@@ -122,8 +125,14 @@ function PosForm({ order, initialStart, products, customers, reloadCustomers }: 
   const visible = products.filter(
     (p) =>
       (!categoryId || p.categoryId === categoryId) &&
+      (!stockFilter || p.stockMode === stockFilter) &&
       (!q.trim() || p.name.toLowerCase().includes(q.trim().toLowerCase())),
   );
+  // Kelompokkan per jenis stok (urutan tetap) agar ketiganya mudah dibedakan.
+  const groups = STOCK_MODES.map((mode) => ({
+    mode,
+    items: visible.filter((p) => p.stockMode === mode),
+  })).filter((g) => g.items.length > 0);
 
   const totals = cartTotals(products, cart, startDate, endDate);
   const cartLines = products.filter((p) => (cart[p.id] ?? 0) > 0);
@@ -216,83 +225,105 @@ function PosForm({ order, initialStart, products, customers, reloadCustomers }: 
             onChange={setCategoryId}
             options={[{ value: '', label: t('orders.pos.allCategories') }, ...categories]}
           />
+          <SearchSelect
+            ariaLabel={t('products.stockModeLabel')}
+            value={stockFilter}
+            onChange={(v) => setStockFilter(v as StockMode | '')}
+            options={[
+              { value: '', label: t('orders.pos.allStockModes') },
+              ...STOCK_MODES.map((m) => ({ value: m, label: t(`products.stockModes.${m}`) })),
+            ]}
+          />
         </div>
 
-        <div className="ev-pos__grid">
-          {visible.map((p) => {
-            const qty = cart[p.id] ?? 0;
-            const max = stock?.[p.id];
-            const soldOut = max !== undefined && max <= 0;
-            return (
-              <div
-                key={p.id}
-                className="ev-pos__card"
-                data-selected={qty > 0}
-                data-soldout={soldOut}
-              >
-                <button
-                  type="button"
-                  className="ev-pos__pick"
-                  disabled={soldOut || (max !== undefined && qty >= max)}
-                  onClick={() => setQty(p.id, qty + 1)}
-                >
-                  <span className="ev-pos__thumb">
-                    <ProductThumb productId={p.id} hasPhoto={p.hasPhoto} />
-                  </span>
-                  <span className="ev-pos__name">{p.name}</span>
-                  <span className="ev-pos__price">
-                    {p.unitPrice === 0
-                      ? t('orders.pos.included')
-                      : `${formatRupiah(p.unitPrice)} / ${p.unitLabel}`}
-                    {p.pricingUnit === 'AREA' && (
-                      <span className="ev-table__hint ev-table__hint--block">
-                        {t('orders.pos.perArea', { price: formatRupiah(p.price) })}
-                      </span>
-                    )}
-                  </span>
-                  <span className="ev-pos__stock">
-                    {max === undefined ? (
-                      <span className="ev-dots" />
-                    ) : (
-                      <Badge variant={soldOut ? 'error' : 'success'}>
-                        {soldOut
-                          ? t('orders.pos.soldOut')
-                          : p.stockMode === 'UNLIMITED' || max >= MAX_ITEM_QUANTITY
-                            ? t('orders.pos.unlimited')
-                            : t('orders.pos.stock', { count: max })}
-                      </Badge>
-                    )}
-                  </span>
-                </button>
-                {qty > 0 && (
-                  <div className="ev-pos__qty">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      icon={mdiMinus}
-                      aria-label={t('orders.pos.decrease')}
-                      onClick={() => setQty(p.id, qty - 1)}
-                    />
-                    <input
-                      className="input input-sm ev-control ev-pos__qty-input"
-                      inputMode="numeric"
-                      aria-label={t('orders.quantity')}
-                      value={qty}
-                      onChange={(e) => setQty(p.id, e.target.value)}
-                    />
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      icon={mdiPlus}
-                      aria-label={t('orders.pos.increase')}
-                      disabled={max !== undefined && qty >= max}
-                      onClick={() => setQty(p.id, qty + 1)}
-                    />
-                  </div>
-                )}
+        <div className="ev-pos__groups">
+          {groups.map((group) => (
+            <section key={group.mode} className="ev-pos__group" data-mode={group.mode}>
+              {stockFilter === '' && (
+                <h3 className="ev-pos__group-title">
+                  <span>{t(`products.stockModes.${group.mode}`)}</span>
+                  <span className="ev-pos__group-count">{group.items.length}</span>
+                </h3>
+              )}
+              <div className="ev-pos__grid">
+                {group.items.map((p) => {
+                  const qty = cart[p.id] ?? 0;
+                  const max = stock?.[p.id];
+                  const soldOut = max !== undefined && max <= 0;
+                  return (
+                    <div
+                      key={p.id}
+                      className="ev-pos__card"
+                      data-selected={qty > 0}
+                      data-soldout={soldOut}
+                      data-mode={p.stockMode}
+                    >
+                      <button
+                        type="button"
+                        className="ev-pos__pick"
+                        disabled={soldOut || (max !== undefined && qty >= max)}
+                        onClick={() => setQty(p.id, qty + 1)}
+                      >
+                        <span className="ev-pos__thumb">
+                          <ProductThumb productId={p.id} hasPhoto={p.hasPhoto} />
+                        </span>
+                        <span className="ev-pos__name">{p.name}</span>
+                        <span className="ev-pos__price">
+                          {p.unitPrice === 0
+                            ? t('orders.pos.included')
+                            : `${formatRupiah(p.unitPrice)} / ${p.unitLabel}`}
+                          {p.pricingUnit === 'AREA' && (
+                            <span className="ev-table__hint ev-table__hint--block">
+                              {t('orders.pos.perArea', { price: formatRupiah(p.price) })}
+                            </span>
+                          )}
+                        </span>
+                        <span className="ev-pos__stock">
+                          {max === undefined ? (
+                            <span className="ev-dots" />
+                          ) : (
+                            <Badge variant={soldOut ? 'error' : 'success'}>
+                              {soldOut
+                                ? t('orders.pos.soldOut')
+                                : p.stockMode === 'UNLIMITED' || max >= MAX_ITEM_QUANTITY
+                                  ? t('orders.pos.unlimited')
+                                  : t('orders.pos.stock', { count: max })}
+                            </Badge>
+                          )}
+                        </span>
+                      </button>
+                      {qty > 0 && (
+                        <div className="ev-pos__qty">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            icon={mdiMinus}
+                            aria-label={t('orders.pos.decrease')}
+                            onClick={() => setQty(p.id, qty - 1)}
+                          />
+                          <input
+                            className="input input-sm ev-control ev-pos__qty-input"
+                            inputMode="numeric"
+                            aria-label={t('orders.quantity')}
+                            value={qty}
+                            onChange={(e) => setQty(p.id, e.target.value)}
+                          />
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            icon={mdiPlus}
+                            aria-label={t('orders.pos.increase')}
+                            disabled={max !== undefined && qty >= max}
+                            onClick={() => setQty(p.id, qty + 1)}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
+            </section>
+          ))}
           {visible.length === 0 && <p className="ev-hint">{t('common.empty')}</p>}
         </div>
       </PageCard>

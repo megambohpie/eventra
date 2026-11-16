@@ -383,6 +383,7 @@ export const id: Messages<typeof en> = {
       invalidDates: 'Tanggal selesai harus sama atau setelah tanggal mulai.',
       category: 'Kategori',
       allCategories: 'Semua kategori',
+      allStockModes: 'Semua jenis stok',
       stock: 'Stok: {{count}}',
       soldOut: 'Habis',
       unlimited: 'Tak terbatas',
