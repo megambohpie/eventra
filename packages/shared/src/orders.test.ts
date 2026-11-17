@@ -37,7 +37,9 @@ describe('state machine pesanan', () => {
     expect(canTransitionOrder('DRAFT', 'PENDING_REVIEW')).toBe(true);
     expect(canTransitionOrder('QUOTED', 'AWAITING_PAYMENT')).toBe(true);
     expect(canTransitionOrder('AWAITING_PAYMENT', 'CONFIRMED')).toBe(true);
-    expect(canTransitionOrder('DRAFT', 'CONFIRMED')).toBe(false);
+    // Draft boleh langsung dikonfirmasi (tanpa tahap review).
+    expect(canTransitionOrder('DRAFT', 'CONFIRMED')).toBe(true);
+    expect(canTransitionOrder('DRAFT', 'COMPLETED')).toBe(false);
     for (const s of ['COMPLETED', 'REJECTED', 'CANCELLED', 'EXPIRED'] as const) {
       expect(ORDER_TRANSITIONS[s]).toEqual([]);
     }

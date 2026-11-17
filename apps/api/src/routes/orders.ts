@@ -52,6 +52,7 @@ import {
   toOrderDto,
   toSummaryDto,
 } from '../orders/service';
+import { pickupDeadlinePassed } from '../orders/noShow';
 
 type Tx = Prisma.TransactionClient;
 
@@ -172,6 +173,7 @@ export function ordersRouter(db: PrismaClient): Router {
       const totals = computeTotals(priced, rentalDays(input.startDate, input.endDate), {
         mode: input.pricingMode,
         lumpTotal: input.lumpTotal == null ? null : BigInt(input.lumpTotal),
+        depositOverride: input.depositOverride == null ? null : BigInt(input.depositOverride),
       });
       const start = dateOnlyToDate(input.startDate);
       const order = await tx.order.create({
@@ -189,6 +191,7 @@ export function ordersRouter(db: PrismaClient): Router {
           depositTotal: totals.depositTotal,
           pricingMode: input.pricingMode,
           lumpTotal: input.lumpTotal == null ? null : BigInt(input.lumpTotal),
+          depositOverride: input.depositOverride == null ? null : BigInt(input.depositOverride),
           createdBy: currentUser(req).id,
           items: { create: priced },
         },
@@ -218,6 +221,7 @@ export function ordersRouter(db: PrismaClient): Router {
       const totals = computeTotals(priced, rentalDays(input.startDate, input.endDate), {
         mode: input.pricingMode,
         lumpTotal: input.lumpTotal == null ? null : BigInt(input.lumpTotal),
+        depositOverride: input.depositOverride == null ? null : BigInt(input.depositOverride),
       });
       await tx.orderItem.deleteMany({ where: { orderId: id } });
       const updated = await tx.order.update({
@@ -235,6 +239,7 @@ export function ordersRouter(db: PrismaClient): Router {
           depositTotal: totals.depositTotal,
           pricingMode: input.pricingMode,
           lumpTotal: input.lumpTotal == null ? null : BigInt(input.lumpTotal),
+          depositOverride: input.depositOverride == null ? null : BigInt(input.depositOverride),
           items: { create: priced },
         },
       });
@@ -321,6 +326,7 @@ export function ordersRouter(db: PrismaClient): Router {
       const totals = computeTotals(priced, rentalDays(start, end), {
         mode: order.pricingMode,
         lumpTotal: order.lumpTotal,
+        depositOverride: order.depositOverride,
       });
       await tx.orderItem.deleteMany({ where: { orderId: id } });
       await tx.orderItem.createMany({ data: priced.map((p) => ({ ...p, orderId: id })) });
@@ -403,15 +409,25 @@ export function ordersRouter(db: PrismaClient): Router {
     const id = parseId(req.params.id);
     orderNoteSchema.parse(req.body ?? {});
     const now = new Date();
+    const target = await db.order.findUnique({ where: { id }, select: { startDate: true } });
+    if (target && pickupDeadlinePassed(target.startDate, now)) {
+      throw new HttpError(
+        409,
+        'ORDER_DATE_PASSED',
+        'Tanggal sewa sudah lewat; pesanan tidak dapat dikonfirmasi',
+      );
+    }
     if (await expireOrderIfDue(db, id, now)) {
       throw new HttpError(409, 'HOLD_EXPIRED', 'Hold pembayaran sudah kadaluarsa');
     }
     await db.$transaction(async (tx) => {
       const order = await loadOrder(tx, id);
+      // Draft boleh langsung dikonfirmasi (tanpa tahap review); pelanggan harus masih aktif.
+      if (order.status === 'DRAFT') await assertCustomerActive(tx, order.customerId);
       const from = await claimTransition(
         tx,
         id,
-        ['PENDING_REVIEW', 'QUOTED', 'AWAITING_PAYMENT'],
+        ['DRAFT', 'PENDING_REVIEW', 'QUOTED', 'AWAITING_PAYMENT'],
         'CONFIRMED',
         {
           confirmedAt: now,

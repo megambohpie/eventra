@@ -3,12 +3,15 @@ import type {
   IncidentCloseInput,
   IncidentCreateInput,
   IncidentDto,
+  DeliveryNoteReportDto,
   IncidentListQuery,
+  IncidentPhotoKind,
   IncidentReviewInput,
   IncidentSummaryDto,
   NotificationListDto,
   Page,
   PickScanInput,
+  ReportableOrderDto,
   ReplacementCancelInput,
   ReplacementListQuery,
   ReplacementReceiveInput,
@@ -28,14 +31,30 @@ type Envelope<T> = { data: T };
 
 export const listIncidents = async (c: AxiosInstance, params: IncidentListQuery = {}) =>
   (await c.get<Envelope<Page<IncidentSummaryDto>>>('/incidents', { params })).data.data;
+/** Pesanan aktif yang boleh dilaporkan kerusakannya oleh pengguna saat ini. */
+export const listReportableOrders = async (c: AxiosInstance) =>
+  (await c.get<Envelope<ReportableOrderDto[]>>('/incidents/reportable-orders')).data.data;
+/** Surat jalan (dari token QR) beserta aset yang dapat dilaporkan. */
+export const getDeliveryNoteReport = async (c: AxiosInstance, token: string) =>
+  (
+    await c.get<Envelope<DeliveryNoteReportDto>>(
+      `/incidents/delivery-note/${encodeURIComponent(token)}`,
+    )
+  ).data.data;
 export const getIncident = async (c: AxiosInstance, id: string) =>
   (await c.get<Envelope<IncidentDto>>(`/incidents/${id}`)).data.data;
 export const createIncident = async (c: AxiosInstance, input: IncidentCreateInput) =>
   (await c.post<Envelope<IncidentDto>>('/incidents', input)).data.data;
 /** Unggah foto (JPEG/PNG) sebagai body mentah; backend memvalidasi tipe, ukuran, dan batas 5. */
-export const uploadIncidentPhoto = async (c: AxiosInstance, id: string, file: UploadFile) =>
+export const uploadIncidentPhoto = async (
+  c: AxiosInstance,
+  id: string,
+  file: UploadFile,
+  kind: IncidentPhotoKind,
+) =>
   (
     await c.post<Envelope<IncidentDto>>(`/incidents/${id}/photos`, uploadBody(file), {
+      params: { kind },
       headers: { 'Content-Type': file.type },
     })
   ).data.data;

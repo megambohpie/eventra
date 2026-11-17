@@ -34,6 +34,8 @@ export interface CartPricing {
   prices?: Record<string, number>;
   /** Total borongan seluruh sewa (tidak dikali hari); bila ada, menggantikan harga per baris. */
   lumpTotal?: number | null;
+  /** Deposit hasil negosiasi (seluruh pesanan, tidak dikali hari); null/kosong = deposit default per unit. */
+  depositOverride?: number | null;
 }
 
 /** Selisih harga final terhadap harga default dalam persen bulat (negatif = diskon); null bila default 0. */
@@ -59,6 +61,8 @@ export function cartTotals(
   subtotal: number;
   listSubtotal: number;
   deposit: number;
+  /** Deposit menurut aturan default (pembanding negosiasi). */
+  listDeposit: number;
   areaM2: number;
 } {
   const days = Math.max(0, rentalDays(startDate, endDate));
@@ -81,7 +85,8 @@ export function cartTotals(
     units,
     subtotal: pricing.lumpTotal != null ? pricing.lumpTotal : subtotal,
     listSubtotal,
-    deposit,
+    deposit: pricing.depositOverride != null ? pricing.depositOverride : deposit,
+    listDeposit: deposit,
     areaM2: Math.round(area * 100) / 100,
   };
 }

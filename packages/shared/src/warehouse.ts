@@ -123,7 +123,10 @@ export const pickListListQuerySchema = z.object({
 });
 export type PickListListQuery = z.input<typeof pickListListQuerySchema>;
 
-/** PICK boleh lewat QR atau kode aset (pilih manual); VERIFY wajib QR (bukti scan). */
+/**
+ * PICK boleh lewat QR atau kode aset (pilih manual). VERIFY idealnya QR (bukti scan); kode aset
+ * hanya diterima server untuk pengguna ber-capability `scan.manual` (dicatat sebagai MANUAL).
+ */
 export const pickScanSchema = z
   .object({
     action: z.enum(['PICK', 'VERIFY']),
@@ -135,19 +138,21 @@ export const pickScanSchema = z
   .refine((v) => Boolean(v.qrToken) !== Boolean(v.assetCode), {
     path: ['qrToken'],
     message: 'Isi tepat satu: token QR atau kode aset',
-  })
-  .refine((v) => v.action === 'PICK' || Boolean(v.qrToken), {
-    path: ['qrToken'],
-    message: 'Verifikasi akhir wajib memindai QR',
   });
 export type PickScanInput = z.input<typeof pickScanSchema>;
 
-export const returnScanSchema = z.object({
-  qrToken,
-  condition: z.enum(ASSET_CONDITIONS),
-  note: optionalText(500),
-  locationId: z.uuid().optional(),
-});
+export const returnScanSchema = z
+  .object({
+    qrToken: qrToken.optional(),
+    assetCode: assetCode.optional(),
+    condition: z.enum(ASSET_CONDITIONS),
+    note: optionalText(500),
+    locationId: z.uuid().optional(),
+  })
+  .refine((v) => Boolean(v.qrToken) !== Boolean(v.assetCode), {
+    path: ['qrToken'],
+    message: 'Isi tepat satu: token QR atau kode aset',
+  });
 export type ReturnScanInput = z.input<typeof returnScanSchema>;
 
 export const returnCompleteSchema = z.object({
@@ -193,6 +198,14 @@ export type DocumentReviseInput = z.input<typeof documentReviseSchema>;
 
 // ---------- DTO ----------
 
+/** Ringkasan dokumen serah-terima (versi terbaru) agar bisa dicetak langsung dari daftar. */
+export interface PickListDocumentRefDto {
+  id: string;
+  number: string;
+  version: number;
+  type: HandoverType;
+}
+
 export interface PickListSummaryDto {
   id: string;
   number: string;
@@ -210,6 +223,8 @@ export interface PickListSummaryDto {
   dispatchedAt: string | null;
   returnedAt: string | null;
   createdAt: string;
+  /** Dokumen serah-terima terbaru per nomor (keluar/kembali). */
+  documents: PickListDocumentRefDto[];
 }
 
 export interface PickLineDto {

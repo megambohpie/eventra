@@ -109,6 +109,18 @@ describe('Harga negosiasi dan borongan pada pesanan', () => {
     );
   });
 
+  it('deposit bisa diganti nominal sendiri (termasuk 0) dan tetap lewat ubah draft', async () => {
+    const { speaker, create } = await setup();
+    const items = [{ productId: speaker.id, quantity: 2 }];
+    const order = data<OrderDto>(await create({ depositOverride: 15_000, items }));
+    expect(order).toMatchObject({ depositOverride: 15_000, depositTotal: 15_000 });
+    const free = data<OrderDto>(await create({ depositOverride: 0, items }));
+    expect(free).toMatchObject({ depositOverride: 0, depositTotal: 0 });
+    const normal = data<OrderDto>(await create({ items }));
+    expect(normal.depositOverride).toBeNull();
+    expect(normal.depositTotal).toBeGreaterThan(0);
+  });
+
   it('invoice menyalin total borongan; konfirmasi mengalokasikan stok seperti biasa', async () => {
     const { app, admin, speaker, create } = await setup();
     const order = data<OrderDto>(

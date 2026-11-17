@@ -3,7 +3,11 @@ import { mdiCheckCircle, mdiGavel, mdiSend, mdiSwapHorizontal } from '@mdi/js';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 import { cancelReplacement, getIncident, submitIncident } from '@eventra/api-client';
-import { REVIEWABLE_INCIDENT_STATUSES, type IncidentDto } from '@eventra/shared';
+import {
+  INCIDENT_PHOTO_KINDS,
+  REVIEWABLE_INCIDENT_STATUSES,
+  type IncidentDto,
+} from '@eventra/shared';
 import { api } from '@/api';
 import { useAuth } from '@/auth/AuthProvider';
 import { AssetStatusBadge, ConditionBadge } from '@/components/assets/badges';
@@ -61,7 +65,10 @@ function Detail({ incident, reload }: { incident: IncidentDto; reload: () => voi
     canReview &&
     task !== null &&
     (task.status === 'PENDING_PICK' || task.status === 'PICKED' || task.status === 'VERIFIED');
-  const canSubmit = isDraft && can('incident.report') && incident.photoCount >= 1;
+  const canSubmit =
+    isDraft &&
+    can('incident.report') &&
+    INCIDENT_PHOTO_KINDS.every((k) => incident.photos.some((p) => p.kind === k));
   const canReceive = task?.status === 'DISPATCHED' && can('replacement.receive');
 
   const submit = async () => {
@@ -198,7 +205,7 @@ function Detail({ incident, reload }: { incident: IncidentDto; reload: () => voi
         </h2>
         <IncidentPhotos
           incidentId={incident.id}
-          photoIds={incident.photoIds}
+          photos={incident.photos}
           canUpload={isDraft && can('incident.report')}
           onChanged={reload}
         />

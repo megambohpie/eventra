@@ -19,6 +19,7 @@ import {
   pickScanSchema,
   returnCompleteSchema,
   returnScanSchema,
+  hasCapability,
   type HandoverDocumentDto,
   type OrderSummaryDto,
   type Page,
@@ -29,6 +30,7 @@ import {
   type ScanOutcomeDto,
 } from '@eventra/shared';
 import { writeAudit } from '../audit';
+import { enforcePickupDeadline } from '../orders/noShow';
 import { currentUser, requireCapability } from '../auth/middleware';
 import { HttpError } from '../errors';
 import { parseId } from '../http';
@@ -68,6 +70,15 @@ const PIC_ROLE_LABEL: Record<string, string> = {
 
 export function warehouseRouter(db: PrismaClient): Router {
   const router = Router();
+
+  /** Batas barang keluar sudah lewat → pesanan dibatalkan (no-show) dan gudang tidak boleh menyiapkan lagi. */
+  const gatePickup = async (pickListId: string): Promise<void> => {
+    const pick = await db.pickList.findUnique({
+      where: { id: pickListId },
+      select: { orderId: true },
+    });
+    if (pick) await enforcePickupDeadline(db, pick.orderId);
+  };
 
   const respond = async (id: string): Promise<PickListDto> =>
     toPickListDto(db, await loadPickList(db, id));
@@ -186,6 +197,7 @@ export function warehouseRouter(db: PrismaClient): Router {
   router.post('/pick-lists', requireCapability('warehouse.write'), async (req, res) => {
     const { orderId } = pickListCreateSchema.parse(req.body);
     const user = currentUser(req);
+    await enforcePickupDeadline(db, orderId);
     const id = await db.$transaction(async (tx) => {
       const order = await tx.order.findUnique({ where: { id: orderId }, include: { items: true } });
       if (!order) throw new HttpError(400, 'INVALID_REFERENCE', 'Pesanan tidak ditemukan');
@@ -273,7 +285,12 @@ export function warehouseRouter(db: PrismaClient): Router {
     const id = parseId(req.params.id);
     const input = pickScanSchema.parse(req.body);
     const user = currentUser(req);
+    await gatePickup(id);
     const method: ScanMethod = input.qrToken ? 'QR' : 'MANUAL';
+    // Verifikasi tanpa QR (kode aset diketik) hanya untuk Owner/Admin; dicatat sebagai MANUAL.
+    if (input.action === 'VERIFY' && !input.qrToken && !hasCapability(user.role, 'scan.manual')) {
+      throw new HttpError(403, 'MANUAL_SCAN_FORBIDDEN', 'Verifikasi akhir wajib memindai QR');
+    }
 
     const itemId = await guarded(
       req,
@@ -433,7 +450,7 @@ export function warehouseRouter(db: PrismaClient): Router {
           data: {
             action: 'VERIFY',
             result: 'OK',
-            method: 'QR',
+            method,
             pickListId: id,
             orderId: pick.orderId,
             assetId: asset.id,
@@ -471,6 +488,7 @@ export function warehouseRouter(db: PrismaClient): Router {
     const id = parseId(req.params.id);
     const input = countSchema.parse(req.body);
     const user = currentUser(req);
+    await gatePickup(id);
     await db.$transaction(async (tx) => {
       const orderStatus = await lockPickList(tx, id);
       const pick = await tx.pickList.findUniqueOrThrow({
@@ -625,6 +643,7 @@ export function warehouseRouter(db: PrismaClient): Router {
       const id = parseId(req.params.id);
       const { note } = checkoutSchema.parse(req.body ?? {});
       const user = currentUser(req);
+      await gatePickup(id);
       await db.$transaction(async (tx) => {
         const orderStatus = await lockPickList(tx, id);
         const pick = await tx.pickList.findUniqueOrThrow({
@@ -784,9 +803,13 @@ export function warehouseRouter(db: PrismaClient): Router {
       const id = parseId(req.params.id);
       const input = returnScanSchema.parse(req.body);
       const user = currentUser(req);
+      const method: ScanMethod = input.qrToken ? 'QR' : 'MANUAL';
+      if (!input.qrToken && !hasCapability(user.role, 'scan.manual')) {
+        throw new HttpError(403, 'MANUAL_SCAN_FORBIDDEN', 'Pengembalian wajib memindai QR');
+      }
       const itemId = await guarded(
         req,
-        { action: 'RETURN', method: 'QR', pickListId: id },
+        { action: 'RETURN', method, pickListId: id },
         async (tx) => {
           await lockPickList(tx, id);
           const pick = await tx.pickList.findUniqueOrThrow({
@@ -800,7 +823,7 @@ export function warehouseRouter(db: PrismaClient): Router {
               'Pick list tidak sedang menunggu pengembalian',
             );
           }
-          const asset = await resolveAsset(tx, { qrToken: input.qrToken });
+          const asset = await resolveAsset(tx, input);
           const item = pick.items.find((i) => i.assetId === asset.id);
           if (!item) {
             throw new ScanRejected(
@@ -873,7 +896,7 @@ export function warehouseRouter(db: PrismaClient): Router {
             data: {
               action: 'RETURN',
               result: 'OK',
-              method: 'QR',
+              method,
               pickListId: id,
               orderId: pick.orderId,
               assetId: asset.id,
@@ -1140,7 +1163,13 @@ export function warehouseRouter(db: PrismaClient): Router {
           image: sig ? Buffer.from(sig.image) : null,
         };
       };
+      const token = await db.handoverDocument.findUniqueOrThrow({
+        where: { id },
+        select: { reportToken: true },
+      });
+      const webBase = (process.env.WEB_BASE_URL ?? 'http://localhost:5175').replace(/[/]+$/, '');
       const pdf = await buildHandoverPdf({
+        reportUrl: `${webBase}/r/${token.reportToken}`,
         number: dto.number,
         version: dto.version,
         type: dto.type,

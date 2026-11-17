@@ -277,7 +277,7 @@ export const incidentInclude = {
   order: { select: { number: true, eventLocation: true, customer: { select: { name: true } } } },
   reporter: { select: { name: true } },
   reviewer: { select: { name: true } },
-  photos: { select: { id: true }, orderBy: { createdAt: 'asc' } },
+  photos: { select: { id: true, kind: true }, orderBy: { createdAt: 'asc' } },
   events: { include: { actor: { select: { name: true } } }, orderBy: { createdAt: 'asc' } },
   serviceTickets: { include: ticketInclude, orderBy: { createdAt: 'desc' } },
   replacementTasks: {
@@ -328,6 +328,7 @@ export async function toIncidentDto(
     closeNote: i.closeNote,
     closedAt: i.closedAt?.toISOString() ?? null,
     photoIds: i.photos.map((p) => p.id),
+    photos: i.photos.map((p) => ({ id: p.id, kind: p.kind })),
     events: i.events.map((e) => ({
       id: e.id,
       fromStatus: e.fromStatus,

@@ -4,11 +4,14 @@ import { useTranslation } from 'react-i18next';
 import { ApiRequestError, completeReturn, listLocations, scanReturn } from '@eventra/api-client';
 import { ASSET_CONDITIONS, type AssetCondition, type PickListDto } from '@eventra/shared';
 import { api } from '@/api';
+import { useAuth } from '@/auth/AuthProvider';
 import { Button } from '@/components/ui/Button';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { FormField } from '@/components/ui/FormField';
 import { useResource } from '@/hooks/useResource';
 import { notify } from '@/lib/notifications';
+
+const ASSET_CODE = /^AST-[A-Z0-9-]+$/i;
 
 interface ReturnPanelProps {
   pick: PickListDto;
@@ -18,6 +21,7 @@ interface ReturnPanelProps {
 /** Scan pengembalian (kondisi + catatan) dan penyelesaian pengembalian dengan konfirmasi selisih. */
 export function ReturnPanel({ pick, onChanged }: ReturnPanelProps) {
   const { t } = useTranslation();
+  const { can } = useAuth();
   const input = useRef<HTMLInputElement>(null);
   const [token, setToken] = useState('');
   const [condition, setCondition] = useState<AssetCondition>('GOOD');
@@ -37,7 +41,10 @@ export function ReturnPanel({ pick, onChanged }: ReturnPanelProps) {
     setBusy(true);
     try {
       const out = await scanReturn(api, pick.id, {
-        qrToken: value,
+        // Owner/Admin boleh mengetik kode aset (tercatat MANUAL); lainnya wajib memindai QR.
+        ...(ASSET_CODE.test(value) && can('scan.manual')
+          ? { assetCode: value.toUpperCase() }
+          : { qrToken: value }),
         condition,
         note,
         locationId: locationId || undefined,

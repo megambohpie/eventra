@@ -44,6 +44,8 @@ export function toSummaryDto(o: SummaryRow, showPrices: boolean): OrderSummaryDt
     depositTotal: showPrices ? Number(o.depositTotal) : 0,
     pricingMode: o.pricingMode,
     lumpTotal: showPrices && o.lumpTotal != null ? Number(o.lumpTotal) : null,
+    depositOverride: showPrices && o.depositOverride != null ? Number(o.depositOverride) : null,
+    noShowAt: o.noShowAt?.toISOString() ?? null,
     pricesHidden: !showPrices,
     holdExpiresAt: o.holdExpiresAt?.toISOString() ?? null,
     createdAt: o.createdAt.toISOString(),
@@ -149,12 +151,16 @@ export async function toOrderDto(db: Db, o: OrderRow, showPrices: boolean): Prom
 
 /**
  * Subtotal sewa: per baris = harga final × qty × hari; borongan = total borongan apa adanya (sudah
- * seluruh sewa, tidak dikali hari). Deposit selalu per unit dan tidak dikalikan hari.
+ * seluruh sewa, tidak dikali hari). Deposit default per unit (tidak dikali hari); bila depositOverride terisi, nilai itu dipakai apa adanya.
  */
 export function computeTotals(
   items: { quantity: number; unitPrice: bigint; unitDeposit: bigint }[],
   days: number,
-  pricing: { mode: 'LINE' | 'LUMP'; lumpTotal?: bigint | null } = { mode: 'LINE' },
+  pricing: {
+    mode: 'LINE' | 'LUMP';
+    lumpTotal?: bigint | null;
+    depositOverride?: bigint | null;
+  } = { mode: 'LINE' },
 ): { subtotal: bigint; depositTotal: bigint } {
   let subtotal = 0n;
   let depositTotal = 0n;
@@ -163,6 +169,7 @@ export function computeTotals(
     depositTotal += i.unitDeposit * BigInt(i.quantity);
   }
   if (pricing.mode === 'LUMP') subtotal = pricing.lumpTotal ?? 0n;
+  if (pricing.depositOverride != null) depositTotal = pricing.depositOverride;
   return { subtotal, depositTotal };
 }
 

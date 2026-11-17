@@ -32,6 +32,8 @@ export const CAPABILITIES = [
   'availability.read',
   'warehouse.read',
   'warehouse.write',
+  /** Verifikasi akhir/pengembalian dengan mengetik kode aset (tanpa memindai QR); hanya Owner/Admin, tercatat MANUAL. */
+  'scan.manual',
   'handover.sign',
   'incident.read',
   'incident.report',

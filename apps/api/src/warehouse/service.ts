@@ -38,6 +38,10 @@ export const summaryInclude = {
   items: {
     select: { status: true, productId: true, extra: true, product: { select: sizeSelect } },
   },
+  documents: {
+    select: { id: true, number: true, version: true, type: true },
+    orderBy: [{ number: 'asc' }, { version: 'desc' }],
+  },
 } satisfies Prisma.PickListInclude;
 
 export const pickListInclude = {
@@ -169,6 +173,10 @@ export function toSummaryDto(p: SummaryRow): PickListSummaryDto {
     dispatchedAt: p.dispatchedAt?.toISOString() ?? null,
     returnedAt: p.returnedAt?.toISOString() ?? null,
     createdAt: p.createdAt.toISOString(),
+    // Versi terbaru per nomor dokumen (urutan sudah version desc per nomor).
+    documents: p.documents
+      .filter((d, i, all) => all.findIndex((x) => x.number === d.number) === i)
+      .map((d) => ({ id: d.id, number: d.number, version: d.version, type: d.type })),
   };
 }
 

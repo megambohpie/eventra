@@ -509,16 +509,16 @@
   }
   /* ---------- POS pesanan ---------- */
   .ev-pos {
-    @apply grid items-start gap-4 pb-16 lg:grid-cols-[minmax(0,1fr)_22rem] lg:pb-0;
+    @apply grid items-start gap-4 pb-16 lg:grid-cols-[minmax(0,1fr)_24rem] lg:pb-0;
   }
   .ev-pos__cart {
-    @apply overflow-hidden lg:sticky lg:top-4 lg:max-h-[calc(100dvh-2rem)];
+    @apply overflow-hidden lg:sticky lg:top-20 lg:max-h-[calc(100dvh-6rem)];
   }
   .ev-pos__cart-head {
     @apply from-primary/10 flex items-center justify-between gap-2 bg-gradient-to-r to-transparent px-5 py-4;
   }
   .ev-pos__cart-body {
-    @apply grid flex-1 content-start gap-4 overflow-y-auto px-5 py-4 lg:min-h-0;
+    @apply grid flex-1 grid-cols-1 content-start gap-4 overflow-x-hidden overflow-y-auto px-5 py-4 lg:min-h-0;
   }
   .ev-pos__cart-foot {
     @apply border-base-300 bg-base-200/50 grid gap-3 border-t px-5 py-4;
@@ -533,7 +533,7 @@
     @apply min-h-0 py-3 text-sm font-semibold;
   }
   .ev-pos__section-body {
-    @apply grid gap-3;
+    @apply grid grid-cols-1 gap-3;
   }
   .ev-pos__toolbar {
     @apply grid gap-2 sm:grid-cols-3;
@@ -607,6 +607,9 @@
   }
   .ev-pos__qty-input {
     @apply w-full min-w-0 px-1 text-center;
+  }
+  .ev-pos__duration {
+    @apply bg-primary/10 text-primary w-fit rounded-full px-3 py-1 text-sm;
   }
   .ev-pos__lines {
     @apply grid gap-1 text-sm;
@@ -772,6 +775,18 @@
   }
   .ev-thumbs--start {
     @apply justify-start;
+  }
+  .ev-photo-kinds {
+    @apply grid gap-3;
+  }
+  .ev-photo-kinds__group {
+    @apply grid gap-1 rounded-xl border border-base-300 p-3;
+  }
+  .ev-photo-kinds__group[data-missing='true'] {
+    @apply border-warning/60;
+  }
+  .ev-photo-kinds__label {
+    @apply text-sm font-semibold;
   }
   .ev-thumb--empty {
     @apply inline-flex items-center justify-center bg-base-200 text-base-content/40;

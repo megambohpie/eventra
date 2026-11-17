@@ -1,4 +1,5 @@
 import PDFDocument from 'pdfkit';
+import QRCode from 'qrcode';
 import { docLabel, type HandoverPayload, type HandoverType } from '@eventra/shared';
 
 export interface PdfSignature {
@@ -17,6 +18,8 @@ export interface HandoverPdfInput {
   createdAt: string;
   revisionReason: string | null;
   signatures: PdfSignature[];
+  /** URL halaman lapor kerusakan; dicetak sebagai QR pada surat jalan keluar. */
+  reportUrl?: string;
 }
 
 const MARGIN = 40;
@@ -95,6 +98,26 @@ export async function buildHandoverPdf(input: HandoverPdfInput): Promise<Buffer>
       .font('Helvetica-Oblique')
       .text(`Revisi${input.revisionReason ? `: ${input.revisionReason}` : ''}`, MARGIN, doc.y);
   }
+  if (input.reportUrl && input.type === 'OUT') {
+    const size = 84;
+    const x = PAGE_W - MARGIN - size;
+    const png = await QRCode.toBuffer(input.reportUrl, {
+      width: 300,
+      margin: 1,
+      errorCorrectionLevel: 'M',
+      type: 'png',
+    });
+    doc.image(png, x, MARGIN, { width: size, height: size });
+    doc
+      .font('Helvetica')
+      .fontSize(7)
+      .fillColor('#000000')
+      .text('Scan untuk lapor kerusakan', x - 8, MARGIN + size + 2, {
+        width: size + 16,
+        align: 'center',
+      });
+    doc.y = Math.max(doc.y, MARGIN + size + 22);
+  }
   doc.moveDown(0.8);
 
   // Informasi pesanan
@@ -155,6 +178,31 @@ export async function buildHandoverPdf(input: HandoverPdfInput): Promise<Buffer>
     { title: payload.type === 'OUT' ? 'Waktu keluar' : 'Waktu scan', w: 90 },
     { title: 'Status', w: 56 },
   ];
+  /**
+   * Satu baris tabel: teks panjang dibungkus per sel dan tinggi baris mengikuti sel tertinggi,
+   * sehingga baris tidak saling menimpa. Mengembalikan tinggi baris.
+   */
+  const rowHeight = (cells: string[], widths: number[]): number => {
+    let tallest = 11;
+    cells.forEach((cell, i) => {
+      tallest = Math.max(tallest, doc.heightOfString(cell, { width: (widths[i] ?? 80) - 4 }));
+    });
+    return Math.ceil(tallest) + 5;
+  };
+  const drawRow = (cells: string[], widths: number[], y: number, h: number) => {
+    let x = MARGIN;
+    cells.forEach((cell, i) => {
+      const w = widths[i] ?? 80;
+      doc.text(cell, x + 2, y, { width: w - 4, height: h - 4 });
+      x += w;
+    });
+    doc
+      .moveTo(MARGIN, y + h - 2)
+      .lineTo(MARGIN + CONTENT_W, y + h - 2)
+      .lineWidth(0.3)
+      .stroke('#cccccc');
+    doc.y = y + h;
+  };
   const drawHeader = () => {
     let x = MARGIN;
     const y = doc.y;
@@ -167,12 +215,8 @@ export async function buildHandoverPdf(input: HandoverPdfInput): Promise<Buffer>
     doc.y = y + 18;
   };
   drawHeader();
+  const assetWidths = cols.map((c) => c.w);
   payload.items.forEach((item, index) => {
-    if (doc.y + 16 > PAGE_H - MARGIN - 20) {
-      doc.addPage();
-      drawHeader();
-    }
-    const y = doc.y;
     const cells = [
       String(index + 1),
       item.assetCode,
@@ -182,26 +226,23 @@ export async function buildHandoverPdf(input: HandoverPdfInput): Promise<Buffer>
       fmtTime(item.scannedAt).replace(' WIB', ''),
       STATUS_ID[item.status] ?? item.status,
     ];
-    let x = MARGIN;
     doc
       .font('Helvetica')
       .fontSize(8.5)
       .fillColor(item.status === 'MISSING' ? '#b91c1c' : '#000000');
-    cells.forEach((cell, i) => {
-      const col = cols[i];
-      if (!col) return;
-      doc.text(cell, x + 2, y, { width: col.w - 4, lineBreak: false, ellipsis: true });
-      x += col.w;
-    });
-    doc
-      .moveTo(MARGIN, y + 13)
-      .lineTo(MARGIN + CONTENT_W, y + 13)
-      .lineWidth(0.3)
-      .stroke('#cccccc');
-    doc.y = y + 15;
+    const h = rowHeight(cells, assetWidths);
+    if (doc.y + h > PAGE_H - MARGIN - 20) {
+      doc.addPage();
+      drawHeader();
+      doc
+        .font('Helvetica')
+        .fontSize(8.5)
+        .fillColor(item.status === 'MISSING' ? '#b91c1c' : '#000000');
+    }
+    drawRow(cells, assetWidths, doc.y, h);
     if (item.note) {
       doc.font('Helvetica-Oblique').fontSize(8).fillColor('#555555');
-      doc.text(`   Catatan: ${item.note}`, MARGIN, doc.y);
+      doc.text(`   Catatan: ${item.note}`, MARGIN, doc.y, { width: CONTENT_W });
     }
   });
   doc.fillColor('#000000');
@@ -214,7 +255,7 @@ export async function buildHandoverPdf(input: HandoverPdfInput): Promise<Buffer>
     const titles = isReturn
       ? ['Barang (hitung jumlah)', 'Dibutuhkan', 'Dikeluarkan', 'Kembali', 'Selisih']
       : ['Barang (hitung jumlah)', 'Dibutuhkan', 'Dikeluarkan'];
-    ensure(40 + counted.length * 16);
+    ensure(60);
     doc.moveDown(0.8);
     doc.font('Helvetica-Bold').fontSize(10.5).fillColor('#000000');
     doc.text('Barang tanpa QR (dihitung)', MARGIN, doc.y);
@@ -229,7 +270,6 @@ export async function buildHandoverPdf(input: HandoverPdfInput): Promise<Buffer>
     });
     doc.y = headY + 18;
     for (const line of counted) {
-      const y = doc.y;
       const cells = isReturn
         ? [
             line.productName,
@@ -239,25 +279,13 @@ export async function buildHandoverPdf(input: HandoverPdfInput): Promise<Buffer>
             line.lost === null ? '-' : String(line.lost),
           ]
         : [line.productName, String(line.required), String(line.packed)];
-      let x = MARGIN;
       doc
         .font('Helvetica')
         .fontSize(8.5)
         .fillColor(line.lost && line.lost > 0 ? '#b91c1c' : '#000000');
-      cells.forEach((cell, i) => {
-        doc.text(cell, x + 2, y, {
-          width: (widths[i] ?? 80) - 4,
-          lineBreak: false,
-          ellipsis: true,
-        });
-        x += widths[i] ?? 80;
-      });
-      doc
-        .moveTo(MARGIN, y + 13)
-        .lineTo(MARGIN + CONTENT_W, y + 13)
-        .lineWidth(0.3)
-        .stroke('#cccccc');
-      doc.y = y + 15;
+      const h = rowHeight(cells, widths);
+      if (doc.y + h > PAGE_H - MARGIN - 20) doc.addPage();
+      drawRow(cells, widths, doc.y, h);
     }
     doc.fillColor('#000000');
   }

@@ -475,6 +475,10 @@ model Order {
   pricingMode   OrderPricingMode @default(LINE) @map("pricing_mode")
   // Total borongan (seluruh sewa, tidak dikali hari); terisi hanya bila pricingMode = LUMP. `subtotal` = nilai ini.
   lumpTotal     BigInt?     @map("lump_total")
+  // Deposit hasil negosiasi (menggantikan jumlah deposit per unit); null = deposit default. `depositTotal` = nilai ini bila terisi.
+  depositOverride BigInt?   @map("deposit_override")
+  // Waktu pesanan dibatalkan otomatis karena barang tidak keluar sampai batas (akhir hari sewa pertama); deposit hangus.
+  noShowAt      DateTime?   @map("no_show_at") @db.Timestamptz(3)
   holdExpiresAt DateTime?   @map("hold_expires_at") @db.Timestamptz(3)
   confirmedAt   DateTime?   @map("confirmed_at") @db.Timestamptz(3)
   createdBy     String?     @map("created_by") @db.Uuid
@@ -782,6 +786,8 @@ model HandoverDocument {
   pickListId     String       @map("pick_list_id") @db.Uuid
   payload        Json
   revisionReason String?      @map("revision_reason")
+  // Token acak untuk QR surat jalan (lapor kerusakan oleh tim lapangan); tanpa data sensitif.
+  reportToken    String       @unique @default(dbgenerated("replace((gen_random_uuid())::text || (gen_random_uuid())::text, '-'::text, ''::text)")) @map("report_token")
   createdBy      String?      @map("created_by") @db.Uuid
   createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
 
@@ -814,6 +820,12 @@ model DocumentSignature {
 }
 
 // ---------- Fase 05: insiden, servis, aset pengganti ----------
+
+enum IncidentPhotoKind {
+  ITEM
+  DAMAGE
+  STICKER
+}
 
 enum IncidentUrgency {
   LOW
@@ -907,6 +919,7 @@ model Incident {
 model IncidentPhoto {
   id         String   @id @default(uuid()) @db.Uuid
   incidentId String   @map("incident_id") @db.Uuid
+  kind       IncidentPhotoKind @default(ITEM)
   mimeType   String   @map("mime_type")
   data       Bytes
   createdBy  String?  @map("created_by") @db.Uuid

@@ -9,7 +9,11 @@ import {
   hasCapability,
   incidentCloseSchema,
   incidentCreateSchema,
+  type DeliveryNoteReportDto,
+  type ReportableOrderDto,
+  INCIDENT_PHOTO_KINDS,
   incidentListQuerySchema,
+  incidentPhotoKindSchema,
   incidentReviewSchema,
   type AssetCondition,
   type AssetStatus,
@@ -126,6 +130,107 @@ export function incidentsRouter(db: PrismaClient): Router {
     res.json({ data });
   });
 
+  /** Pesanan aktif (pick list sudah keluar gudang); PIC lapangan hanya melihat pesanan yang ditugaskan padanya. */
+  router.get(
+    '/incidents/reportable-orders',
+    requireCapability('incident.report'),
+    async (req, res) => {
+      const user = currentUser(req);
+      const orders = await db.order.findMany({
+        where: {
+          pickLists: { some: { status: { in: ['DISPATCHED', 'RETURN_ISSUE'] } } },
+          ...(user.role === 'FIELD_PIC'
+            ? { pics: { some: { role: 'FIELD', userId: user.id } } }
+            : {}),
+        },
+        include: {
+          customer: { select: { name: true } },
+          pickLists: {
+            where: { status: { in: ['DISPATCHED', 'RETURN_ISSUE'] } },
+            select: {
+              items: {
+                where: { status: 'DISPATCHED' },
+                select: {
+                  asset: { select: { code: true, status: true } },
+                  product: { select: { name: true } },
+                },
+              },
+            },
+          },
+        },
+        orderBy: [{ startDate: 'desc' }, { number: 'asc' }],
+        take: 200,
+      });
+      const data: ReportableOrderDto[] = orders.map((o) => ({
+        id: o.id,
+        number: o.number,
+        customerName: o.customer.name,
+        eventLocation: o.eventLocation,
+        assets: o.pickLists
+          .flatMap((p) => p.items)
+          .filter((i) => REPORTABLE_ASSET_STATUSES.includes(i.asset.status))
+          .map((i) => ({ code: i.asset.code, productName: i.product.name }))
+          .sort((a, b) => a.code.localeCompare(b.code)),
+      }));
+      res.json({ data });
+    },
+  );
+
+  /** Scan QR surat jalan: daftar aset pada dokumen itu. PIC lapangan hanya untuk pesanan yang ditugaskan padanya. */
+  router.get(
+    '/incidents/delivery-note/:token',
+    requireCapability('incident.report'),
+    async (req, res) => {
+      const user = currentUser(req);
+      const token = String(req.params.token);
+      const doc = await db.handoverDocument.findUnique({
+        where: { reportToken: token },
+        include: {
+          order: {
+            select: { number: true, eventLocation: true, customer: { select: { name: true } } },
+          },
+          pickList: {
+            select: {
+              status: true,
+              items: {
+                where: { status: 'DISPATCHED' },
+                select: {
+                  asset: { select: { code: true, status: true } },
+                  product: { select: { name: true } },
+                },
+              },
+            },
+          },
+        },
+      });
+      if (!doc || doc.type !== 'OUT') {
+        throw new HttpError(404, 'NOT_FOUND', 'Surat jalan tidak ditemukan');
+      }
+      if (user.role === 'FIELD_PIC' && !(await fieldPicOf(db, doc.orderId, user.id))) {
+        throw new HttpError(403, 'NOT_ASSIGNED', 'Anda bukan PIC lapangan pada pesanan ini');
+      }
+      if (doc.pickList.status !== 'DISPATCHED' && doc.pickList.status !== 'RETURN_ISSUE') {
+        throw new HttpError(
+          409,
+          'DELIVERY_NOTE_CLOSED',
+          'Barang pada surat jalan ini sudah tidak di luar gudang',
+        );
+      }
+      const data: DeliveryNoteReportDto = {
+        documentNumber: doc.number,
+        orderId: doc.orderId,
+        orderNumber: doc.order.number,
+        customerName: doc.order.customer.name,
+        eventLocation: doc.order.eventLocation,
+        assets: doc.pickList.items
+          .filter((i) => REPORTABLE_ASSET_STATUSES.includes(i.asset.status))
+          .map((i) => ({ code: i.asset.code, productName: i.product.name }))
+          .sort((a, b) => a.code.localeCompare(b.code)),
+      };
+      res.json({ data });
+    },
+  );
+
   router.get('/incidents/:id', requireCapability('incident.read'), async (req, res) => {
     res.json({ data: await respond(req, parseId(req.params.id)) });
   });
@@ -162,6 +267,17 @@ export function incidentsRouter(db: PrismaClient): Router {
           throw new ScanRejected(
             'ASSET_NOT_ON_ORDER',
             'Aset ini tidak tercatat pada pesanan yang sedang berjalan',
+            asset.id,
+          );
+        }
+        const ordered = await tx.order.findUniqueOrThrow({
+          where: { id: active.orderId },
+          select: { number: true },
+        });
+        if (ordered.number.toUpperCase() !== input.orderNumber) {
+          throw new ScanRejected(
+            'ORDER_MISMATCH',
+            'Nomor pesanan tidak sesuai dengan pesanan aset ini',
             asset.id,
           );
         }
@@ -228,6 +344,7 @@ export function incidentsRouter(db: PrismaClient): Router {
     async (req, res) => {
       const id = parseId(req.params.id);
       const user = currentUser(req);
+      const kind = incidentPhotoKindSchema.parse(req.query.kind);
       const body: unknown = req.body;
       if (!Buffer.isBuffer(body) || body.length === 0) {
         throw new HttpError(400, 'INVALID_IMAGE', 'Unggah foto JPEG atau PNG');
@@ -247,8 +364,15 @@ export function incidentsRouter(db: PrismaClient): Router {
             'Foto hanya dapat ditambahkan sebelum laporan dikirim',
           );
         }
-        const count = await tx.incidentPhoto.count({ where: { incidentId: id } });
-        if (count >= MAX_INCIDENT_PHOTOS) {
+        const existing = await tx.incidentPhoto.findMany({
+          where: { incidentId: id },
+          select: { kind: true },
+        });
+        // Sisakan slot untuk jenis foto wajib yang belum ada agar draft tidak buntu.
+        const missing = INCIDENT_PHOTO_KINDS.filter(
+          (k) => k !== kind && !existing.some((p) => p.kind === k),
+        ).length;
+        if (existing.length + 1 + missing > MAX_INCIDENT_PHOTOS) {
           throw new HttpError(
             409,
             'PHOTO_LIMIT',
@@ -256,14 +380,20 @@ export function incidentsRouter(db: PrismaClient): Router {
           );
         }
         const photo = await tx.incidentPhoto.create({
-          data: { incidentId: id, mimeType: mime, data: new Uint8Array(body), createdBy: user.id },
+          data: {
+            incidentId: id,
+            kind,
+            mimeType: mime,
+            data: new Uint8Array(body),
+            createdBy: user.id,
+          },
           select: { id: true },
         });
         await writeAudit(tx, req, {
           action: 'incident.photo',
           entity: 'incident',
           entityId: id,
-          after: { photoId: photo.id, bytes: body.length },
+          after: { photoId: photo.id, kind, bytes: body.length },
         });
       });
       res.status(201).json({ data: await respond(req, id) });
@@ -288,7 +418,7 @@ export function incidentsRouter(db: PrismaClient): Router {
 
   // ---------- Kirim laporan ----------
 
-  /** DRAFT → REPORTED: wajib 1–5 foto; aset ditandai ISSUE_ON_SITE/DAMAGED dan admin diberi notifikasi. */
+  /** DRAFT → REPORTED: wajib foto barang, kerusakan, dan stiker aset; aset ditandai ISSUE_ON_SITE/DAMAGED dan admin diberi notifikasi. */
   router.post('/incidents/:id/submit', requireCapability('incident.report'), async (req, res) => {
     const id = parseId(req.params.id);
     const user = currentUser(req);
@@ -306,12 +436,19 @@ export function incidentsRouter(db: PrismaClient): Router {
       if (incident.status !== 'DRAFT') {
         throw new HttpError(409, 'INVALID_INCIDENT_STATE', 'Laporan sudah dikirim');
       }
-      const photos = await tx.incidentPhoto.count({ where: { incidentId: id } });
-      if (photos < 1 || photos > MAX_INCIDENT_PHOTOS) {
+      const kinds = await tx.incidentPhoto.findMany({
+        where: { incidentId: id },
+        select: { kind: true },
+      });
+      const photos = kinds.length;
+      if (
+        photos > MAX_INCIDENT_PHOTOS ||
+        !INCIDENT_PHOTO_KINDS.every((k) => kinds.some((p) => p.kind === k))
+      ) {
         throw new HttpError(
           422,
           'PHOTOS_REQUIRED',
-          `Laporan wajib memiliki 1–${MAX_INCIDENT_PHOTOS} foto`,
+          'Laporan wajib memiliki foto barang, foto kerusakan, dan foto barang dengan stiker aset terlihat',
         );
       }
       const { asset } = incident;

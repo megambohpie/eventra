@@ -1,8 +1,13 @@
 import { useState } from 'react';
-import { mdiPlus } from '@mdi/js';
+import { mdiPlus, mdiPrinter } from '@mdi/js';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { createPickList, listPickLists, listPickableOrders } from '@eventra/api-client';
+import {
+  createPickList,
+  getHandoverPdf,
+  listPickLists,
+  listPickableOrders,
+} from '@eventra/api-client';
 import { PICK_LIST_STATUSES, type PickListStatus } from '@eventra/shared';
 import { api } from '@/api';
 import { useAuth } from '@/auth/AuthProvider';
@@ -107,6 +112,7 @@ export function WarehousePage() {
                   <th>{t('warehouse.period')}</th>
                   <th>{t('warehouse.progress')}</th>
                   <th>{t('common.status')}</th>
+                  <th>{t('warehouse.documents.title')}</th>
                   <th />
                 </tr>
               </thead>
@@ -129,6 +135,31 @@ export function WarehousePage() {
                     <td>
                       <PickListStatusBadge status={p.status} />
                     </td>
+                    <td>
+                      <div className="ev-actions">
+                        {p.documents.length === 0 && <span className="ev-hint">-</span>}
+                        {p.documents.map((d) => (
+                          <Button
+                            key={d.id}
+                            size="sm"
+                            variant="ghost"
+                            icon={mdiPrinter}
+                            onClick={async () => {
+                              try {
+                                window.open(
+                                  URL.createObjectURL(await getHandoverPdf(api, d.id)),
+                                  '_blank',
+                                );
+                              } catch {
+                                /* error sudah tampil sebagai notifikasi */
+                              }
+                            }}
+                          >
+                            {t(`warehouse.documents.short.${d.type}`)} v{d.version}
+                          </Button>
+                        ))}
+                      </div>
+                    </td>
                     <td className="ev-table__actions">
                       <Link className="btn btn-ghost btn-sm" to={`/warehouse/pick-lists/${p.id}`}>
                         {t('common.details')}
@@ -138,7 +169,7 @@ export function WarehousePage() {
                 ))}
                 {data?.items.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="ev-table__empty">
+                    <td colSpan={8} className="ev-table__empty">
                       {t('common.empty')}
                     </td>
                   </tr>

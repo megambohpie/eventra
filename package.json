@@ -9,7 +9,7 @@
   "scripts": {
     "dev:api": "pnpm --filter @eventra/api dev",
     "dev:web": "pnpm --filter @eventra/web dev",
-    "dev:mobile": "pnpm --filter @eventra/mobile start",
+    "dev:field": "pnpm --filter @eventra/field dev",
     "db:up": "docker compose up -d db",
     "db:migrate": "pnpm --filter @eventra/api db:migrate",
     "lint": "eslint .",

@@ -30,6 +30,8 @@ export const apiEnvSchema = z
           .filter(Boolean),
       ),
     /** Jumlah hop reverse proxy tepercaya (agar req.ip dan rate limit memakai IP klien). */
+    /** URL aplikasi lapangan; dipakai pada QR surat jalan (halaman lapor kerusakan untuk tim lapangan). */
+    WEB_BASE_URL: z.string().url().default('http://localhost:5175'),
     TRUST_PROXY: z.coerce.number().int().min(0).default(0),
     LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
   })

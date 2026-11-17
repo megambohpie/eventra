@@ -244,15 +244,23 @@ describe('Fase 08 — E2E smoke: alur kritis rental', () => {
       'post',
       field,
       '/incidents',
-      { qrToken: a1.qrToken, urgency: 'HIGH', description: 'Speaker tidak bersuara' },
+      {
+        orderNumber: full.number,
+        qrToken: a1.qrToken,
+        urgency: 'HIGH',
+        description: 'Speaker tidak bersuara',
+      },
       201,
     );
-    const photo = await request(app)
-      .post(`${V1}/incidents/${incident.id}/photos`)
-      .set(auth(field))
-      .set('Content-Type', 'image/jpeg')
-      .send(JPEG);
-    expect(photo.status).toBe(201);
+    for (const kind of ['ITEM', 'DAMAGE', 'STICKER']) {
+      const photo = await request(app)
+        .post(`${V1}/incidents/${incident.id}/photos`)
+        .query({ kind })
+        .set(auth(field))
+        .set('Content-Type', 'image/jpeg')
+        .send(JPEG);
+      expect(photo.status).toBe(201);
+    }
     const reported = await ok<IncidentDto>('post', field, `/incidents/${incident.id}/submit`);
     expect(reported.status).toBe('REPORTED');
     expect((await db.asset.findUniqueOrThrow({ where: { id: a1.id } })).status).toBe(

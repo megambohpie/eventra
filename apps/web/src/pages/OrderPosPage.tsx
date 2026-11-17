@@ -100,6 +100,10 @@ function PosForm({ order, initialStart, products, customers, reloadCustomers }: 
   const [lumpTotal, setLumpTotal] = useState(
     order?.lumpTotal != null ? String(order.lumpTotal) : '',
   );
+  const [depositCustom, setDepositCustom] = useState(order?.depositOverride != null);
+  const [depositValue, setDepositValue] = useState(
+    order?.depositOverride != null ? String(order.depositOverride) : '',
+  );
   const [q, setQ] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [stockFilter, setStockFilter] = useState<StockMode | ''>('');
@@ -157,6 +161,7 @@ function PosForm({ order, initialStart, products, customers, reloadCustomers }: 
   const totals = cartTotals(products, cart, startDate, endDate, {
     prices: priceNums,
     lumpTotal: lump ? Number(lumpTotal || 0) : null,
+    depositOverride: depositCustom ? Number(depositValue || 0) : null,
   });
   const totalDiff =
     totals.subtotal === totals.listSubtotal
@@ -183,6 +188,7 @@ function PosForm({ order, initialStart, products, customers, reloadCustomers }: 
         note,
         pricingMode: lump ? ('LUMP' as const) : ('LINE' as const),
         lumpTotal: lump ? Number(lumpTotal || 0) : null,
+        depositOverride: depositCustom ? Number(depositValue || 0) : null,
         items: cartLines.map((p) => ({
           productId: p.id,
           quantity: cart[p.id] ?? 0,
@@ -207,6 +213,7 @@ function PosForm({ order, initialStart, products, customers, reloadCustomers }: 
     validDates &&
     cartLines.length > 0 &&
     (!lump || lumpTotal !== '') &&
+    (!depositCustom || depositValue !== '') &&
     !overStock;
 
   return (
@@ -245,7 +252,11 @@ function PosForm({ order, initialStart, products, customers, reloadCustomers }: 
             />
           </FormField>
         </fieldset>
-        {!validDates && (
+        {validDates ? (
+          <p className="ev-pos__duration">
+            {t('orders.pos.duration')}: <strong>{t('orders.days', { count: totals.days })}</strong>
+          </p>
+        ) : (
           <div role="alert" className="alert alert-warning ev-notice">
             <span>{t('orders.pos.invalidDates')}</span>
           </div>
@@ -390,40 +401,6 @@ function PosForm({ order, initialStart, products, customers, reloadCustomers }: 
               {t('orders.pos.newCustomer')}
             </Button>
           </div>
-          <details className="collapse collapse-arrow ev-pos__section" open>
-            <summary className="collapse-title ev-pos__section-title">
-              {t('orders.pos.eventDetails')}
-            </summary>
-            <div className="collapse-content ev-pos__section-body">
-              <FormField label={t('orders.eventLocation')}>
-                <input
-                  className="input ev-control"
-                  required
-                  value={eventLocation}
-                  onChange={(e) => setEventLocation(e.target.value)}
-                />
-              </FormField>
-              <FormField label={t('orders.eventAddress')}>
-                <textarea
-                  className="textarea ev-control"
-                  rows={2}
-                  placeholder={t('orders.eventAddressPlaceholder')}
-                  value={eventAddress}
-                  onChange={(e) => setEventAddress(e.target.value)}
-                />
-              </FormField>
-              <LocationPicker value={point} onChange={setPoint} />
-              <FormField label={t('common.note')}>
-                <textarea
-                  className="textarea ev-control"
-                  rows={2}
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                />
-              </FormField>
-            </div>
-          </details>
-
           {cartLines.length === 0 ? (
             <p className="ev-hint">{t('orders.pos.cartEmpty')}</p>
           ) : (
@@ -441,6 +418,15 @@ function PosForm({ order, initialStart, products, customers, reloadCustomers }: 
                         <span>{formatRupiah(price * (cart[p.id] ?? 0) * totals.days)}</span>
                       )}
                     </div>
+                    {!lump && (
+                      <p className="ev-hint">
+                        {t('orders.pos.lineFormula', {
+                          price: formatRupiah(price),
+                          qty: cart[p.id] ?? 0,
+                          days: t('orders.days', { count: totals.days }),
+                        })}
+                      </p>
+                    )}
                     {!lump && (
                       <div className="ev-pos__line-price">
                         <CurrencyInput
@@ -489,6 +475,35 @@ function PosForm({ order, initialStart, products, customers, reloadCustomers }: 
                 <p className="ev-hint">{t('orders.pricing.lumpHint')}</p>
               </>
             )}
+            <label className="label ev-pos__lump-toggle">
+              <input
+                type="checkbox"
+                className="toggle toggle-primary"
+                checked={depositCustom}
+                onChange={(e) => {
+                  setDepositCustom(e.target.checked);
+                  // Mulai dari deposit default agar tinggal disesuaikan.
+                  if (e.target.checked && depositValue === '')
+                    setDepositValue(String(totals.listDeposit));
+                }}
+              />
+              <span>{t('orders.pricing.depositCustom')}</span>
+            </label>
+            {depositCustom && (
+              <>
+                <FormField label={t('orders.pricing.depositTotal')}>
+                  <CurrencyInput
+                    required
+                    ariaLabel={t('orders.pricing.depositTotal')}
+                    value={depositValue}
+                    onChange={setDepositValue}
+                  />
+                </FormField>
+                <p className="ev-hint">
+                  {t('orders.pricing.depositDefault', { total: formatRupiah(totals.listDeposit) })}
+                </p>
+              </>
+            )}
             {totals.listSubtotal > 0 && (
               <p className="ev-hint">
                 {t('orders.pricing.listTotal', { total: formatRupiah(totals.listSubtotal) })}
@@ -502,10 +517,45 @@ function PosForm({ order, initialStart, products, customers, reloadCustomers }: 
               </p>
             )}
           </fieldset>
+          <details className="collapse collapse-arrow ev-pos__section" open>
+            <summary className="collapse-title ev-pos__section-title">
+              {t('orders.pos.eventDetails')}
+            </summary>
+            <div className="collapse-content ev-pos__section-body">
+              <FormField label={t('orders.eventLocation')}>
+                <input
+                  className="input ev-control"
+                  required
+                  value={eventLocation}
+                  onChange={(e) => setEventLocation(e.target.value)}
+                />
+              </FormField>
+              <FormField label={t('orders.eventAddress')}>
+                <textarea
+                  className="textarea ev-control"
+                  rows={2}
+                  placeholder={t('orders.eventAddressPlaceholder')}
+                  value={eventAddress}
+                  onChange={(e) => setEventAddress(e.target.value)}
+                />
+              </FormField>
+              <LocationPicker value={point} onChange={setPoint} />
+              <FormField label={t('common.note')}>
+                <textarea
+                  className="textarea ev-control"
+                  rows={2}
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                />
+              </FormField>
+            </div>
+          </details>
         </div>
         <footer className="ev-pos__cart-foot">
           <dl className="ev-pos__totals">
-            <dt>{t('orders.days', { count: totals.days })}</dt>
+            <dt>{t('orders.pos.duration')}</dt>
+            <dd>{t('orders.days', { count: totals.days })}</dd>
+            <dt>{t('orders.pos.totalUnits')}</dt>
             <dd>{t('orders.pos.units', { count: totals.units })}</dd>
             {totals.areaM2 > 0 && (
               <>

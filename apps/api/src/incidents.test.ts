@@ -88,6 +88,9 @@ const get = (c: Ctx, token: string, path: string) =>
   request(c.app).get(`${V1}${path}`).set(auth(token));
 
 /** Pesanan SCHEDULED dengan PIC lapangan = pengguna FIELD_PIC uji, lalu barang keluar gudang. */
+/** Nomor pesanan terakhir yang dikeluarkan `dispatched`; wajib disertakan pada laporan insiden. */
+let orderNo = '';
+
 async function dispatched(c: Ctx, productId: string, assets: { qrToken: string }[], qty: number) {
   const created = await post(c, c.admin, '/orders', {
     customerId: c.customerId,
@@ -98,6 +101,7 @@ async function dispatched(c: Ctx, productId: string, assets: { qrToken: string }
   });
   expect(created.status).toBe(201);
   const id = data<OrderDto>(created).id;
+  orderNo = data<OrderDto>(created).number;
   const pics = [
     { role: 'CUSTOMER_PIC', source: 'CUSTOMER', name: 'Budi', phone: '0812' },
     { role: 'WAREHOUSE_OUT', source: 'OWNER', userId: c.warehouseUserId },
@@ -124,8 +128,11 @@ async function dispatched(c: Ctx, productId: string, assets: { qrToken: string }
 }
 
 /** Buat draft → unggah foto → kirim sebagai PIC lapangan. */
-async function report(c: Ctx, qrToken: string, photos = 2, token = c.field) {
+const KINDS = ['ITEM', 'DAMAGE', 'STICKER'] as const;
+
+async function report(c: Ctx, qrToken: string, photos = 3, token = c.field) {
   const draft = await post(c, token, '/incidents', {
+    orderNumber: orderNo,
     qrToken,
     urgency: 'HIGH',
     description: 'Panel LED pecah di sudut kiri',
@@ -136,6 +143,7 @@ async function report(c: Ctx, qrToken: string, photos = 2, token = c.field) {
   for (let i = 0; i < photos; i += 1) {
     const up = await request(c.app)
       .post(`${V1}/incidents/${id}/photos`)
+      .query({ kind: KINDS[i % KINDS.length] })
       .set(auth(token))
       .set('Content-Type', 'image/jpeg')
       .send(JPEG);
@@ -160,12 +168,44 @@ describe('Fase 05 — insiden, servis, aset pengganti', () => {
     const otherField = data<{ accessToken: string }>(login).accessToken;
     const [a1] = assets;
     if (!a1) throw new Error('seed');
+    // Pilihan nomor pesanan: PIC yang ditugaskan melihat pesanan aktif, PIC lain tidak.
+    const mine = data<{ number: string; assets: { code: string }[] }[]>(
+      await get(c, c.field, '/incidents/reportable-orders'),
+    );
+    expect(mine.map((o) => o.number)).toEqual([orderNo]);
+    expect(mine[0]?.assets.map((x) => x.code)).toEqual([assets[0]?.code]);
+    expect(data<unknown[]>(await get(c, otherField, '/incidents/reportable-orders'))).toEqual([]);
+    // QR surat jalan: token dokumen membuka daftar aset pada surat jalan itu.
+    const sj = await db.handoverDocument.findFirstOrThrow({ where: { type: 'OUT' } });
+    const scanned = await get(c, c.field, `/incidents/delivery-note/${sj.reportToken}`);
+    expect(scanned.status).toBe(200);
+    expect(data<{ orderNumber: string; assets: { code: string }[] }>(scanned)).toMatchObject({
+      orderNumber: orderNo,
+      assets: [{ code: a1.code }],
+    });
+    expect((await get(c, otherField, `/incidents/delivery-note/${sj.reportToken}`)).status).toBe(
+      403,
+    );
+    expect((await get(c, c.warehouse, `/incidents/delivery-note/${sj.reportToken}`)).status).toBe(
+      403,
+    );
+    expect((await get(c, c.field, '/incidents/delivery-note/token-tidak-ada')).status).toBe(404);
+    // Nomor pesanan yang salah ditolak.
+    const mismatch = await post(c, c.field, '/incidents', {
+      orderNumber: 'ORD-SALAH',
+      qrToken: a1.qrToken,
+      urgency: 'LOW',
+      description: 'rusak parah',
+    });
+    expect(mismatch.status).toBe(409);
+    expect(errorCode(mismatch)).toBe('ORDER_MISMATCH');
 
     expect((await get(c, owner, '/incidents')).status).toBe(200);
     expect((await get(c, owner, '/service-tickets')).status).toBe(200);
     expect(
       (
         await post(c, c.warehouse, '/incidents', {
+          orderNumber: orderNo,
           qrToken: a1.qrToken,
           urgency: 'LOW',
           description: 'rusak parah',
@@ -178,15 +218,17 @@ describe('Fase 05 — insiden, servis, aset pengganti', () => {
 
     // PIC lapangan lain (tidak ditugaskan pada pesanan ini) ditolak dan percobaannya tercatat.
     const rejected = await post(c, otherField, '/incidents', {
+      orderNumber: orderNo,
       qrToken: a1.qrToken,
       urgency: 'LOW',
       description: 'rusak parah',
     });
     expect(rejected.status).toBe(403);
     expect(errorCode(rejected)).toBe('NOT_ASSIGNED');
+    // Dua penolakan tercatat: nomor pesanan salah dan PIC tidak ditugaskan.
     expect(
       await db.scanEvent.count({ where: { action: 'INCIDENT_SCAN', result: 'REJECTED' } }),
-    ).toBe(1);
+    ).toBe(2);
     expect((await request(c.app).get(`${V1}/incidents`)).status).toBe(401);
   });
 
@@ -199,6 +241,7 @@ describe('Fase 05 — insiden, servis, aset pengganti', () => {
 
     // Aset yang tidak sedang di luar gudang tidak dapat dilaporkan.
     const wrong = await post(c, c.field, '/incidents', {
+      orderNumber: orderNo,
       qrToken: a2.qrToken,
       urgency: 'LOW',
       description: 'rusak parah',
@@ -206,6 +249,7 @@ describe('Fase 05 — insiden, servis, aset pengganti', () => {
     expect(wrong.status).toBe(409);
     expect(errorCode(wrong)).toBe('SCAN_WRONG_STATE');
     const unknown = await post(c, c.field, '/incidents', {
+      orderNumber: orderNo,
       qrToken: 'tidak-dikenal-xxxxxxxxxxxxx',
       urgency: 'LOW',
       description: 'rusak parah',
@@ -219,14 +263,33 @@ describe('Fase 05 — insiden, servis, aset pengganti', () => {
     expect(errorCode(none)).toBe('PHOTOS_REQUIRED');
     expect((await db.asset.findUniqueOrThrow({ where: { id: a1.id } })).status).toBe('CHECKED_OUT');
 
-    const upload = (body: Buffer, type = 'image/jpeg') =>
+    const upload = (body: Buffer, type = 'image/jpeg', kind = 'ITEM') =>
       request(c.app)
         .post(`${V1}/incidents/${id}/photos`)
+        .query({ kind })
         .set(auth(c.field))
         .set('Content-Type', type)
         .send(body);
     expect(errorCode(await upload(Buffer.from('bukan gambar sama sekali')))).toBe('INVALID_IMAGE');
-    for (let i = 0; i < 5; i += 1) expect((await upload(JPEG)).status).toBe(201);
+    // Jenis foto wajib; tanpa kind ditolak.
+    expect(
+      (
+        await request(c.app)
+          .post(`${V1}/incidents/${id}/photos`)
+          .set(auth(c.field))
+          .set('Content-Type', 'image/jpeg')
+          .send(JPEG)
+      ).status,
+    ).toBe(400);
+    // Foto barang + kerusakan saja belum cukup: foto stiker aset wajib.
+    expect((await upload(JPEG, 'image/jpeg', 'ITEM')).status).toBe(201);
+    expect((await upload(JPEG, 'image/jpeg', 'DAMAGE')).status).toBe(201);
+    const partial = await submit();
+    expect(partial.status).toBe(422);
+    expect(errorCode(partial)).toBe('PHOTOS_REQUIRED');
+    expect((await upload(JPEG, 'image/jpeg', 'STICKER')).status).toBe(201);
+    expect((await upload(JPEG, 'image/jpeg', 'ITEM')).status).toBe(201);
+    expect((await upload(JPEG, 'image/jpeg', 'DAMAGE')).status).toBe(201);
     const sixth = await upload(JPEG);
     expect(sixth.status).toBe(409);
     expect(errorCode(sixth)).toBe('PHOTO_LIMIT');
@@ -246,6 +309,7 @@ describe('Fase 05 — insiden, servis, aset pengganti', () => {
     expect(errorCode(await submit())).toBe('INVALID_INCIDENT_STATE');
     // Aset yang sama tidak bisa dilaporkan lagi.
     const again = await post(c, c.field, '/incidents', {
+      orderNumber: orderNo,
       qrToken: a1.qrToken,
       urgency: 'LOW',
       description: 'rusak lagi',

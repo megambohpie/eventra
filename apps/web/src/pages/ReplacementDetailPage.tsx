@@ -57,7 +57,7 @@ function Detail({ task, reload }: { task: ReplacementTaskDto; reload: () => void
     event.preventDefault();
     const raw = value.trim();
     if (!raw || !mode) return;
-    const manual = mode === 'PICK' && ASSET_CODE.test(raw);
+    const manual = ASSET_CODE.test(raw) && (mode === 'PICK' || can('scan.manual'));
     setBusy(true);
     try {
       const out = await scanReplacement(api, task.id, {

@@ -103,6 +103,12 @@ export function OrderDetailPage() {
           )}
         </div>
 
+        {order.noShowAt && (
+          <div role="alert" className="alert alert-error ev-notice">
+            <span>{t('orders.pricing.noShow')}</span>
+          </div>
+        )}
+
         <div className="ev-detail__actions">
           {canWrite && s === 'DRAFT' && (
             <>
@@ -110,14 +116,25 @@ export function OrderDetailPage() {
                 <Icon path={mdiPencil} />
                 {t('common.edit')}
               </Link>
-              <Button
-                size="sm"
-                variant="primary"
-                icon={mdiSend}
-                onClick={run(() => submitOrder(api, order.id), 'orders.submitted')}
-              >
-                {t('orders.actions.submit')}
-              </Button>
+              {canApprove ? (
+                <Button
+                  size="sm"
+                  variant="success"
+                  icon={mdiCheckCircle}
+                  onClick={run(() => confirmOrder(api, order.id), 'orders.confirmed')}
+                >
+                  {t('orders.actions.confirm')}
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="primary"
+                  icon={mdiSend}
+                  onClick={run(() => submitOrder(api, order.id), 'orders.submitted')}
+                >
+                  {t('orders.actions.submit')}
+                </Button>
+              )}
             </>
           )}
           {canApprove && (s === 'PENDING_REVIEW' || s === 'QUOTED' || s === 'AWAITING_PAYMENT') && (

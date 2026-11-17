@@ -25,7 +25,11 @@
   }
 
   .ev-content {
-    @apply container mx-auto flex-1 p-4 sm:p-6;
+    @apply container mx-auto flex flex-1 flex-col gap-5 p-4 sm:gap-6 sm:p-6;
+  }
+  /* Anak langsung (kartu halaman) tidak boleh melebar melebihi kolom konten. */
+  .ev-content > * {
+    @apply min-w-0;
   }
   .ev-footer {
     @apply p-4 text-sm text-base-content/70 print:hidden;

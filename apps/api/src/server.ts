@@ -3,6 +3,7 @@ import { apiEnvSchema, parseEnv } from '@eventra/shared';
 import { createApp } from './app';
 import { sendDueReminders } from './finance/service';
 import { expireHolds } from './orders/service';
+import { expireNoShows } from './orders/noShow';
 import { logErrorReporter } from './ops/errorReporter';
 import { JobMonitor } from './ops/jobs';
 import { createLogger } from './ops/logger';
@@ -50,6 +51,9 @@ const server = app.listen(env.PORT, () => {
 jobs.schedule('hold-expiry', 60_000, () => expireHolds(prisma));
 
 // Pengingat tagihan: jatuh tempo ≤ 3 hari atau terlambat, maksimal satu per invoice per 24 jam (in-app).
+// Pesanan tidak diambil: lewat akhir hari sewa pertama tanpa barang keluar → batal otomatis, deposit hangus.
+jobs.schedule('no-show', 5 * 60_000, () => expireNoShows(prisma));
+
 jobs.schedule('invoice-reminders', 15 * 60_000, () => sendDueReminders(prisma));
 
 let shuttingDown = false;

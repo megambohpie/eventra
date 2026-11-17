@@ -29,6 +29,7 @@ describe('pos', () => {
       subtotal: 2 * 100_000 * 3 + 10_000 * 3,
       listSubtotal: 2 * 100_000 * 3 + 10_000 * 3,
       deposit: 100_000,
+      listDeposit: 100_000,
       areaM2: 0,
     });
   });
@@ -75,6 +76,20 @@ describe('pos', () => {
       listSubtotal: 2 * 100_000 * 5,
       deposit: 50_000,
     });
+  });
+
+  it('cartTotals: deposit bisa diganti nominal sendiri tanpa dikali hari; default jadi pembanding', () => {
+    const products = [
+      { id: 'a', unitPrice: 100_000, deposit: 25_000, widthCm: null, heightCm: null },
+    ];
+    const t = cartTotals(products, { a: 2 }, '2026-12-03', '2026-12-07', {
+      depositOverride: 10_000,
+    });
+    expect(t).toMatchObject({ deposit: 10_000, listDeposit: 50_000, subtotal: 2 * 100_000 * 5 });
+    // 0 adalah nominal sah (bebas deposit), bukan "tidak diisi".
+    expect(
+      cartTotals(products, { a: 2 }, '2026-12-03', '2026-12-07', { depositOverride: 0 }).deposit,
+    ).toBe(0);
   });
 
   it('priceDiffPercent: diskon negatif, markup positif, tanpa pembanding null', () => {

@@ -63,6 +63,7 @@ interface DetailProps {
 
 function Detail({ pick, canWrite, canSign, reload }: DetailProps) {
   const { t } = useTranslation();
+  const { can } = useAuth();
   const input = useRef<HTMLInputElement>(null);
   const [mode, setMode] = useState<Mode>('PICK');
   const [value, setValue] = useState('');
@@ -81,7 +82,14 @@ function Detail({ pick, canWrite, canSign, reload }: DetailProps) {
     event.preventDefault();
     const raw = value.trim();
     if (!raw) return;
-    const manual = mode === 'PICK' && ASSET_CODE.test(raw);
+    const manual = ASSET_CODE.test(raw) && (mode === 'PICK' || can('scan.manual'));
+    // Verifikasi akhir wajib bukti scan QR kecuali pengguna ber-capability scan.manual (Owner/Admin).
+    if (mode === 'VERIFY' && ASSET_CODE.test(raw) && !can('scan.manual')) {
+      setFeedback({ ok: false, text: t('warehouse.detail.verifyNeedsQr') });
+      setValue('');
+      input.current?.focus();
+      return;
+    }
     setBusy(true);
     try {
       const out = await scanPickList(api, pick.id, {
@@ -191,6 +199,11 @@ function Detail({ pick, canWrite, canSign, reload }: DetailProps) {
             <Button size="sm" variant="ghost" icon={mdiCancel} onClick={() => setDialog('cancel')}>
               {t('warehouse.detail.cancelList')}
             </Button>
+          </div>
+        )}
+        {preparing && (
+          <div role="alert" className="alert alert-info ev-notice">
+            <span>{t('warehouse.detail.deadlineHint', { date: formatDate(pick.startDate) })}</span>
           </div>
         )}
         {pick.status === 'VERIFIED' && (

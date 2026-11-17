@@ -1,0 +1,11 @@
+@import '@/assets/brand/eventra-theme.css';
+@import 'tailwindcss';
+@import './styles/app.css';
+@plugin 'daisyui' {
+  themes: false;
+}
+
+/*
+ * Token warna/tema: assets/brand/eventra-theme.css. Styling komponen: styles/app.css (kelas
+ * semantik `ev-*`). Komponen React hanya memuat nama komponen DaisyUI dan kelas `ev-*`.
+ */

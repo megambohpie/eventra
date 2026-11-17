@@ -39,6 +39,10 @@
   }
 
   /* ---------- Tombol & badge ---------- */
+  /* Badge tidak boleh memotong/membungkus teks: lebar mengikuti isi, tinggi menyesuaikan. */
+  .badge {
+    @apply h-auto min-h-6 w-fit shrink-0 py-0.5 whitespace-nowrap;
+  }
   .ev-btn--block {
     @apply w-full;
   }

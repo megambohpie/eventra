@@ -3,6 +3,7 @@ import request from 'supertest';
 import type { Express } from 'express';
 import type { HandoverDocumentDto, OrderDto, PickListDto, ScanOutcomeDto } from '@eventra/shared';
 import { createTestApp, db, loginAs, resetDb } from '../test/helpers';
+import { expireNoShows, pickupDeadline } from './orders/noShow';
 
 const V1 = '/api/v1';
 const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
@@ -208,8 +209,13 @@ describe('Fase 04 — gudang, scan, dokumen serah-terima', () => {
     expect(errorCode(wrongProduct)).toBe('SCAN_PRODUCT_NOT_REQUIRED');
     const dmg = await scan(c, pick.id, { action: 'PICK', qrToken: damaged.qrToken });
     expect(errorCode(dmg)).toBe('SCAN_ASSET_DAMAGED');
-    // Verifikasi akhir wajib QR (bukan kode aset).
-    expect((await scan(c, pick.id, { action: 'VERIFY', assetCode: a1.code })).status).toBe(400);
+    // Verifikasi akhir: gudang wajib QR (kode aset ditolak); Owner/Admin boleh mengetik kode aset.
+    const typed = await scan(c, pick.id, { action: 'VERIFY', assetCode: a1.code });
+    expect(typed.status).toBe(403);
+    expect(errorCode(typed)).toBe('MANUAL_SCAN_FORBIDDEN');
+    // Admin lolos otorisasi manual; aset belum dipilih sehingga ditolak oleh aturan pick list (bukan 403).
+    const adminTyped = await scan(c, pick.id, { action: 'VERIFY', assetCode: a1.code }, c.admin);
+    expect(errorCode(adminTyped)).toBe('SCAN_NOT_IN_PICK_LIST');
 
     // Pilih lewat QR dan lewat kode aset (manual).
     const p1 = await scan(c, pick.id, { action: 'PICK', qrToken: a1.qrToken });
@@ -548,5 +554,58 @@ describe('Fase 04 — gudang, scan, dokumen serah-terima', () => {
       .set(auth(c.warehouse))
       .send({});
     expect(out.status).toBe(200); // pesanan terkonfirmasi langsung boleh keluar (tanpa jadwal)
+  });
+
+  it('batas keluar = akhir hari sewa pertama (24:00 WIB): lewat batas → batal otomatis, deposit hangus, gudang diblokir', async () => {
+    // Batas untuk sewa 16 Nov = 16 Nov 24:00 WIB = 16 Nov 17:00 UTC.
+    expect(pickupDeadline(new Date('2026-11-16T00:00:00Z')).toISOString()).toBe(
+      '2026-11-16T17:00:00.000Z',
+    );
+
+    const c = await setup();
+    const { product, assets } = await seedProduct('Speaker', 2);
+    const [a1] = assets;
+    if (!a1) throw new Error('seed');
+    const o = await order(c, [{ productId: product.id, quantity: 1 }], '2027-08-10', '2027-08-11');
+    const pick = data<PickListDto>(await createPick(c, o.id));
+    expect((await scan(c, pick.id, { action: 'PICK', qrToken: a1.qrToken })).status).toBe(200);
+
+    const get = async () =>
+      data<OrderDto>(await request(c.app).get(`${V1}/orders/${o.id}`).set(auth(c.admin)));
+    // Sebelum batas: job tidak menyentuh pesanan.
+    expect(await expireNoShows(db, new Date('2027-08-10T16:59:00Z'))).toBe(0);
+    expect((await get()).status).toBe('SCHEDULED');
+
+    // Sesudah 24:00 WIB hari sewa pertama, barang belum keluar → batal otomatis.
+    expect(await expireNoShows(db, new Date('2027-08-10T17:00:01Z'))).toBe(1);
+    const after = await get();
+    expect(after.status).toBe('CANCELLED');
+    expect(after.noShowAt).not.toBeNull();
+    expect(after.history.at(-1)?.note).toContain('deposit hangus');
+    // Pick list dibatalkan dan aset yang sudah dipilih kembali tersedia.
+    expect((await getPick(c, pick.id)).status).toBe('CANCELLED');
+    expect((await db.asset.findUniqueOrThrow({ where: { id: a1.id } })).status).toBe('AVAILABLE');
+    // Aman dijalankan berulang.
+    expect(await expireNoShows(db, new Date('2027-08-10T18:00:00Z'))).toBe(0);
+
+    // Gudang tidak bisa menyiapkan lagi.
+    const again = await scan(c, pick.id, { action: 'PICK', qrToken: a1.qrToken });
+    expect(again.status).toBe(409);
+    expect(errorCode(again)).toBe('PICKUP_DEADLINE_PASSED');
+    expect(errorCode(await createPick(c, o.id))).toBe('PICKUP_DEADLINE_PASSED');
+  });
+
+  it('gerbang lazy: aksi gudang setelah batas membatalkan pesanan walau job belum jalan', async () => {
+    const c = await setup();
+    const { product } = await seedProduct('Mic', 1);
+    const o = await order(c, [{ productId: product.id, quantity: 1 }], '2027-09-01', '2027-09-01');
+    // Geser tanggal sewa ke masa lalu seolah hari sewa sudah lewat tanpa barang keluar.
+    await db.order.update({ where: { id: o.id }, data: { startDate: new Date('2026-01-01') } });
+    const res = await createPick(c, o.id);
+    expect(res.status).toBe(409);
+    expect(errorCode(res)).toBe('PICKUP_DEADLINE_PASSED');
+    const after = await db.order.findUniqueOrThrow({ where: { id: o.id } });
+    expect(after.status).toBe('CANCELLED');
+    expect(after.noShowAt).not.toBeNull();
   });
 });

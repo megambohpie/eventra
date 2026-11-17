@@ -32,7 +32,7 @@ export type OrderStatus = (typeof ORDER_STATUSES)[number];
 
 /** Transisi yang valid; setiap perubahan divalidasi backend dan dicatat sebagai event. */
 export const ORDER_TRANSITIONS: Record<OrderStatus, readonly OrderStatus[]> = {
-  DRAFT: ['PENDING_REVIEW', 'CANCELLED'],
+  DRAFT: ['PENDING_REVIEW', 'CONFIRMED', 'CANCELLED'],
   PENDING_REVIEW: ['QUOTED', 'CONFIRMED', 'REJECTED', 'CANCELLED'],
   QUOTED: ['AWAITING_PAYMENT', 'CONFIRMED', 'REJECTED', 'CANCELLED', 'QUOTED'],
   AWAITING_PAYMENT: ['CONFIRMED', 'EXPIRED', 'CANCELLED'],
@@ -241,6 +241,8 @@ export const orderInputSchema = z
     pricingMode: z.enum(ORDER_PRICING_MODES).default('LINE'),
     /** Total borongan seluruh sewa (tidak dikali hari); wajib bila LUMP, harus kosong bila LINE. */
     lumpTotal: z.number().int().min(0).max(MAX_ORDER_PRICE).nullish(),
+    /** Nominal deposit hasil negosiasi (seluruh pesanan, tidak dikali hari); kosong = deposit default per unit. */
+    depositOverride: z.number().int().min(0).max(MAX_ORDER_PRICE).nullish(),
     items: z.array(orderItemInputSchema).min(1).max(50),
   })
   .refine(dateRange, dateRangeMessage)
@@ -343,6 +345,10 @@ export interface OrderSummaryDto {
   pricingMode: OrderPricingMode;
   /** Total borongan; null pada harga per baris. */
   lumpTotal: number | null;
+  /** Deposit hasil negosiasi; null = deposit default per unit. */
+  depositOverride: number | null;
+  /** Waktu pesanan batal otomatis karena barang tidak keluar sampai batas; deposit hangus. null = bukan no-show. */
+  noShowAt: string | null;
   /** True bila pengguna tidak punya `order.price.read`: semua nominal harga dikosongkan (0). */
   pricesHidden: boolean;
   holdExpiresAt: string | null;

@@ -5,6 +5,7 @@ import {
   replacementCancelSchema,
   replacementListQuerySchema,
   replacementReceiveSchema,
+  hasCapability,
   type Page,
   type ReplacementTaskDto,
   type ScanAction,
@@ -124,6 +125,9 @@ export function replacementsRouter(db: PrismaClient): Router {
       const input = pickScanSchema.parse(req.body);
       const user = currentUser(req);
       const method: ScanMethod = input.qrToken ? 'QR' : 'MANUAL';
+      if (input.action === 'VERIFY' && !input.qrToken && !hasCapability(user.role, 'scan.manual')) {
+        throw new HttpError(403, 'MANUAL_SCAN_FORBIDDEN', 'Verifikasi akhir wajib memindai QR');
+      }
       const action: ScanAction =
         input.action === 'PICK' ? 'REPLACEMENT_PICK' : 'REPLACEMENT_VERIFY';
       const head = await db.replacementTask.findUnique({
@@ -205,7 +209,7 @@ export function replacementsRouter(db: PrismaClient): Router {
             return;
           }
 
-          // VERIFY: wajib QR dan harus aset yang dipilih untuk tugas ini.
+          // VERIFY: QR (Owner/Admin boleh mengetik kode aset) dan harus aset yang dipilih untuk tugas ini.
           if (task.status !== 'PICKED') {
             throw wrongState('Pilih aset pengganti lebih dulu atau aset sudah diverifikasi');
           }

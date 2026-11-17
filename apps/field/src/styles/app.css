@@ -1,0 +1,180 @@
+/* Aplikasi lapangan (web tampilan ponsel). Hanya kelas semantik `ev-*` yang dipakai komponen. */
+@layer utilities {
+  /* ---------- Kerangka ---------- */
+  .ev-app {
+    @apply mx-auto flex min-h-dvh w-full max-w-xl flex-col bg-base-200;
+  }
+  .ev-main {
+    @apply flex flex-1 flex-col gap-4 px-4 pt-4 pb-28;
+  }
+  .ev-dock {
+    @apply fixed inset-x-0 bottom-0 z-30 mx-auto max-w-xl border-t border-base-300 bg-base-100;
+  }
+  .ev-dock__item {
+    @apply text-base-content/60;
+  }
+  .ev-dock__item.active {
+    @apply text-primary;
+  }
+  .ev-icon {
+    @apply size-5 shrink-0;
+  }
+  .ev-toast {
+    @apply z-50;
+  }
+  .ev-toast__item {
+    @apply shadow-lg;
+  }
+
+  /* ---------- Halaman ---------- */
+  .ev-screen {
+    @apply flex flex-col gap-4;
+  }
+  .ev-screen__head {
+    @apply flex items-center gap-1;
+  }
+  .ev-screen__title {
+    @apply flex-1 text-xl font-bold tracking-tight;
+  }
+  .ev-section {
+    @apply flex flex-col gap-3;
+  }
+  .ev-section__title {
+    @apply text-base font-semibold;
+  }
+  .ev-loading {
+    @apply flex justify-center p-6;
+  }
+  .ev-empty {
+    @apply p-6 text-center text-sm text-base-content/60;
+  }
+  .ev-error {
+    @apply flex flex-col items-center gap-2 p-6 text-center text-error;
+  }
+  .ev-error-text {
+    @apply text-sm text-error;
+  }
+  .ev-warn-text {
+    @apply text-sm text-warning;
+  }
+
+  /* ---------- Kartu & baris ---------- */
+  .ev-card {
+    @apply rounded-2xl border border-base-300/40 bg-base-100 shadow-sm;
+  }
+  .ev-card--link {
+    @apply transition active:scale-[0.99];
+  }
+  .ev-card__body {
+    @apply gap-2 p-4;
+  }
+  .ev-row {
+    @apply flex items-start justify-between gap-3 text-sm;
+  }
+  .ev-row__label {
+    @apply shrink-0 text-base-content/60;
+  }
+  .ev-row__value {
+    @apply min-w-0 text-right font-medium break-words;
+  }
+  .ev-strong {
+    @apply text-base font-bold break-words;
+  }
+  .ev-muted {
+    @apply text-sm break-words text-base-content/60;
+  }
+  .ev-badges {
+    @apply flex flex-wrap gap-2;
+  }
+  .ev-between {
+    @apply flex items-center justify-between gap-2;
+  }
+
+  /* ---------- Tombol & badge ---------- */
+  .badge {
+    @apply h-auto min-h-6 w-fit shrink-0 py-0.5 whitespace-nowrap;
+  }
+  .btn {
+    @apply min-h-11;
+  }
+  .ev-btn--block {
+    @apply w-full;
+  }
+
+  /* ---------- Form ---------- */
+  .ev-field {
+    @apply flex flex-col gap-1;
+  }
+  .ev-field__label {
+    @apply text-sm font-medium;
+  }
+  .ev-control {
+    @apply w-full;
+  }
+
+  /* ---------- Login ---------- */
+  .ev-login {
+    @apply mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center gap-4 p-4;
+  }
+  .ev-login__card {
+    @apply w-full;
+  }
+  .ev-login__logo {
+    @apply size-16 self-center;
+  }
+
+  /* ---------- Foto ---------- */
+  .ev-photo-slots {
+    @apply flex flex-col gap-2;
+  }
+  .ev-photo-slot {
+    @apply flex flex-col gap-1 rounded-xl border border-base-300 bg-base-100 p-3;
+  }
+  .ev-photo-slot[data-missing='true'] {
+    @apply border-warning/60;
+  }
+  .ev-photo-slot__label {
+    @apply text-sm font-semibold;
+  }
+  .ev-photo-slot__body {
+    @apply flex flex-wrap items-center gap-2;
+  }
+  .ev-thumbs {
+    @apply flex flex-wrap items-center gap-2;
+  }
+  .ev-thumb {
+    @apply size-20 rounded-lg border border-base-300 object-cover;
+  }
+
+  /* ---------- Modal & pemindai ---------- */
+  .ev-modal__box {
+    @apply w-11/12 max-w-md;
+  }
+  .ev-modal__title {
+    @apply text-lg font-bold;
+  }
+  .ev-modal__actions {
+    @apply flex justify-end gap-2;
+  }
+  .ev-scanner {
+    @apply flex flex-col gap-3;
+  }
+  .ev-scanner__head {
+    @apply flex items-center justify-between;
+  }
+  .ev-scanner__video {
+    @apply aspect-square w-full rounded-xl bg-black object-cover;
+  }
+  .ev-scanner__feedback {
+    @apply rounded-lg bg-base-200 p-3 text-sm font-medium;
+  }
+  .ev-scanner__feedback[data-ok='true'] {
+    @apply text-success;
+  }
+  .ev-scanner__feedback[data-ok='false'] {
+    @apply text-error;
+  }
+  .ev-scanner__manual {
+    @apply flex items-center gap-2;
+  }
+}

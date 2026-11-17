@@ -82,6 +82,11 @@ export const REPORTABLE_ASSET_STATUSES: readonly AssetStatus[] = [
 
 export const MAX_INCIDENT_PHOTOS = 5;
 
+/** Foto wajib laporan kerusakan: barang, bagian rusak, dan barang dengan stiker aset terlihat. */
+export const INCIDENT_PHOTO_KINDS = ['ITEM', 'DAMAGE', 'STICKER'] as const;
+export type IncidentPhotoKind = (typeof INCIDENT_PHOTO_KINDS)[number];
+export const incidentPhotoKindSchema = z.enum(INCIDENT_PHOTO_KINDS);
+
 export const INCIDENT_STATUS_BADGE: Record<IncidentStatus, BadgeVariant> = {
   DRAFT: 'neutral',
   REPORTED: 'error',
@@ -129,6 +134,8 @@ const rupiah = z.number().int().min(0).max(100_000_000_000);
 /** Aset dilaporkan lewat scan QR (utama) atau kode aset (manual bila QR rusak/tak terbaca). */
 export const incidentCreateSchema = z
   .object({
+    /** Nomor pesanan yang sedang berjalan; wajib agar laporan tertaut ke pesanan yang benar. */
+    orderNumber: z.string().trim().toUpperCase().min(3).max(40),
     qrToken: qrToken.optional(),
     assetCode: assetCode.optional(),
     urgency: z.enum(INCIDENT_URGENCIES),
@@ -249,6 +256,26 @@ export interface ServiceTicketDto {
   createdAt: string;
 }
 
+/** Pesanan aktif (barang sedang di luar gudang) yang dapat dipilih saat melapor kerusakan. */
+export interface ReportableOrderDto {
+  id: string;
+  number: string;
+  customerName: string;
+  eventLocation: string;
+  /** Aset pesanan ini yang sedang di luar gudang dan masih bisa dilaporkan. */
+  assets: { code: string; productName: string }[];
+}
+
+/** Isi surat jalan hasil scan QR: aset di dokumen itu yang masih dapat dilaporkan kerusakannya. */
+export interface DeliveryNoteReportDto {
+  documentNumber: string;
+  orderId: string;
+  orderNumber: string;
+  customerName: string;
+  eventLocation: string;
+  assets: { code: string; productName: string }[];
+}
+
 export interface ReplacementTaskDto {
   id: string;
   number: string;
@@ -314,6 +341,7 @@ export interface IncidentDto extends IncidentSummaryDto {
   closeNote: string | null;
   closedAt: string | null;
   photoIds: string[];
+  photos: { id: string; kind: IncidentPhotoKind }[];
   events: IncidentEventDto[];
   serviceTickets: ServiceTicketDto[];
   replacement: ReplacementTaskDto | null;

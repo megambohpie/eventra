@@ -10,10 +10,13 @@ const QR = 'abcdefghijklmnopqrstuvwx';
 
 describe('incidents — skema', () => {
   it('laporan memerlukan tepat satu pengenal aset dan deskripsi yang memadai', () => {
-    const base = { urgency: 'HIGH', description: 'Panel pecah' } as const;
+    const base = { orderNumber: 'ORD-001', urgency: 'HIGH', description: 'Panel pecah' } as const;
     expect(incidentCreateSchema.safeParse({ ...base, qrToken: QR }).success).toBe(true);
     expect(incidentCreateSchema.safeParse({ ...base, assetCode: 'ast-000001' }).success).toBe(true);
     expect(incidentCreateSchema.safeParse(base).success).toBe(false);
+    expect(incidentCreateSchema.safeParse({ ...base, orderNumber: '', qrToken: QR }).success).toBe(
+      false,
+    );
     expect(
       incidentCreateSchema.safeParse({ ...base, qrToken: QR, assetCode: 'AST-000001' }).success,
     ).toBe(false);
