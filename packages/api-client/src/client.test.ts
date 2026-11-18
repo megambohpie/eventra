@@ -116,7 +116,7 @@ describe('unggah berkas mentah', () => {
       return respond(200, { data: {} })(config);
     };
     const data = new Uint8Array([1, 2, 3]).buffer;
-    await uploadIncidentPhoto(client, 'i1', { data, type: 'image/jpeg' });
+    await uploadIncidentPhoto(client, 'i1', { data, type: 'image/jpeg' }, 'ITEM');
     expect(sent?.body).toBe(data);
     expect(sent?.type).toBe('image/jpeg');
   });

@@ -9,14 +9,26 @@ export const RESET_TTL_MS = 60 * 60 * 1000;
 export interface AccessClaims {
   sub: string;
   role: Role;
+  /** Hanya token portal pelanggan: id pesanan satu-satunya yang boleh diakses. */
+  ord?: string;
 }
 
-export function signAccessToken(secret: string, claims: AccessClaims): string {
-  return jwt.sign({ role: claims.role }, secret, {
-    subject: claims.sub,
-    expiresIn: ACCESS_TTL_SECONDS,
-    algorithm: 'HS256',
-  });
+export const PORTAL_TTL_SECONDS = 12 * 60 * 60;
+
+export function signAccessToken(
+  secret: string,
+  claims: AccessClaims,
+  ttlSeconds = ACCESS_TTL_SECONDS,
+): string {
+  return jwt.sign(
+    claims.ord ? { role: claims.role, ord: claims.ord } : { role: claims.role },
+    secret,
+    {
+      subject: claims.sub,
+      expiresIn: ttlSeconds,
+      algorithm: 'HS256',
+    },
+  );
 }
 
 /** Mengembalikan claim bila token valid dan belum kadaluarsa; null bila tidak. */
@@ -26,7 +38,12 @@ export function verifyAccessToken(secret: string, token: string): AccessClaims |
     if (typeof payload === 'string' || typeof payload.sub !== 'string') return null;
     const role = payload['role'];
     if (!ROLES.includes(role as Role)) return null;
-    return { sub: payload.sub, role: role as Role };
+    const ord = payload['ord'];
+    return {
+      sub: payload.sub,
+      role: role as Role,
+      ...(typeof ord === 'string' ? { ord } : {}),
+    };
   } catch {
     return null;
   }

@@ -5,10 +5,11 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   createPickList,
   getHandoverPdf,
+  getPickListTabCounts,
   listPickLists,
   listPickableOrders,
 } from '@eventra/api-client';
-import { PICK_LIST_STATUSES, type PickListStatus } from '@eventra/shared';
+import { PICK_LIST_TABS, type PickListTab } from '@eventra/shared';
 import { api } from '@/api';
 import { useAuth } from '@/auth/AuthProvider';
 import { Button } from '@/components/ui/Button';
@@ -33,21 +34,19 @@ export function WarehousePage() {
   const [params] = useSearchParams();
 
   const [q, setQ] = useState(params.get('q') ?? '');
-  const [status, setStatus] = useState<PickListStatus | ''>('');
+  const initialTab = params.get('tab');
+  const [tab, setTab] = useState<PickListTab>(
+    PICK_LIST_TABS.find((x) => x === initialTab) ?? 'TO_DISPATCH',
+  );
   const [page, setPage] = useState(1);
   const [creating, setCreating] = useState(false);
   const [orderId, setOrderId] = useState('');
 
   const { data, loading } = useResource(
-    () =>
-      listPickLists(api, {
-        q: q || undefined,
-        status: status || undefined,
-        page,
-        pageSize: PAGE_SIZE,
-      }),
-    `${q}|${status}|${page}`,
+    () => listPickLists(api, { q: q || undefined, tab, page, pageSize: PAGE_SIZE }),
+    `${q}|${tab}|${page}`,
   );
+  const counts = useResource(() => getPickListTabCounts(api), `counts-${tab}-${data?.total ?? 0}`);
   const eligible = useResource(
     () => (creating ? listPickableOrders(api) : Promise.resolve(undefined)),
     `eligible-${creating}`,
@@ -74,30 +73,36 @@ export function WarehousePage() {
               setPage(1);
             }}
           />
-          <select
-            className="select select-sm ev-control ev-select--auto"
-            aria-label={t('common.status')}
-            value={status}
-            onChange={(e) => {
-              setStatus(e.target.value as PickListStatus | '');
-              setPage(1);
-            }}
-          >
-            <option value="">
-              {t('common.status')}: {t('common.all')}
-            </option>
-            {PICK_LIST_STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {t(`warehouse.statuses.${s}`)}
-              </option>
-            ))}
-          </select>
           {canWrite && (
             <Button size="sm" variant="primary" icon={mdiPlus} onClick={() => setCreating(true)}>
               {t('warehouse.new')}
             </Button>
           )}
         </PageHeader>
+
+        <div role="tablist" className="tabs tabs-border ev-tabs">
+          {PICK_LIST_TABS.map((key) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              className={`tab ${tab === key ? 'tab-active' : ''}`.trim()}
+              aria-selected={tab === key}
+              onClick={() => {
+                setTab(key);
+                setPage(1);
+              }}
+            >
+              {t(`warehouse.tabs.${key}`)}
+              {counts.data && (
+                <span className="ev-tabs__count" data-alert={key === 'RETURN_CHECK'}>
+                  {counts.data[key]}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+        <p className="ev-hint">{t(`warehouse.tabHints.${tab}`)}</p>
 
         {loading && !data ? (
           <Loading />

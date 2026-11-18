@@ -17,6 +17,7 @@ import {
 } from '@eventra/shared';
 import { api } from '@/api';
 import { useAuth } from '@/auth/AuthProvider';
+import { usePortal } from '@/auth/portal';
 import { Badge } from '@/components/Badge';
 import { Button } from '@/components/Button';
 import { PhotoSlot } from '@/components/PhotoSlot';
@@ -65,6 +66,7 @@ export function IncidentDetailPage() {
   const { id = '' } = useParams();
   const { user } = useAuth();
   const access = fieldAccess(user?.role ?? 'CUSTOMER');
+  const portal = usePortal();
   const { data, error, loading, reload, setData } = useAsync(() => getIncident(api, id), id);
   const [added, setAdded] = useState<Partial<Record<IncidentPhotoKind, File>>>({});
 
@@ -77,7 +79,7 @@ export function IncidentDetailPage() {
   }
 
   const incident = data;
-  const isDraft = incident.status === 'DRAFT' && access.reportIncident;
+  const isDraft = incident.status === 'DRAFT' && (access.reportIncident || portal !== null);
   const missing = INCIDENT_PHOTO_KINDS.filter((k) => !incident.photos.some((p) => p.kind === k));
 
   const sendDraft = async () => {

@@ -54,7 +54,10 @@ function send(app: Express, r: RouteDef, token?: string): Promise<request.Respon
 /** Rute publik (login, refresh, reset); selain itu wajib autentikasi. */
 const PUBLIC_FILE = 'auth.ts';
 const PROTECTED_IN_AUTH = new Set(['/me']);
-const isPublic = (r: RouteDef) => r.file === PUBLIC_FILE && !PROTECTED_IN_AUTH.has(r.path);
+// Login pelanggan (portal) publik; rute portal lain wajib token.
+const isPublic = (r: RouteDef) =>
+  (r.file === PUBLIC_FILE && !PROTECTED_IN_AUTH.has(r.path)) ||
+  (r.file === 'portal.ts' && r.path === '/portal/login');
 
 describe('Fase 08 — keamanan akses', () => {
   beforeEach(resetDb);
@@ -113,7 +116,11 @@ describe('Fase 08 — keamanan akses', () => {
     const { app } = createTestApp();
     const owner = await loginAs(app, 'OWNER');
     const failures: string[] = [];
-    for (const r of allRoutes().filter((x) => x.method !== 'get' && !isPublic(x))) {
+    // Rute portal khusus token pelanggan: staf (termasuk OWNER) memang ditolak 403.
+    const writes = allRoutes().filter(
+      (x) => x.method !== 'get' && !isPublic(x) && x.file !== 'portal.ts',
+    );
+    for (const r of writes) {
       const res = await send(app, r, owner);
       if (res.status === 403) failures.push(`${r.method.toUpperCase()} ${r.path} → ${res.status}`);
     }
@@ -234,7 +241,7 @@ describe('Fase 08 — unggah berkas', () => {
     'base64',
   );
   const endpoints = [
-    `/incidents/${UUID}/photos`,
+    `/incidents/${UUID}/photos?kind=ITEM`,
     `/pick-lists/${UUID}/items/${UUID}/photos`,
     `/assets/${UUID}/photos`,
     `/assets/groups/${UUID}/photos?date=2026-01-01`,
@@ -268,11 +275,13 @@ describe('Fase 08 — unggah berkas', () => {
 
   it('unggah memerlukan capability yang tepat', async () => {
     const { app } = createTestApp();
+    // Pelanggan portal boleh melapor insiden (dibatasi pesanannya); rute unggah lain tetap tertutup.
     const customer = await loginAs(app, 'CUSTOMER');
+    const warehouse = await loginAs(app, 'WAREHOUSE');
     for (const path of endpoints) {
       const res = await request(app)
         .post(`${V1}${path}`)
-        .set(auth(customer))
+        .set(auth(path.startsWith('/incidents') ? warehouse : customer))
         .set('Content-Type', 'image/png')
         .send(PNG);
       expect(res.status, path).toBe(403);

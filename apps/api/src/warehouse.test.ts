@@ -534,6 +534,63 @@ describe('Fase 04 — gudang, scan, dokumen serah-terima', () => {
     }
   });
 
+  it('tab daftar gudang: perlu dikeluarkan, di luar, konfirmasi kembali, selesai', async () => {
+    const c = await setup();
+    const { product, assets } = await seedProduct('Lampu', 2);
+    const [a1, a2] = assets;
+    if (!a1 || !a2) throw new Error('seed');
+
+    const list = async (tab: string) =>
+      data<{ items: { id: string }[]; total: number }>(
+        await request(c.app).get(`${V1}/pick-lists?tab=${tab}`).set(auth(c.warehouse)),
+      );
+    const counts = async () =>
+      data<Record<string, number>>(
+        await request(c.app).get(`${V1}/pick-lists/tab-counts`).set(auth(c.warehouse)),
+      );
+
+    // Pick list baru: perlu dikeluarkan.
+    const o = await order(c, [{ productId: product.id, quantity: 1 }]);
+    const pick = data<PickListDto>(await createPick(c, o.id));
+    expect((await list('TO_DISPATCH')).items.map((i) => i.id)).toContain(pick.id);
+    expect(await counts()).toEqual({ TO_DISPATCH: 1, OUT: 0, RETURN_CHECK: 0, DONE: 0 });
+
+    // Sudah keluar dan masa sewa belum lewat: di luar.
+    expect((await scan(c, pick.id, { action: 'PICK', qrToken: a1.qrToken })).status).toBe(200);
+    expect((await scan(c, pick.id, { action: 'VERIFY', qrToken: a1.qrToken })).status).toBe(200);
+    const out = await request(c.app)
+      .post(`${V1}/pick-lists/${pick.id}/checkout`)
+      .set(auth(c.warehouse))
+      .send({});
+    expect(out.status).toBe(200);
+    expect((await list('OUT')).items.map((i) => i.id)).toContain(pick.id);
+    expect(await counts()).toEqual({ TO_DISPATCH: 0, OUT: 1, RETURN_CHECK: 0, DONE: 0 });
+
+    // Masa sewa lewat tetapi belum dikonfirmasi kembali: pindah ke konfirmasi kembali.
+    await db.order.update({
+      where: { id: o.id },
+      data: { endDate: new Date('2020-01-02'), startDate: new Date('2020-01-01') },
+    });
+    expect((await list('OUT')).total).toBe(0);
+    expect((await list('RETURN_CHECK')).items.map((i) => i.id)).toContain(pick.id);
+
+    // Dikembalikan: selesai.
+    const back = await request(c.app)
+      .post(`${V1}/pick-lists/${pick.id}/return/scan`)
+      .set(auth(c.warehouse))
+      .send({ qrToken: a1.qrToken, condition: 'GOOD' });
+    expect(back.status).toBe(200);
+    const done = await request(c.app)
+      .post(`${V1}/pick-lists/${pick.id}/return/complete`)
+      .set(auth(c.warehouse))
+      .send({});
+    expect(done.status).toBe(200);
+    expect(await counts()).toEqual({ TO_DISPATCH: 0, OUT: 0, RETURN_CHECK: 0, DONE: 1 });
+    expect(
+      errorCode(await request(c.app).get(`${V1}/pick-lists?tab=XYZ`).set(auth(c.warehouse))),
+    ).toBeTruthy();
+  });
+
   it('checkout butuh pesanan SCHEDULED', async () => {
     const c = await setup();
     const { product, assets } = await seedProduct('Speaker', 1);

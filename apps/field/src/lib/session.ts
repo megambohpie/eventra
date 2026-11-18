@@ -1,4 +1,4 @@
-import type { AuthSession, UserDto } from '@eventra/shared';
+import type { AuthSession, PortalSession, UserDto } from '@eventra/shared';
 
 /**
  * Store sesi global (dapat dibaca interceptor Axios di luar React).
@@ -70,4 +70,38 @@ export function clearSession(): void {
 export function subscribeSession(listener: () => void): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
+}
+
+/**
+ * Sesi pelanggan (login no HP + no pesanan): satu token = satu pesanan. Disimpan terpisah dari sesi staf
+ * agar pelanggan dengan beberapa pesanan cukup keluar lalu masuk dengan pesanan lainnya.
+ */
+const PORTAL_KEY = 'eventra.portal';
+
+function loadPortal(): PortalSession | null {
+  try {
+    const raw = localStorage.getItem(PORTAL_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as PortalSession;
+    return parsed.accessToken && new Date(parsed.expiresAt).getTime() > Date.now() ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+let portal: PortalSession | null = loadPortal();
+
+/** Sesi pelanggan; otomatis dianggap habis setelah `expiresAt` (pelanggan masuk ulang). */
+export const getPortal = (): PortalSession | null =>
+  portal && new Date(portal.expiresAt).getTime() > Date.now() ? portal : null;
+
+export function setPortal(session: PortalSession | null): void {
+  portal = session;
+  try {
+    if (session) localStorage.setItem(PORTAL_KEY, JSON.stringify(session));
+    else localStorage.removeItem(PORTAL_KEY);
+  } catch {
+    /* abaikan */
+  }
+  emit();
 }

@@ -5,6 +5,7 @@ import type {
   IncidentDto,
   NotificationListDto,
   OrderDto,
+  PortalOrderDto,
   PickListDto,
   ReplacementTaskDto,
   ServiceTicketDto,
@@ -16,6 +17,8 @@ const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
 const errorCode = (res: request.Response) => (res.body as { error: { code: string } }).error.code;
 const data = <T>(res: request.Response) => (res.body as { data: T }).data;
 
+const PNG_1X1 =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
 const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0x10, 0x4a, 0x46, 0x49, 0x46, 0, 1, 1]);
 
 let seq = 0;
@@ -69,7 +72,7 @@ async function setup(): Promise<Ctx> {
   const wh = await db.user.findFirstOrThrow({ where: { role: 'WAREHOUSE' } });
   const fu = await db.user.findFirstOrThrow({ where: { role: 'FIELD_PIC' } });
   const customer = await db.customer.create({
-    data: { type: 'COMPANY', name: 'PT Acara', phone: '021' },
+    data: { type: 'COMPANY', name: 'PT Acara', phone: '0812-3456-7890' },
   });
   return {
     app,
@@ -650,5 +653,170 @@ describe('Fase 05 — insiden, servis, aset pengganti', () => {
       ),
     ).toBe('ASSET_NOT_SERVICEABLE');
     expect((await get(c, c.admin, '/service-tickets?status=CANCELLED')).status).toBe(200);
+  });
+});
+
+describe('Portal pelanggan — akses per pesanan (no HP + no pesanan)', () => {
+  beforeEach(resetDb);
+  afterAll(() => db.$disconnect());
+
+  const portalLogin = (c: Ctx, phone: string, orderNumber: string) =>
+    request(c.app).post(`${V1}/portal/login`).send({ phone, orderNumber });
+
+  it('login hanya dengan HP + nomor pesanan yang cocok; format HP bebas', async () => {
+    const c = await setup();
+    const { product, assets } = await seedProduct('Panel', 3);
+    await dispatched(c, product.id, assets, 1);
+    for (const phone of ['081234567890', '+62 812-3456-7890', '812 3456 7890']) {
+      const ok = await portalLogin(c, phone, orderNo.toLowerCase());
+      expect(ok.status).toBe(200);
+      expect(data<{ orderNumber: string }>(ok).orderNumber).toBe(orderNo);
+    }
+    const badPhone = await portalLogin(c, '081200000000', orderNo);
+    expect(badPhone.status).toBe(401);
+    expect(errorCode(badPhone)).toBe('INVALID_PORTAL_CREDENTIALS');
+    const badOrder = await portalLogin(c, '081234567890', 'ORD-NOPE-1');
+    expect(badOrder.status).toBe(401);
+    expect(errorCode(badOrder)).toBe('INVALID_PORTAL_CREDENTIALS');
+    // Pesanan DRAFT belum terlihat pelanggan.
+    const draft = await post(c, c.admin, '/orders', {
+      customerId: c.customerId,
+      startDate: '2027-06-01',
+      endDate: '2027-06-02',
+      eventLocation: 'Gedung',
+      items: [{ productId: product.id, quantity: 1 }],
+    });
+    const denied = await portalLogin(c, '081234567890', data<OrderDto>(draft).number);
+    expect(denied.status).toBe(401);
+  });
+
+  it('pelanggan menandatangani dokumen pesanannya sendiri (peran penerima), sekali saja', async () => {
+    const c = await setup();
+    const { product, assets } = await seedProduct('Panel', 4);
+    await dispatched(c, product.id, assets, 1);
+    const orderA = orderNo;
+    await dispatched(c, product.id, assets.slice(1), 1);
+    const orderB = orderNo;
+    const login = async (n: string) =>
+      data<{ accessToken: string }>(await portalLogin(c, '081234567890', n)).accessToken;
+    const sessionA = await login(orderA);
+    const sessionB = await login(orderB);
+    const view = data<PortalOrderDto>(await get(c, sessionA, '/portal/order'));
+    const doc = view.documents[0];
+    const viewB = data<PortalOrderDto>(await get(c, sessionB, '/portal/order'));
+    const docB = viewB.documents[0];
+    if (!doc || !docB) throw new Error('docs');
+    expect(doc.counterpartSigned).toBe(false);
+    expect(doc.signers.map((s) => s.name)).toContain('Budi');
+    const signer = doc.signers.find((s) => s.name === 'Budi');
+    if (!signer) throw new Error('signer');
+    const body = { picId: signer.id, image: PNG_1X1 };
+    const sign = (token: string, id: string, payload: object = body) =>
+      post(c, token, `/portal/documents/${id}/sign`, payload);
+
+    // Dokumen pesanan lain tertutup; PNG tidak valid ditolak; staf tidak punya rute ini.
+    expect((await sign(sessionA, docB.id)).status).toBe(404);
+    expect(
+      errorCode(await sign(sessionA, doc.id, { ...body, image: 'data:image/png;base64,AAAA' })),
+    ).toBe('INVALID_IMAGE');
+    expect((await sign(c.admin, doc.id)).status).toBe(403);
+
+    expect((await sign(sessionA, doc.id)).status).toBe(200);
+    const after = data<PortalOrderDto>(await get(c, sessionA, '/portal/order')).documents[0];
+    expect(after?.counterpartSigned).toBe(true);
+    expect(
+      await db.documentSignature.count({ where: { documentId: doc.id, role: 'COUNTERPART' } }),
+    ).toBe(1);
+    // Tanda tangan append-only: tidak bisa menimpa.
+    expect(errorCode(await sign(sessionA, doc.id))).toBe('ALREADY_SIGNED');
+
+    // Pesanan B: pemesan menandatangani sendiri tanpa memilih PIC (nama dari data pelanggan).
+    expect((await sign(sessionB, docB.id, { image: PNG_1X1 })).status).toBe(200);
+    const bySelf = await db.documentSignature.findFirstOrThrow({
+      where: { documentId: docB.id, role: 'COUNTERPART' },
+    });
+    expect(bySelf.picId).toBeNull();
+    expect(bySelf.signerName).toBe(
+      (await db.customer.findUniqueOrThrow({ where: { id: c.customerId } })).name,
+    );
+  });
+
+  it('token hanya untuk satu pesanan: data, dokumen, dan insiden pesanan lain tertutup', async () => {
+    const c = await setup();
+    const { product, assets } = await seedProduct('Panel', 4);
+    await dispatched(c, product.id, assets, 1);
+    const orderA = orderNo;
+    await dispatched(c, product.id, assets.slice(1), 1);
+    const orderB = orderNo;
+    const [a, b] = [assets[0], assets[1]];
+    if (!a || !b) throw new Error('seed');
+
+    const sessionA = data<{ accessToken: string }>(
+      await portalLogin(c, '081234567890', orderA),
+    ).accessToken;
+    const sessionB = data<{ accessToken: string }>(
+      await portalLogin(c, '081234567890', orderB),
+    ).accessToken;
+
+    const rawA = await get(c, sessionA, '/portal/order');
+    const viewA = data<PortalOrderDto>(rawA);
+    expect(viewA.number).toBe(orderA);
+    expect(viewA.assets.map((x) => x.code)).toEqual([a.code]);
+    expect(viewA.assets[0]?.reportable).toBe(true);
+    expect(viewA.items[0]?.quantity).toBe(1);
+    expect(viewA.documents.length).toBeGreaterThan(0);
+    const viewB = data<PortalOrderDto>(await get(c, sessionB, '/portal/order'));
+    expect(viewB.assets.map((x) => x.code)).toEqual([b.code]);
+
+    // Staf tidak punya tampilan portal.
+    expect((await get(c, c.admin, '/portal/order')).status).toBe(403);
+    // Token portal tidak bisa menyentuh API staf.
+    for (const path of ['/orders', '/customers', '/notifications', '/assets']) {
+      const res = await get(c, sessionA, path);
+      expect(res.status).toBe(403);
+    }
+
+    // PDF: dokumen sendiri boleh, dokumen pesanan lain 404.
+    const docA = viewA.documents[0];
+    const docB = viewB.documents[0];
+    if (!docA || !docB) throw new Error('docs');
+    const pdf = await get(c, sessionA, `/handover-documents/${docA.id}/pdf`);
+    expect(pdf.status).toBe(200);
+    expect(pdf.headers['content-type']).toContain('application/pdf');
+    expect((await get(c, sessionA, `/handover-documents/${docB.id}/pdf`)).status).toBe(404);
+
+    // Lapor kerusakan: hanya aset pada pesanannya sendiri.
+    const other = await post(c, sessionA, '/incidents', {
+      orderNumber: orderB,
+      assetCode: b.code,
+      urgency: 'LOW',
+      description: 'Aset milik pesanan lain',
+    });
+    expect(other.status).toBe(409);
+    expect(errorCode(other)).toBe('ASSET_NOT_ON_ORDER');
+
+    orderNo = orderA;
+    const incidentId = await report(c, a.qrToken, 3, sessionA);
+    const submitted = await post(c, sessionA, `/incidents/${incidentId}/submit`);
+    expect(submitted.status).toBe(200);
+    expect(data<IncidentDto>(submitted).status).toBe('REPORTED');
+
+    const list = data<{ items: { id: string }[] }>(await get(c, sessionA, '/incidents'));
+    expect(list.items.map((i) => i.id)).toEqual([incidentId]);
+    // Pesanan B tidak melihat insiden pesanan A, dan tidak bisa mengubahnya.
+    expect(data<{ items: unknown[] }>(await get(c, sessionB, '/incidents')).items).toHaveLength(0);
+    expect((await get(c, sessionB, `/incidents/${incidentId}`)).status).toBe(404);
+    const photo = await request(c.app)
+      .post(`${V1}/incidents/${incidentId}/photos`)
+      .query({ kind: 'ITEM' })
+      .set(auth(sessionB))
+      .set('Content-Type', 'image/jpeg')
+      .send(JPEG);
+    expect(photo.status).toBe(403);
+    // Daftar pesanan yang bisa dilaporkan hanya pesanannya sendiri.
+    const orders = data<{ number: string }[]>(
+      await get(c, sessionB, '/incidents/reportable-orders'),
+    );
+    expect(orders.map((o) => o.number)).toEqual([orderB]);
   });
 });

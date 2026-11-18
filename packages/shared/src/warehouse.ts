@@ -115,11 +115,21 @@ const assetCode = z
 export const pickListCreateSchema = z.object({ orderId: z.uuid() });
 export type PickListCreateInput = z.input<typeof pickListCreateSchema>;
 
+/**
+ * Tab daftar gudang: TO_DISPATCH = perlu dikeluarkan (OPEN/VERIFIED); OUT = sedang di luar (sudah keluar,
+ * masa sewa belum lewat); RETURN_CHECK = perlu dikonfirmasi kembali (sudah keluar dan masa sewa lewat,
+ * atau pengembalian dengan selisih); DONE = selesai/dibatalkan.
+ */
+export const PICK_LIST_TABS = ['TO_DISPATCH', 'OUT', 'RETURN_CHECK', 'DONE'] as const;
+export type PickListTab = (typeof PICK_LIST_TABS)[number];
+export type PickListTabCounts = Record<PickListTab, number>;
+
 export const pickListListQuerySchema = z.object({
   q: z.string().trim().max(100).optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
   status: z.enum(PICK_LIST_STATUSES).optional(),
+  tab: z.enum(PICK_LIST_TABS).optional(),
 });
 export type PickListListQuery = z.input<typeof pickListListQuerySchema>;
 

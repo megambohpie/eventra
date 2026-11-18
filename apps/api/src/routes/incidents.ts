@@ -52,8 +52,12 @@ import {
   recordAssetEvent,
 } from '../warehouse/service';
 
+const NO_ORDER = '00000000-0000-0000-0000-000000000000';
+
 /** PIC lapangan hanya melihat insiden yang dilaporkannya atau pada pesanan tempat ia ditugaskan. */
 function scopeFor(user: AuthUser): Prisma.IncidentWhereInput {
+  // Pelanggan (portal) hanya melihat insiden pada pesanannya sendiri.
+  if (user.role === 'CUSTOMER') return { orderId: user.portalOrderId ?? NO_ORDER };
   if (user.role !== 'FIELD_PIC') return {};
   return {
     OR: [
@@ -81,9 +85,12 @@ export function incidentsRouter(db: PrismaClient): Router {
   /** Pengunggah foto/pengirim laporan: pelapor sendiri atau pemegang izin review. */
   function assertOwnerOrReviewer(
     user: AuthUser,
-    incident: { reporterId: string },
+    incident: { reporterId: string; orderId: string },
     action: string,
   ): void {
+    if (user.role === 'CUSTOMER' && incident.orderId !== user.portalOrderId) {
+      throw new HttpError(403, 'FORBIDDEN', `Hanya pelapor yang dapat ${action}`);
+    }
     if (incident.reporterId !== user.id && !hasCapability(user.role, 'incident.review')) {
       throw new HttpError(403, 'FORBIDDEN', `Hanya pelapor yang dapat ${action}`);
     }
@@ -142,6 +149,7 @@ export function incidentsRouter(db: PrismaClient): Router {
           ...(user.role === 'FIELD_PIC'
             ? { pics: { some: { role: 'FIELD', userId: user.id } } }
             : {}),
+          ...(user.role === 'CUSTOMER' ? { id: user.portalOrderId ?? NO_ORDER } : {}),
         },
         include: {
           customer: { select: { name: true } },
@@ -204,6 +212,9 @@ export function incidentsRouter(db: PrismaClient): Router {
         },
       });
       if (!doc || doc.type !== 'OUT') {
+        throw new HttpError(404, 'NOT_FOUND', 'Surat jalan tidak ditemukan');
+      }
+      if (user.role === 'CUSTOMER' && doc.orderId !== user.portalOrderId) {
         throw new HttpError(404, 'NOT_FOUND', 'Surat jalan tidak ditemukan');
       }
       if (user.role === 'FIELD_PIC' && !(await fieldPicOf(db, doc.orderId, user.id))) {
@@ -278,6 +289,13 @@ export function incidentsRouter(db: PrismaClient): Router {
           throw new ScanRejected(
             'ORDER_MISMATCH',
             'Nomor pesanan tidak sesuai dengan pesanan aset ini',
+            asset.id,
+          );
+        }
+        if (user.role === 'CUSTOMER' && active.orderId !== user.portalOrderId) {
+          throw new ScanRejected(
+            'ASSET_NOT_ON_ORDER',
+            'Aset ini tidak tercatat pada pesanan Anda',
             asset.id,
           );
         }

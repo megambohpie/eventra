@@ -2,7 +2,7 @@
 @layer utilities {
   /* ---------- Kerangka ---------- */
   .ev-app {
-    @apply mx-auto flex min-h-dvh w-full max-w-xl flex-col bg-base-200;
+    @apply mx-auto flex min-h-dvh w-full max-w-xl flex-col border-x border-base-300 bg-base-200;
   }
   .ev-main {
     @apply flex flex-1 flex-col gap-4 px-4 pt-4 pb-28;
@@ -11,7 +11,10 @@
     @apply fixed inset-x-0 bottom-0 z-30 mx-auto max-w-xl border-t border-base-300 bg-base-100;
   }
   .ev-dock__item {
-    @apply text-base-content/60;
+    @apply text-base-content/60 outline-none;
+  }
+  .ev-dock__item:focus-visible {
+    @apply bg-base-200;
   }
   .ev-dock__item.active {
     @apply text-primary;
@@ -58,9 +61,32 @@
     @apply text-sm text-warning;
   }
 
+  /* ---------- Beranda ---------- */
+  .ev-stats {
+    @apply grid grid-cols-1 gap-3;
+  }
+  .ev-stat {
+    @apply flex items-baseline justify-between gap-3 rounded-2xl border border-base-content/20 bg-base-100 p-4 shadow-sm;
+  }
+  .ev-stat__value {
+    @apply text-3xl font-bold text-primary;
+  }
+  .ev-stat__label {
+    @apply text-sm text-base-content/60;
+  }
+  .ev-shortcuts {
+    @apply grid grid-cols-2 gap-3;
+  }
+  .ev-shortcut {
+    @apply flex min-h-24 flex-col items-center justify-center gap-2 rounded-2xl border border-base-content/20 bg-base-100 p-3 text-center text-sm font-semibold shadow-sm transition active:scale-[0.98];
+  }
+  .ev-shortcut--danger {
+    @apply border-error/50 text-error;
+  }
+
   /* ---------- Kartu & baris ---------- */
   .ev-card {
-    @apply rounded-2xl border border-base-300/40 bg-base-100 shadow-sm;
+    @apply rounded-2xl border border-base-content/20 bg-base-100 shadow-sm;
   }
   .ev-card--link {
     @apply transition active:scale-[0.99];
@@ -69,13 +95,13 @@
     @apply gap-2 p-4;
   }
   .ev-row {
-    @apply flex items-start justify-between gap-3 text-sm;
+    @apply flex items-start justify-between gap-3 border-b border-base-300 py-2 text-sm last:border-b-0;
   }
   .ev-row__label {
-    @apply shrink-0 text-base-content/60;
+    @apply min-w-0 flex-1 text-base-content/60;
   }
   .ev-row__value {
-    @apply min-w-0 text-right font-medium break-words;
+    @apply max-w-[55%] shrink-0 text-right font-medium break-words;
   }
   .ev-strong {
     @apply text-base font-bold break-words;
@@ -109,18 +135,45 @@
     @apply text-sm font-medium;
   }
   .ev-control {
-    @apply w-full;
+    @apply w-full border-base-content/30;
+  }
+  .ev-control:focus,
+  .ev-control:focus-within {
+    @apply border-primary;
+  }
+
+  .ev-select {
+    @apply relative w-full;
+  }
+  .ev-select__menu {
+    @apply absolute z-30 mt-1 max-h-56 w-full flex-nowrap overflow-y-auto rounded-box border border-base-content/20 bg-base-100 p-1 shadow-lg;
+  }
+  .ev-select__empty {
+    @apply px-3 py-2 text-sm opacity-60;
+  }
+
+  .ev-sign {
+    @apply flex flex-col gap-3 border-t border-base-300 pt-3;
+  }
+  .ev-signature {
+    @apply grid gap-2;
+  }
+  .ev-signature__canvas {
+    @apply aspect-[600/220] w-full touch-none rounded-xl border border-base-content/30 bg-white;
   }
 
   /* ---------- Login ---------- */
   .ev-login {
-    @apply mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center gap-4 p-4;
+    @apply mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-4;
   }
   .ev-login__card {
     @apply w-full;
   }
   .ev-login__logo {
     @apply size-16 self-center;
+  }
+  .ev-login__divider {
+    @apply my-1;
   }
 
   /* ---------- Foto ---------- */

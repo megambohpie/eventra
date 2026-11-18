@@ -13,6 +13,7 @@ import { INCIDENT_PHOTO_LABEL, URGENCY_LABEL } from '@/lib/labels';
 import { notify, notifyError } from '@/lib/notifications';
 import { Button } from './Button';
 import { PhotoSlot } from './PhotoSlot';
+import { SearchSelect } from './SearchSelect';
 import { Choice, Field, Muted } from './ui';
 
 type Photos = Partial<Record<IncidentPhotoKind, File>>;
@@ -29,12 +30,20 @@ const URGENCY_OPTIONS = INCIDENT_URGENCIES.map((value) => ({
 export function IncidentReportForm({
   orderNumber,
   assets,
+  initialAsset = '',
+  detailBase = '/incidents',
 }: {
   orderNumber: string;
   assets: { code: string; productName: string }[];
+  /** Aset yang sudah terpilih (mis. dari tombol lapor pada daftar aset). */
+  initialAsset?: string;
+  /** Awalan rute detail insiden setelah laporan dibuat (`/p/incidents` untuk pelanggan). */
+  detailBase?: string;
 }) {
   const navigate = useNavigate();
-  const [assetCode, setAssetCode] = useState('');
+  const [assetCode, setAssetCode] = useState(
+    assets.some((a) => a.code === initialAsset) ? initialAsset : '',
+  );
   const [urgency, setUrgency] = useState<IncidentUrgency>('MEDIUM');
   const [description, setDescription] = useState('');
   const [locationNote, setLocationNote] = useState('');
@@ -73,23 +82,22 @@ export function IncidentReportForm({
       if (incidentId)
         notifyError('Laporan tersimpan sebagai draft. Lengkapi dan kirim dari detail.');
     }
-    if (incidentId) void navigate(`/incidents/${incidentId}`, { replace: true });
+    if (incidentId) void navigate(`${detailBase}/${incidentId}`, { replace: true });
   };
 
   return (
     <>
-      <Choice
-        label="Aset yang rusak"
-        value={assetCode}
-        options={[
-          {
-            value: '',
-            label: assets.length ? 'Pilih aset…' : 'Tidak ada aset yang dapat dilaporkan',
-          },
-          ...assets.map((a) => ({ value: a.code, label: `${a.code} · ${a.productName}` })),
-        ]}
-        onChange={setAssetCode}
-      />
+      <Field label="Aset yang rusak">
+        <SearchSelect
+          value={assetCode}
+          options={assets.map((a) => ({ value: a.code, label: `${a.code} · ${a.productName}` }))}
+          placeholder={
+            assets.length ? 'Cari / pilih aset…' : 'Tidak ada aset yang dapat dilaporkan'
+          }
+          disabled={assets.length === 0}
+          onChange={setAssetCode}
+        />
+      </Field>
       <Choice label="Urgensi" value={urgency} options={URGENCY_OPTIONS} onChange={setUrgency} />
       <Field label="Deskripsi masalah">
         <textarea

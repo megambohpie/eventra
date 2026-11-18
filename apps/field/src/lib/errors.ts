@@ -6,6 +6,7 @@ const MESSAGES: Record<string, string> = {
   UNAUTHENTICATED: 'Sesi berakhir. Silakan masuk kembali.',
   INVALID_REFRESH_TOKEN: 'Sesi berakhir. Silakan masuk kembali.',
   INVALID_CREDENTIALS: 'Email atau kata sandi salah.',
+  INVALID_PORTAL_CREDENTIALS: 'Nomor HP atau nomor pesanan tidak cocok.',
   FORBIDDEN: 'Anda tidak memiliki izin untuk aksi ini.',
 };
 

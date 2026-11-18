@@ -136,10 +136,11 @@ describe('tugas saya', () => {
       replacements: true,
       incidents: true,
     });
+    // Pelanggan (portal) hanya melihat/melapor insiden pesanannya; tidak ada tugas gudang/pengganti.
     expect(taskSourcesFor('CUSTOMER')).toEqual({
       pickLists: false,
       replacements: false,
-      incidents: false,
+      incidents: true,
     });
     expect(fieldAccess('WAREHOUSE')).toMatchObject({
       scanWarehouse: true,
@@ -153,7 +154,12 @@ describe('tugas saya', () => {
       viewDocuments: false,
     });
     expect(fieldAccess('OWNER')).toMatchObject({ scanWarehouse: true, reportIncident: true });
-    expect(fieldAccess('CUSTOMER').tasks).toBe(false);
+    expect(fieldAccess('CUSTOMER')).toMatchObject({
+      scanWarehouse: false,
+      receiveReplacement: false,
+      viewDocuments: false,
+      reportIncident: true,
+    });
   });
 });
 

@@ -5,6 +5,7 @@ import type {
   IncidentStatus,
   IncidentPhotoKind,
   IncidentUrgency,
+  OrderStatus,
   PickItemStatus,
   PickListStatus,
   ReplacementStatus,
@@ -97,4 +98,31 @@ export const SERVICE_TICKET_STATUS_LABEL: Record<ServiceTicketStatus, string> = 
   IN_PROGRESS: 'Dikerjakan',
   COMPLETED: 'Selesai',
   CANCELLED: 'Dibatalkan',
+};
+
+export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
+  DRAFT: 'Draft',
+  PENDING_REVIEW: 'Menunggu tinjauan',
+  QUOTED: 'Penawaran',
+  AWAITING_PAYMENT: 'Menunggu pembayaran',
+  CONFIRMED: 'Terkonfirmasi',
+  SCHEDULED: 'Terjadwal',
+  IN_PROGRESS: 'Sedang berjalan',
+  COMPLETED: 'Selesai',
+  REJECTED: 'Ditolak',
+  CANCELLED: 'Dibatalkan',
+  EXPIRED: 'Kedaluwarsa',
+  ISSUE: 'Ada masalah',
+};
+
+export const PAYMENT_PURPOSE_LABEL: Record<string, string> = { RENT: 'Sewa', DEPOSIT: 'Deposit' };
+export const PAYMENT_METHOD_LABEL: Record<string, string> = {
+  CASH: 'Tunai',
+  BANK_TRANSFER: 'Transfer bank',
+  GATEWAY: 'Gateway',
+  OTHER: 'Lainnya',
+};
+export const PAYMENT_STATUS_LABEL: Record<string, string> = {
+  SUCCEEDED: 'Diterima',
+  PENDING: 'Menunggu konfirmasi',
 };

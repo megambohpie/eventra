@@ -8,6 +8,8 @@ export interface AuthUser {
   id: string;
   name: string;
   role: Role;
+  /** Terisi bila sesi berasal dari portal pelanggan: satu-satunya pesanan yang boleh diakses. */
+  portalOrderId?: string;
 }
 
 declare module 'express-serve-static-core' {
@@ -27,7 +29,12 @@ export function authenticate(db: PrismaClient, jwtSecret: string): RequestHandle
     if (!user || !user.active) {
       throw new HttpError(401, 'UNAUTHENTICATED', 'Autentikasi diperlukan');
     }
-    req.user = { id: user.id, name: user.name, role: user.role };
+    req.user = {
+      id: user.id,
+      name: user.name,
+      role: user.role,
+      ...(claims.ord ? { portalOrderId: claims.ord } : {}),
+    };
     next();
   };
 }

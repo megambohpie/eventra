@@ -736,6 +736,54 @@
   .ev-table__hint--block {
     @apply ml-0 block;
   }
+  .ev-tabs {
+    @apply mb-2 overflow-x-auto;
+  }
+  .ev-tabs .tab {
+    @apply min-h-11 gap-2 whitespace-nowrap;
+  }
+  .ev-tabs__count {
+    @apply rounded-full bg-base-200 px-2 text-xs font-semibold;
+  }
+  .ev-tabs__count[data-alert='true'] {
+    @apply bg-warning/30;
+  }
+  .ev-checklist {
+    @apply mb-4 rounded-box border border-base-300;
+  }
+  .ev-checklist__head {
+    @apply flex flex-wrap items-center justify-between gap-2 border-b border-base-300 p-3;
+  }
+  .ev-checklist__all {
+    @apply flex min-h-10 cursor-pointer items-center gap-2 font-medium;
+  }
+  .ev-checklist__list {
+    @apply max-h-80 divide-y divide-base-300 overflow-y-auto;
+  }
+  .ev-checklist__item {
+    @apply flex items-center justify-between gap-2 px-3;
+  }
+  .ev-checklist__item[data-status='RETURNED'] {
+    @apply bg-success/10;
+  }
+  .ev-checklist__item[data-status='MISSING'] {
+    @apply bg-error/10;
+  }
+  .ev-checklist__label {
+    @apply flex min-h-12 flex-1 cursor-pointer items-center gap-3 py-2;
+  }
+  .ev-checklist__text {
+    @apply min-w-0 break-words;
+  }
+  .ev-scanner {
+    @apply flex flex-col gap-3;
+  }
+  .ev-scanner__video {
+    @apply aspect-square w-full rounded-box bg-base-300 object-cover;
+  }
+  .ev-scanner__manual {
+    @apply flex items-center gap-2;
+  }
   .ev-progress-cell {
     @apply min-w-24;
   }

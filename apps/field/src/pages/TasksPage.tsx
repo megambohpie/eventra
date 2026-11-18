@@ -1,31 +1,17 @@
 import { mdiAlertOctagon } from '@mdi/js';
 import { Link } from 'react-router-dom';
-import { listIncidents, listPickLists, listReplacements } from '@eventra/api-client';
 import { useAuth } from '@/auth/AuthProvider';
 import { Badge } from '@/components/Badge';
 import { Card, EmptyState, ErrorState, Loading, Muted, Screen, Strong } from '@/components/ui';
 import { Icon } from '@/components/Icon';
-import { api } from '@/api';
-import { useAsync } from '@/hooks/useAsync';
-import { buildTasks, fieldAccess, taskSourcesFor } from '@/lib/tasks';
+import { useTasks } from '@/hooks/useTasks';
+import { fieldAccess } from '@/lib/tasks';
 
 export function TasksPage() {
   const { user } = useAuth();
   const role = user?.role ?? 'CUSTOMER';
   const access = fieldAccess(role);
-  const { data, error, loading, reload } = useAsync(async () => {
-    const want = taskSourcesFor(role);
-    const [pickLists, replacements, incidents] = await Promise.all([
-      want.pickLists ? listPickLists(api, { pageSize: 100 }) : null,
-      want.replacements ? listReplacements(api, { pageSize: 100 }) : null,
-      want.incidents ? listIncidents(api, { pageSize: 100 }) : null,
-    ]);
-    return buildTasks(role, {
-      pickLists: pickLists?.items,
-      replacements: replacements?.items,
-      incidents: incidents?.items,
-    });
-  }, role);
+  const { data, error, loading, reload } = useTasks(role);
 
   if (!access.tasks) {
     return (

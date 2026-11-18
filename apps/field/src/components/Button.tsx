@@ -7,6 +7,7 @@ const VARIANTS = {
   accent: 'btn-accent',
   neutral: 'btn-neutral',
   ghost: 'btn-ghost',
+  outline: 'btn-outline',
   error: 'btn-error',
   success: 'btn-success',
 } as const;

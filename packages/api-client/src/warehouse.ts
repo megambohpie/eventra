@@ -10,6 +10,7 @@ import type {
   PickListDto,
   PickListListQuery,
   PickListSummaryDto,
+  PickListTabCounts,
   PickScanInput,
   ReturnCompleteInput,
   ReturnScanInput,
@@ -21,6 +22,8 @@ type Envelope<T> = { data: T };
 
 export const listPickLists = async (c: AxiosInstance, params: PickListListQuery = {}) =>
   (await c.get<Envelope<Page<PickListSummaryDto>>>('/pick-lists', { params })).data.data;
+export const getPickListTabCounts = async (c: AxiosInstance) =>
+  (await c.get<Envelope<PickListTabCounts>>('/pick-lists/tab-counts')).data.data;
 export const listPickableOrders = async (c: AxiosInstance) =>
   (await c.get<Envelope<OrderSummaryDto[]>>('/pick-lists/eligible-orders')).data.data;
 export const getPickList = async (c: AxiosInstance, id: string) =>

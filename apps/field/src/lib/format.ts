@@ -15,3 +15,7 @@ export const formatDateTime = (value: string): string => {
 /** `AVAILABLE` → `Available`; label bahasa Indonesia ada di strings.ts. */
 export const humanize = (value: string): string =>
   value.charAt(0) + value.slice(1).toLowerCase().replace(/_/g, ' ');
+
+/** Rupiah tanpa desimal, mis. `Rp 1.500.000`. */
+export const formatRupiah = (value: number): string =>
+  `Rp ${Math.round(value).toLocaleString('id-ID')}`;

@@ -1,4 +1,4 @@
-import express, { Router, type Request } from 'express';
+import express, { Router, type Request, type RequestHandler } from 'express';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import {
   ACTIVE_PICK_ITEM_STATUSES,
@@ -15,6 +15,7 @@ import {
   documentReviseSchema,
   documentSignSchema,
   pickListCreateSchema,
+  PICK_LIST_TABS,
   pickListListQuerySchema,
   pickScanSchema,
   returnCompleteSchema,
@@ -25,6 +26,8 @@ import {
   type Page,
   type PickListDto,
   type PickListSummaryDto,
+  type PickListTab,
+  type PickListTabCounts,
   type ScanAction,
   type ScanMethod,
   type ScanOutcomeDto,
@@ -142,10 +145,44 @@ export function warehouseRouter(db: PrismaClient): Router {
 
   // ---------- Daftar & pembuatan ----------
 
+  /** Tanggal hari ini (WIB) sebagai tanggal murni UTC 00:00, sebanding dengan `orders.end_date`. */
+  const todayWib = (): Date => {
+    const wib = new Date(Date.now() + 7 * 3_600_000);
+    return new Date(Date.UTC(wib.getUTCFullYear(), wib.getUTCMonth(), wib.getUTCDate()));
+  };
+  const tabWhere = (tab: PickListTab): Prisma.PickListWhereInput => {
+    const today = todayWib();
+    switch (tab) {
+      case 'TO_DISPATCH':
+        return { status: { in: ['OPEN', 'VERIFIED'] } };
+      case 'OUT':
+        return { status: 'DISPATCHED', order: { endDate: { gte: today } } };
+      case 'RETURN_CHECK':
+        return {
+          OR: [
+            { status: 'RETURN_ISSUE' },
+            { status: 'DISPATCHED', order: { endDate: { lt: today } } },
+          ],
+        };
+      case 'DONE':
+        return { status: { in: ['RETURNED', 'CANCELLED'] } };
+    }
+  };
+
+  router.get('/pick-lists/tab-counts', requireCapability('warehouse.read'), async (_req, res) => {
+    const entries = await Promise.all(
+      PICK_LIST_TABS.map(
+        async (tab) => [tab, await db.pickList.count({ where: tabWhere(tab) })] as const,
+      ),
+    );
+    res.json({ data: Object.fromEntries(entries) as PickListTabCounts });
+  });
+
   router.get('/pick-lists', requireCapability('warehouse.read'), async (req, res) => {
     const q = pickListListQuerySchema.parse(req.query);
     const and: Prisma.PickListWhereInput[] = [];
     if (q.status) and.push({ status: q.status });
+    if (q.tab) and.push(tabWhere(q.tab));
     if (q.q) {
       and.push({
         OR: [
@@ -160,7 +197,10 @@ export function warehouseRouter(db: PrismaClient): Router {
       db.pickList.findMany({
         where,
         include: summaryInclude,
-        orderBy: [{ createdAt: 'desc' }],
+        orderBy:
+          q.tab === 'OUT' || q.tab === 'RETURN_CHECK'
+            ? [{ order: { endDate: 'asc' } }, { createdAt: 'desc' }]
+            : [{ createdAt: 'desc' }],
         skip: (q.page - 1) * q.pageSize,
         take: q.pageSize,
       }),
@@ -1134,62 +1174,71 @@ export function warehouseRouter(db: PrismaClient): Router {
     res.json({ data: await loadDocument(parseId(req.params.id)) });
   });
 
-  router.get(
-    '/handover-documents/:id/pdf',
-    requireCapability('warehouse.read'),
-    async (req, res) => {
-      const id = parseId(req.params.id);
-      const dto = await loadDocument(id);
-      const stored = await db.documentSignature.findMany({ where: { documentId: id } });
-      const bySigner = new Map(stored.map((s) => [s.role, s]));
-      const out = dto.type === 'OUT';
-      const slot = (role: 'WAREHOUSE' | 'COUNTERPART'): PdfSignature => {
-        const sig = bySigner.get(role);
-        const title =
-          role === 'WAREHOUSE'
-            ? out
-              ? 'PIC Gudang (Keluar)'
-              : 'PIC Gudang (Kembali)'
-            : out
-              ? 'Penerima / PIC Penyewa atau Lapangan'
-              : 'Pengembali / PIC Penyewa atau Lapangan';
-        return {
-          title,
-          name:
-            sig?.signerName ??
-            (role === 'WAREHOUSE' ? (dto.payload.warehousePic?.name ?? '-') : '-'),
-          role: sig ? (PIC_ROLE_LABEL[sig.signerRole] ?? sig.signerRole) : '',
-          signedAt: sig?.signedAt.toISOString() ?? null,
-          image: sig ? Buffer.from(sig.image) : null,
-        };
+  /** PDF dokumen: staf gudang, atau pelanggan portal untuk dokumen pada pesanannya sendiri. */
+  const readOrOwnDocument: RequestHandler = async (req, res, next) => {
+    const user = currentUser(req);
+    if (user.role !== 'CUSTOMER') return requireCapability('warehouse.read')(req, res, next);
+    const doc = await db.handoverDocument.findUnique({
+      where: { id: parseId(req.params.id) },
+      select: { orderId: true },
+    });
+    if (!doc || doc.orderId !== user.portalOrderId) {
+      throw new HttpError(404, 'NOT_FOUND', 'Dokumen tidak ditemukan');
+    }
+    next();
+  };
+
+  router.get('/handover-documents/:id/pdf', readOrOwnDocument, async (req, res) => {
+    const id = parseId(req.params.id);
+    const dto = await loadDocument(id);
+    const stored = await db.documentSignature.findMany({ where: { documentId: id } });
+    const bySigner = new Map(stored.map((s) => [s.role, s]));
+    const out = dto.type === 'OUT';
+    const slot = (role: 'WAREHOUSE' | 'COUNTERPART'): PdfSignature => {
+      const sig = bySigner.get(role);
+      const title =
+        role === 'WAREHOUSE'
+          ? out
+            ? 'PIC Gudang (Keluar)'
+            : 'PIC Gudang (Kembali)'
+          : out
+            ? 'Penerima / PIC Penyewa atau Lapangan'
+            : 'Pengembali / PIC Penyewa atau Lapangan';
+      return {
+        title,
+        name:
+          sig?.signerName ?? (role === 'WAREHOUSE' ? (dto.payload.warehousePic?.name ?? '-') : '-'),
+        role: sig ? (PIC_ROLE_LABEL[sig.signerRole] ?? sig.signerRole) : '',
+        signedAt: sig?.signedAt.toISOString() ?? null,
+        image: sig ? Buffer.from(sig.image) : null,
       };
-      const token = await db.handoverDocument.findUniqueOrThrow({
-        where: { id },
-        select: { reportToken: true },
-      });
-      const webBase = (process.env.WEB_BASE_URL ?? 'http://localhost:5175').replace(/[/]+$/, '');
-      const pdf = await buildHandoverPdf({
-        reportUrl: `${webBase}/r/${token.reportToken}`,
-        number: dto.number,
-        version: dto.version,
-        type: dto.type,
-        payload: dto.payload,
-        createdAt: dto.createdAt,
-        revisionReason: dto.revisionReason,
-        signatures: [slot('WAREHOUSE'), slot('COUNTERPART')],
-      });
-      await writeAudit(db, req, {
-        action: 'handover.pdf',
-        entity: 'handover_document',
-        entityId: id,
-        after: { number: dto.number, version: dto.version },
-      });
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `inline; filename="${dto.number}-v${dto.version}.pdf"`);
-      res.setHeader('Cache-Control', 'no-store');
-      res.send(pdf);
-    },
-  );
+    };
+    const token = await db.handoverDocument.findUniqueOrThrow({
+      where: { id },
+      select: { reportToken: true },
+    });
+    const webBase = (process.env.WEB_BASE_URL ?? 'http://localhost:5175').replace(/[/]+$/, '');
+    const pdf = await buildHandoverPdf({
+      reportUrl: `${webBase}/r/${token.reportToken}`,
+      number: dto.number,
+      version: dto.version,
+      type: dto.type,
+      payload: dto.payload,
+      createdAt: dto.createdAt,
+      revisionReason: dto.revisionReason,
+      signatures: [slot('WAREHOUSE'), slot('COUNTERPART')],
+    });
+    await writeAudit(db, req, {
+      action: 'handover.pdf',
+      entity: 'handover_document',
+      entityId: id,
+      after: { number: dto.number, version: dto.version },
+    });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${dto.number}-v${dto.version}.pdf"`);
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(pdf);
+  });
 
   /** Tanda tangan PIC; dokumen sendiri tidak diubah (tanda tangan = baris append-only terpisah). */
   router.post(

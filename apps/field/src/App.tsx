@@ -1,13 +1,17 @@
 import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from './auth/AuthProvider';
+import { usePortal } from './auth/portal';
 import { Layout } from './components/Layout';
 import { Loading, Muted } from './components/ui';
 import { AccountPage } from './pages/AccountPage';
 import { DocumentPage } from './pages/DocumentPage';
+import { HomePage } from './pages/HomePage';
 import { IncidentDetailPage } from './pages/IncidentDetailPage';
 import { DeliveryNoteReportPage, IncidentNewPage } from './pages/IncidentNewPage';
 import { IncidentsPage } from './pages/IncidentsPage';
 import { LoginPage } from './pages/LoginPage';
+import { PortalHomePage } from './pages/PortalHomePage';
+import { PortalReportPage } from './pages/PortalReportPage';
 import { PickListPage } from './pages/PickListPage';
 import { ReplacementPage } from './pages/ReplacementPage';
 import { TasksPage } from './pages/TasksPage';
@@ -16,9 +20,19 @@ import type { Capability } from '@eventra/shared';
 /** Wajib login; yang belum login diarahkan ke /login lalu kembali ke halaman semula (mis. hasil scan QR). */
 function RequireAuth() {
   const { status } = useAuth();
+  const portal = usePortal();
   const location = useLocation();
   if (status === 'loading') return <Loading />;
+  // Pelanggan yang sudah masuk lewat no HP + no pesanan dialihkan ke halaman pesanannya.
+  if (status === 'anonymous' && portal) return <Navigate to="/p" replace />;
   if (status === 'anonymous') return <Navigate to="/login" replace state={{ from: location }} />;
+  return <Outlet />;
+}
+
+/** Halaman pelanggan: wajib sudah masuk dengan no HP + no pesanan. */
+function RequirePortal() {
+  const portal = usePortal();
+  if (!portal) return <Navigate to="/login" replace />;
   return <Outlet />;
 }
 
@@ -35,8 +49,14 @@ export function App() {
     <Routes>
       <Route element={<Layout />}>
         <Route path="login" element={<LoginPage />} />
+        <Route path="p" element={<RequirePortal />}>
+          <Route index element={<PortalHomePage />} />
+          <Route path="report" element={<PortalReportPage />} />
+          <Route path="incidents/:id" element={<IncidentDetailPage />} />
+        </Route>
         <Route element={<RequireAuth />}>
-          <Route index element={<TasksPage />} />
+          <Route index element={<HomePage />} />
+          <Route path="tasks" element={<TasksPage />} />
           <Route path="account" element={<AccountPage />} />
           <Route element={<RequireCapability capability="warehouse.read" />}>
             <Route path="pick-lists/:id" element={<PickListPage />} />

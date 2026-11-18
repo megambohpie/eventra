@@ -1,10 +1,10 @@
-import express, { type Express } from 'express';
+import express, { type Express, type Request } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import type { PrismaClient } from '@prisma/client';
 import type { HealthResponse } from '@eventra/shared';
 import { authenticate } from './auth/middleware';
-import { createErrorHandler, notFoundHandler } from './errors';
+import { HttpError, createErrorHandler, notFoundHandler } from './errors';
 import { logErrorReporter, type ErrorReporter } from './ops/errorReporter';
 import type { JobMonitor } from './ops/jobs';
 import { accessLog, createLogger, requestId, type Logger } from './ops/logger';
@@ -27,6 +27,10 @@ import { replacementsRouter } from './routes/replacements';
 import { serviceTicketsRouter } from './routes/serviceTickets';
 import { financeRouter } from './routes/finance';
 import { dashboardsRouter } from './routes/dashboards';
+import { portalPublicRouter, portalRouter } from './routes/portal';
+
+/** Jalur yang boleh diakses token portal pelanggan (cakupan data dibatasi lagi di tiap rute). */
+const PORTAL_PATHS = /^[/](portal[/]|incidents([/]|$)|handover-documents[/][0-9a-f-]+[/]pdf$)/;
 
 export interface AppDeps {
   /** Mengembalikan true bila database dapat dijangkau. */
@@ -84,6 +88,15 @@ export function createApp({
     const { login, refresh, reset } = rateLimits;
     v1.post('/auth/login', rateLimit({ ...login, key: emailKey }));
     v1.post('/auth/login', rateLimit({ windowMs: login.windowMs, max: login.maxPerIp }));
+    // Login pelanggan: dibatasi per IP+nomor pesanan (anti tebak nomor HP) dan per IP.
+    const orderKey = (req: Request): string => {
+      const body = req.body as { orderNumber?: unknown } | undefined;
+      const order =
+        typeof body?.orderNumber === 'string' ? body.orderNumber.trim().toUpperCase() : '';
+      return `${req.ip ?? 'unknown'}|${order}`;
+    };
+    v1.post('/portal/login', rateLimit({ ...login, key: orderKey }));
+    v1.post('/portal/login', rateLimit({ windowMs: login.windowMs, max: login.maxPerIp }));
     v1.post('/auth/refresh', rateLimit(refresh));
     v1.post('/auth/password-reset/request', rateLimit(reset));
     v1.post('/auth/password-reset/confirm', rateLimit(reset));
@@ -117,10 +130,19 @@ export function createApp({
 
   // Publik: login, refresh, logout, reset password. /me diautentikasi di dalam router-nya.
   v1.use(authRouter(db, jwtSecret, mailer));
+  v1.use(portalPublicRouter(db, jwtSecret));
 
   // Semua rute di bawah ini wajib login; capability diperiksa per endpoint.
   const protectedRouter = express.Router();
   protectedRouter.use(authenticate(db, jwtSecret));
+  // Token portal pelanggan hanya boleh menyentuh portal, insiden pesanannya, dan PDF dokumennya.
+  protectedRouter.use((req, _res, next) => {
+    if (req.user?.portalOrderId && !PORTAL_PATHS.test(req.path)) {
+      throw new HttpError(403, 'FORBIDDEN', 'Akses pelanggan terbatas pada pesanannya');
+    }
+    next();
+  });
+  protectedRouter.use(portalRouter(db));
   protectedRouter.use(usersRouter(db));
   protectedRouter.use(customersRouter(db));
   protectedRouter.use(productsRouter(db));

@@ -2,16 +2,22 @@ import { useParams } from 'react-router-dom';
 import { getHandoverDocument } from '@eventra/api-client';
 import { PICK_ITEM_STATUS_BADGE, docLabel } from '@eventra/shared';
 import { api } from '@/api';
+import { useAuth } from '@/auth/AuthProvider';
+import { DocumentSign } from '@/components/DocumentSign';
 import { Badge } from '@/components/Badge';
 import { Card, ErrorState, Loading, Muted, Row, Screen, Section, Strong } from '@/components/ui';
 import { useAsync } from '@/hooks/useAsync';
 import { formatDate, formatDateTime } from '@/lib/format';
 import { CONDITION_LABEL, PICK_ITEM_STATUS_LABEL } from '@/lib/labels';
 
-/** Tampilan baca-saja snapshot dokumen serah-terima; PDF resmi dan tanda tangan dikelola di web admin. */
+/** Tampilan baca-saja snapshot dokumen serah-terima; tanda tangan bisa dibubuhkan dari sini; revisi dikelola di web admin. */
 export function DocumentPage() {
   const { id = '' } = useParams();
-  const { data, error, loading, reload } = useAsync(() => getHandoverDocument(api, id), id);
+  const { can } = useAuth();
+  const { data, error, loading, reload, setData } = useAsync(
+    () => getHandoverDocument(api, id),
+    id,
+  );
 
   if (data === null) {
     return (
@@ -86,6 +92,9 @@ export function DocumentPage() {
           </Card>
         ))}
       </Section>
+      {can('handover.sign') && data.isLatest && !data.fullySigned && (
+        <DocumentSign doc={data} onSigned={setData} />
+      )}
     </Screen>
   );
 }
