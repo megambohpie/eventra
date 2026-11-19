@@ -184,6 +184,30 @@ describe('invoice dan pembayaran', () => {
     expect(errorCode(voidInv)).toBe('INVOICE_HAS_PAYMENTS');
   });
 
+  it('bayar lunas sekaligus (FULL) = dua baris sewa + deposit; boleh deposit dulu; sisa saja', async () => {
+    const c = await setup();
+    const a = await invoiceFor(c, (await seedOrder(c)).id, '2099-01-01');
+    const full = data<InvoiceDto>(await pay(c, a.id, { purpose: 'FULL', method: 'CASH' }));
+    expect(full).toMatchObject({ paymentState: 'PAID', paid: 1_200_000, outstanding: 0 });
+    expect(full.payments.map((p) => [p.purpose, p.amount]).sort()).toEqual([
+      ['DEPOSIT', 200_000],
+      ['RENT', 1_000_000],
+    ]);
+    // Sudah lunas: tidak ada lagi yang dibayar.
+    const again = await pay(c, a.id, { purpose: 'FULL', method: 'CASH' });
+    expect(errorCode(again)).toBe('NOTHING_OUTSTANDING');
+
+    // Deposit dulu, lalu FULL hanya melunasi sisa sewa.
+    const b = await invoiceFor(c, (await seedOrder(c)).id, '2099-01-01');
+    await pay(c, b.id, { purpose: 'DEPOSIT', method: 'CASH', amount: 200_000 });
+    const rest = data<InvoiceDto>(await pay(c, b.id, { purpose: 'FULL', method: 'CASH' }));
+    expect(rest.paymentState).toBe('PAID');
+    expect(rest.payments.filter((p) => p.purpose === 'RENT')).toHaveLength(1);
+
+    // Selain FULL, nominal tetap wajib.
+    expect((await pay(c, b.id, { purpose: 'RENT', method: 'CASH' })).status).toBe(400);
+  });
+
   it('pembayaran serentak tidak melebihi tagihan', async () => {
     const c = await setup();
     const inv = await invoiceFor(c, (await seedOrder(c)).id, '2099-01-01');

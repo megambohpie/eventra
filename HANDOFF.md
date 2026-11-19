@@ -2,7 +2,7 @@
 
 Dokumen ini adalah sumber ringkas keadaan proyek untuk manusia, Codex, Claude Code, atau agen lain. Baca sebelum implementasi agar pekerjaan tidak diulang.
 
-**Terakhir diperbarui:** 16 November 2026 
+**Terakhir diperbarui:** 19 November 2026 (invoice otomatis saat pesanan dikonfirmasi, void saat dibatalkan; deposit dinonaktifkan dan barang keluar wajib DP minimum, override hanya Owner; lihat `WORK_QUEUE.md` Fase 09). Keputusan: deposit tidak dipakai lagi (flag `DEPOSIT_ENABLED`); DP = pembayaran sewa SUCCEEDED ≥ persen × sewa (default 30%, diatur Owner). Pesanan CONFIRMED lama tanpa invoice tidak di-backfill dan akan terblokir di checkout sampai dibayar/di-waive. 
 **Status:** Fase 00–08 selesai dan terverifikasi otomatis (Fase 08 = hardening dan rilis). Yang tersisa adalah langkah manusia: UAT owner (`RELEASE_PLAN.md` §3), uji mobile di perangkat nyata, pemeriksaan visual web 360 px/desktop, dan uji restore di server target. Keputusan terbuka (penyedia email, gateway pembayaran, cookie httpOnly) ada di `RUNBOOK.md` §8.
 
 ## Urutan baca

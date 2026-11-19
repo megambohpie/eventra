@@ -353,8 +353,9 @@ export class ScanRejected extends HttpError {
     message: string,
     readonly assetId: string | null = null,
     status = 409,
+    fields?: Record<string, string[]>,
   ) {
-    super(status, code, message);
+    super(status, code, message, fields);
     this.name = 'ScanRejected';
   }
 }

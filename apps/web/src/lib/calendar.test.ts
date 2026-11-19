@@ -6,9 +6,13 @@ const order = (id: string, startDate: string, endDate: string): CalendarOrderDto
   orderId: id,
   orderNumber: `ORD-${id}`,
   status: 'CONFIRMED',
+  customerId: `cust-${id}`,
   customerName: `Cust ${id}`,
+  eventLocation: 'Lokasi',
   startDate,
   endDate,
+  assetCount: 0,
+  lines: [],
 });
 
 describe('kalender', () => {
@@ -52,5 +56,28 @@ describe('kalender', () => {
     const weeks = monthWeeks(2026, 11);
     const bars = weekBars(weeks[1] as string[], [order('c', '2026-12-08', '2026-12-08')]);
     expect(bars[0]).toMatchObject({ col: 2, span: 1 });
+  });
+});
+
+describe('warna pelanggan', () => {
+  it('setiap pelanggan berbeda hue-nya; pelanggan yang sama selalu sama', async () => {
+    const { customerTones } = await import('./calendar');
+    const o = (id: string, cust: string, start: string): CalendarOrderDto => ({
+      ...order(id, start, start),
+      customerId: cust,
+      customerName: cust,
+    });
+    const tones = customerTones([
+      o('b', 'hartono', '2026-11-20'),
+      o('a', 'sartono', '2026-11-16'),
+      o('c', 'hartono', '2026-11-25'),
+      o('d', 'budi', '2026-11-26'),
+    ]);
+    expect(tones.size).toBe(3);
+    const hues = [...tones.values()].map((t) => t.hue);
+    expect(new Set(hues).size).toBe(3);
+    // Urutan menurut pesanan pertama: sartono (16), hartono (20), budi (26).
+    expect(tones.get('sartono')?.hue).toBe(0);
+    expect(tones.get('hartono')?.hue).toBe(138);
   });
 });

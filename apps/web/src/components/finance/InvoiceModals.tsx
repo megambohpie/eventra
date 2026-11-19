@@ -1,7 +1,13 @@
 import { useState, type FormEvent } from 'react';
 import { mdiContentSave } from '@mdi/js';
 import { useTranslation } from 'react-i18next';
-import { createInvoice, createPayment, listOrders, remindInvoice } from '@eventra/api-client';
+import {
+  createInvoice,
+  createPayment,
+  listInvoices,
+  listOrders,
+  remindInvoice,
+} from '@eventra/api-client';
 import {
   INVOICEABLE_ORDER_STATUSES,
   PAYMENT_METHODS,
@@ -9,7 +15,7 @@ import {
   type InvoiceDto,
   type OrderSummaryDto,
   type PaymentMethod,
-  type PaymentPurpose,
+  type PaymentRequestPurpose,
 } from '@eventra/shared';
 import { api } from '@/api';
 import { Button } from '@/components/ui/Button';
@@ -25,7 +31,21 @@ import { notify } from '@/lib/notifications';
 const ORDER_PAGE = 100;
 const MAX_ORDER_PAGES = 5;
 
-/** Pesanan yang dapat ditagih; dimuat per halaman agar daftar panjang tetap lengkap. */
+/** Id pesanan yang sudah punya invoice aktif (bukan VOID). */
+async function loadInvoicedOrderIds(): Promise<Set<string>> {
+  const ids = new Set<string>();
+  for (let page = 1; page <= MAX_ORDER_PAGES; page += 1) {
+    const res = await listInvoices(api, { page, pageSize: ORDER_PAGE });
+    for (const i of res.items) if (i.status === 'ISSUED') ids.add(i.orderId);
+    if (res.items.length < ORDER_PAGE) break;
+  }
+  return ids;
+}
+
+/**
+ * Pesanan yang dapat ditagih dan belum punya invoice aktif. Invoice terbit otomatis saat pesanan
+ * disetujui, jadi daftar ini hanya berisi pesanan yang gagal/terlewat (cadangan manual).
+ */
 async function loadInvoiceableOrders(): Promise<OrderSummaryDto[]> {
   const out: OrderSummaryDto[] = [];
   for (let page = 1; page <= MAX_ORDER_PAGES; page += 1) {
@@ -33,7 +53,11 @@ async function loadInvoiceableOrders(): Promise<OrderSummaryDto[]> {
     out.push(...res.items);
     if (res.items.length < ORDER_PAGE) break;
   }
-  return out.filter((o) => (INVOICEABLE_ORDER_STATUSES as readonly string[]).includes(o.status));
+  const invoiced = await loadInvoicedOrderIds();
+  return out.filter(
+    (o) =>
+      (INVOICEABLE_ORDER_STATUSES as readonly string[]).includes(o.status) && !invoiced.has(o.id),
+  );
 }
 
 interface BaseProps {
@@ -122,14 +146,37 @@ export function InvoiceCreateModal({ onClose, onChanged }: BaseProps) {
 }
 
 /** Catat pembayaran sewa/deposit; nominal diisi otomatis dengan sisa yang boleh dibayar. */
-export function PaymentModal({ invoice, onClose, onChanged }: BaseProps & { invoice: InvoiceDto }) {
+export function PaymentModal({
+  invoice,
+  defaultAmount,
+  onClose,
+  onChanged,
+}: BaseProps & {
+  invoice: Pick<InvoiceDto, 'id' | 'payableRent' | 'payableDeposit'>;
+  /** Nominal awal (mis. kekurangan DP) bila berbeda dari sisa tagihan penuh. */
+  defaultAmount?: number;
+}) {
   const { t } = useTranslation();
-  const [purpose, setPurpose] = useState<PaymentPurpose>(
-    invoice.payableRent > 0 ? 'RENT' : 'DEPOSIT',
-  );
+  const total = invoice.payableRent + invoice.payableDeposit;
+  // "Lunas" hanya relevan bila sewa dan deposit sama-sama masih ada sisa; selain itu satu tujuan saja.
+  const canFull = invoice.payableRent > 0 && invoice.payableDeposit > 0;
+  const purposes: PaymentRequestPurpose[] = [
+    ...(canFull ? (['FULL'] as const) : []),
+    ...PAYMENT_PURPOSES.filter(
+      (p) => (p === 'RENT' ? invoice.payableRent : invoice.payableDeposit) > 0,
+    ),
+  ];
+  const payableOf = (p: PaymentRequestPurpose) =>
+    p === 'FULL' ? total : p === 'RENT' ? invoice.payableRent : invoice.payableDeposit;
+  // Dengan nominal awal (DP) pembayaran dimulai sebagai Sewa, bukan Lunas.
+  const initialPurpose: PaymentRequestPurpose =
+    defaultAmount !== undefined && invoice.payableRent > 0 ? 'RENT' : (purposes[0] ?? 'RENT');
+  const [purpose, setPurpose] = useState<PaymentRequestPurpose>(initialPurpose);
   const [method, setMethod] = useState<PaymentMethod>('BANK_TRANSFER');
-  const payable = purpose === 'RENT' ? invoice.payableRent : invoice.payableDeposit;
-  const [amount, setAmount] = useState(String(payable));
+  const payable = payableOf(purpose);
+  const [amount, setAmount] = useState(
+    String(defaultAmount !== undefined && initialPurpose === 'RENT' ? defaultAmount : payable),
+  );
   const [reference, setReference] = useState('');
   const [note, setNote] = useState('');
   const [paidAt, setPaidAt] = useState('');
@@ -139,9 +186,9 @@ export function PaymentModal({ invoice, onClose, onChanged }: BaseProps & { invo
   );
   const [saving, setSaving] = useState(false);
 
-  const changePurpose = (next: PaymentPurpose) => {
+  const changePurpose = (next: PaymentRequestPurpose) => {
     setPurpose(next);
-    setAmount(String(next === 'RENT' ? invoice.payableRent : invoice.payableDeposit));
+    setAmount(String(payableOf(next)));
   };
 
   const submit = async (event: FormEvent) => {
@@ -151,7 +198,7 @@ export function PaymentModal({ invoice, onClose, onChanged }: BaseProps & { invo
       await createPayment(api, invoice.id, {
         purpose,
         method,
-        amount: Number(amount),
+        amount: purpose === 'FULL' ? undefined : Number(amount),
         reference,
         note,
         paidAt: paidAt ? new Date(paidAt).toISOString() : undefined,
@@ -173,9 +220,9 @@ export function PaymentModal({ invoice, onClose, onChanged }: BaseProps & { invo
           <select
             className="select ev-control"
             value={purpose}
-            onChange={(e) => changePurpose(e.target.value as PaymentPurpose)}
+            onChange={(e) => changePurpose(e.target.value as PaymentRequestPurpose)}
           >
-            {PAYMENT_PURPOSES.map((p) => (
+            {purposes.map((p) => (
               <option key={p} value={p}>
                 {t(`finance.purposes.${p}`)}
               </option>
@@ -197,9 +244,19 @@ export function PaymentModal({ invoice, onClose, onChanged }: BaseProps & { invo
           {method === 'GATEWAY' && <span className="ev-hint">{t('finance.gatewayHint')}</span>}
         </FormField>
         <FormField label={t('finance.amount')}>
-          <CurrencyInput value={amount} onChange={setAmount} required />
+          <CurrencyInput
+            value={amount}
+            onChange={setAmount}
+            required
+            disabled={purpose === 'FULL'}
+          />
           <span className="ev-hint">
-            {t('finance.maxPayable', { amount: formatRupiah(payable) })}
+            {purpose === 'FULL'
+              ? t('finance.fullHint', {
+                  rent: formatRupiah(invoice.payableRent),
+                  deposit: formatRupiah(invoice.payableDeposit),
+                })
+              : t('finance.maxPayable', { amount: formatRupiah(payable) })}
           </span>
         </FormField>
         <FormField label={t('finance.reference')}>

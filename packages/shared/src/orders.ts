@@ -152,6 +152,11 @@ export const availabilityCheckSchema = z
     items: z.array(requestItemSchema).min(1).max(50),
     /** Abaikan alokasi pesanan ini (mis. saat memeriksa ulang pesanan sendiri). */
     excludeOrderId: z.uuid().optional(),
+    /**
+     * Hitung tiap item sendiri-sendiri (tidak saling mengurangi stok). Dipakai daftar stok live POS,
+     * yang menanyakan banyak produk sekaligus padahal bukan satu pesanan.
+     */
+    independent: z.boolean().optional(),
   })
   .refine(dateRange, dateRangeMessage);
 export type AvailabilityCheckInput = z.input<typeof availabilityCheckSchema>;
@@ -466,13 +471,26 @@ export const CALENDAR_HIDDEN_STATUSES: readonly OrderStatus[] = [
 ];
 
 /** Satu pesanan pada kalender depan; ditampilkan sebagai blok sepanjang rentang sewa. */
+/** Isi pesanan untuk popover kalender: aset berQR, stok tak terbatas (hitung jumlah), atau luas (m²). */
+export interface CalendarOrderLineDto {
+  productName: string;
+  quantity: number;
+  kind: 'ASSET' | 'BULK' | 'AREA';
+}
+
 export interface CalendarOrderDto {
   orderId: string;
   orderNumber: string;
   status: OrderStatus;
+  /** Dipakai kalender untuk memberi warna berbeda per pelanggan. */
+  customerId: string;
   customerName: string;
+  eventLocation: string;
   startDate: string;
   endDate: string;
+  /** Jumlah aset fisik berQR pada pesanan (paket sudah diuraikan; tanpa barang tak terbatas dan m²). */
+  assetCount: number;
+  lines: CalendarOrderLineDto[];
 }
 
 export interface CalendarDayDetailDto {

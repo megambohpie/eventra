@@ -8,6 +8,7 @@ import {
   uploadProductPhoto,
 } from '@eventra/api-client';
 import {
+  DEPOSIT_ENABLED,
   effectiveUnitPrice,
   PRICING_UNITS,
   STOCK_MODES,
@@ -205,9 +206,11 @@ export function ProductModal({
                 : t('products.needSizeForArea')}
             </p>
           )}
-          <FormField label={t('products.deposit')}>
-            <CurrencyInput required value={deposit} onChange={setDeposit} />
-          </FormField>
+          {DEPOSIT_ENABLED && (
+            <FormField label={t('products.deposit')}>
+              <CurrencyInput required value={deposit} onChange={setDeposit} />
+            </FormField>
+          )}
           <ProductPhotoField
             productId={product?.id}
             hasPhoto={product?.hasPhoto ?? false}

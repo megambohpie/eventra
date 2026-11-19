@@ -158,17 +158,6 @@ describe('Fase 08 — E2E smoke: alur kritis rental', () => {
       },
       201,
     );
-    await ok(
-      'post',
-      admin,
-      `/invoices/${invoice.id}/payments`,
-      {
-        purpose: 'DEPOSIT',
-        method: 'CASH',
-        amount: 100_000,
-      },
-      201,
-    );
     expect((await ok<OrderDto>('post', admin, `/orders/${orderId}/confirm`)).status).toBe(
       'CONFIRMED',
     );
@@ -299,7 +288,8 @@ describe('Fase 08 — E2E smoke: alur kritis rental', () => {
       owner,
       `/reports/revenue?from=${dayOffset(-1)}&to=${dayOffset(1)}`,
     );
-    expect(revenue).toMatchObject({ rentReceived: 400_000, depositReceived: 100_000 });
+    // Tanpa deposit (keputusan owner): hanya sewa yang diterima.
+    expect(revenue).toMatchObject({ rentReceived: 400_000, depositReceived: 0 });
     const recv = await ok<ReceivablesReportDto>('get', owner, '/reports/receivables');
     expect(recv.summary.totalOutstanding).toBe(0);
     const dashboard = await ok<OwnerDashboardDto>('get', owner, '/dashboards/owner');

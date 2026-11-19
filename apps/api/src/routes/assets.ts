@@ -1,7 +1,9 @@
 import express, { Router } from 'express';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import {
+  ACTIVE_PICK_ITEM_STATUSES,
   ATTENTION_CONDITIONS,
+  LIVE_STOCK_BUCKETS,
   MAX_ASSET_PHOTOS,
   MAX_PHOTO_BYTES,
   PHOTO_MIME_TYPES,
@@ -15,6 +17,7 @@ import {
   assetUpdateSchema,
   hasCapability,
   labelIdsSchema,
+  liveStockAssetsQuerySchema,
   stockBreakdownQuerySchema,
   unitAreaM2,
   type StockBreakdownDto,
@@ -28,6 +31,10 @@ import {
   type AssetScanDto,
   type AssetStatus,
   type AssetSummaryDto,
+  type LiveStockAssetDto,
+  type LiveStockBucket,
+  type LiveStockDto,
+  type LiveStockProductDto,
   type Page,
 } from '@eventra/shared';
 import { writeAudit } from '../audit';
@@ -331,6 +338,166 @@ export function assetsRouter(db: PrismaClient): Router {
       byCondition: Object.fromEntries(byCondition.map((r) => [r.condition, r._count._all])),
     };
     res.json({ data });
+  });
+
+  const bucketOf = (status: AssetStatus): LiveStockBucket | undefined =>
+    (Object.keys(LIVE_STOCK_BUCKETS) as LiveStockBucket[]).find((b) =>
+      (LIVE_STOCK_BUCKETS[b] as readonly AssetStatus[]).includes(status),
+    );
+
+  /**
+   * Rincian aset untuk stok langsung: kondisi, lokasi, dan, bila sedang dipegang pick list aktif,
+   * pesanan/pelanggan/pick list/batas kembali. Diurutkan menurut batas kembali lalu kode.
+   */
+  async function describeLiveAssets(
+    assets: {
+      id: string;
+      code: string;
+      status: AssetStatus;
+      condition: AssetCondition;
+      product: { name: string };
+    }[],
+  ): Promise<LiveStockAssetDto[]> {
+    const items = await db.pickListItem.findMany({
+      where: {
+        assetId: { in: assets.map((a) => a.id) },
+        status: { in: [...ACTIVE_PICK_ITEM_STATUSES] },
+        pickList: { status: { notIn: ['CANCELLED', 'RETURNED'] } },
+      },
+      orderBy: { pickedAt: 'desc' },
+      select: {
+        assetId: true,
+        dispatchedAt: true,
+        pickList: {
+          select: {
+            id: true,
+            number: true,
+            order: {
+              select: {
+                id: true,
+                number: true,
+                startDate: true,
+                endDate: true,
+                customer: { select: { name: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+    const holderByAsset = new Map<string, (typeof items)[number]>();
+    for (const i of items) if (!holderByAsset.has(i.assetId)) holderByAsset.set(i.assetId, i);
+    // Tanggal bisnis WIB (UTC+7) agar barang keluar dini hari tidak tercatat sehari sebelumnya.
+    const wibDay = (d: Date) => new Date(d.getTime() + 7 * 3_600_000).toISOString().slice(0, 10);
+    return assets
+      .map((a) => {
+        const holder = holderByAsset.get(a.id);
+        const pl = holder?.pickList;
+        return {
+          assetId: a.id,
+          assetCode: a.code,
+          productName: a.product.name,
+          status: a.status,
+          condition: a.condition,
+          bucket: bucketOf(a.status) ?? 'READY',
+          orderId: pl?.order.id ?? null,
+          orderNumber: pl?.order.number ?? null,
+          customerName: pl?.order.customer.name ?? null,
+          pickListId: pl?.id ?? null,
+          pickListNumber: pl?.number ?? null,
+          dueDate: pl ? pl.order.endDate.toISOString().slice(0, 10) : null,
+          outDate:
+            holder && pl
+              ? holder.dispatchedAt
+                ? wibDay(holder.dispatchedAt)
+                : pl.order.startDate.toISOString().slice(0, 10)
+              : null,
+          outPlanned: holder ? !holder.dispatchedAt : false,
+        };
+      })
+      .sort(
+        (a, b) =>
+          (a.dueDate ?? '9999').localeCompare(b.dueDate ?? '9999') ||
+          a.assetCode.localeCompare(b.assetCode),
+      );
+  }
+
+  const liveAssetSelect = {
+    id: true,
+    code: true,
+    status: true,
+    condition: true,
+    product: { select: { name: true } },
+  } satisfies Prisma.AssetSelect;
+
+  /**
+   * Stok gudang langsung: aset ready vs dipersiapkan vs sedang keluar per produk, beserta aset yang
+   * sedang dipegang pesanan (pesanan, pelanggan, batas kembali). Hanya membaca; aset pensiun diabaikan.
+   */
+  router.get('/stock/live', requireCapability('asset.read'), async (_req, res) => {
+    const grouped = await db.asset.groupBy({
+      by: ['productId', 'status'],
+      where: { status: { not: 'RETIRED' } },
+      _count: { _all: true },
+    });
+    const holdingStatuses = [...LIVE_STOCK_BUCKETS.PREPARED, ...LIVE_STOCK_BUCKETS.OUT];
+    const [products, holdingAssets] = await Promise.all([
+      db.product.findMany({
+        where: { id: { in: [...new Set(grouped.map((g) => g.productId))] } },
+        select: { id: true, name: true },
+      }),
+      db.asset.findMany({
+        where: { status: { in: holdingStatuses } },
+        select: liveAssetSelect,
+      }),
+    ]);
+
+    const byProduct = new Map<string, LiveStockProductDto>(
+      products.map((p) => [
+        p.id,
+        {
+          productId: p.id,
+          productName: p.name,
+          total: 0,
+          ready: 0,
+          prepared: 0,
+          out: 0,
+          unavailable: 0,
+        },
+      ]),
+    );
+    const totals = { total: 0, ready: 0, prepared: 0, out: 0, unavailable: 0 };
+    for (const g of grouped) {
+      const bucket = bucketOf(g.status);
+      const row = byProduct.get(g.productId);
+      if (!bucket || !row) continue;
+      const key = bucket.toLowerCase() as 'ready' | 'prepared' | 'out' | 'unavailable';
+      const n = g._count._all;
+      row[key] += n;
+      row.total += n;
+      totals[key] += n;
+      totals.total += n;
+    }
+
+    const data: LiveStockDto = {
+      generatedAt: new Date().toISOString(),
+      totals,
+      products: [...byProduct.values()]
+        .filter((p) => p.total > 0)
+        .sort((a, b) => a.productName.localeCompare(b.productName)),
+      holding: await describeLiveAssets(holdingAssets),
+    };
+    res.json({ data });
+  });
+
+  /** Daftar aset satu produk pada satu kelompok stok (mis. semua aset ready produk X). */
+  router.get('/stock/live/assets', requireCapability('asset.read'), async (req, res) => {
+    const { productId, bucket } = liveStockAssetsQuerySchema.parse(req.query);
+    const assets = await db.asset.findMany({
+      where: { productId, status: { in: [...LIVE_STOCK_BUCKETS[bucket]] } },
+      select: liveAssetSelect,
+    });
+    res.json({ data: await describeLiveAssets(assets) });
   });
 
   router.get('/assets/labels.pdf', requireCapability('asset.read'), async (req, res) => {

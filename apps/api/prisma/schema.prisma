@@ -458,6 +458,16 @@ model ProductBundle {
   @@map("product_bundles")
 }
 
+// Pengaturan kunci-nilai aplikasi (mis. `payment.dpMinPercent`).
+model AppSetting {
+  key       String   @id
+  value     Json
+  updatedBy String?  @map("updated_by") @db.Uuid
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("app_settings")
+}
+
 model Order {
   id            String      @id @default(uuid()) @db.Uuid
   number        String      @unique
@@ -479,6 +489,10 @@ model Order {
   depositOverride BigInt?   @map("deposit_override")
   // Waktu pesanan dibatalkan otomatis karena barang tidak keluar sampai batas (akhir hari sewa pertama); deposit hangus.
   noShowAt      DateTime?   @map("no_show_at") @db.Timestamptz(3)
+  // Izin Owner mengeluarkan barang tanpa DP minimum (alasan wajib; juga tercatat di audit).
+  dpWaivedAt    DateTime?   @map("dp_waived_at") @db.Timestamptz(3)
+  dpWaivedBy    String?     @map("dp_waived_by") @db.Uuid
+  dpWaiveReason String?     @map("dp_waive_reason")
   holdExpiresAt DateTime?   @map("hold_expires_at") @db.Timestamptz(3)
   confirmedAt   DateTime?   @map("confirmed_at") @db.Timestamptz(3)
   createdBy     String?     @map("created_by") @db.Uuid

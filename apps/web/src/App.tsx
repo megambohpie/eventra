@@ -3,6 +3,7 @@ import { RequireAuth, RequireCapability } from './auth/guards';
 import { Layout } from './components/Layout';
 import { AssetDetailPage } from './pages/AssetDetailPage';
 import { AssetsPage } from './pages/AssetsPage';
+import { StockLivePage } from './pages/StockLivePage';
 import { DashboardPage } from './pages/DashboardPage';
 import { FinancePage } from './pages/FinancePage';
 import { InvoiceDetailPage } from './pages/InvoiceDetailPage';
@@ -45,6 +46,7 @@ export function App() {
           </Route>
           <Route element={<RequireCapability capability="asset.read" />}>
             <Route path="assets" element={<AssetsPage />} />
+            <Route path="stock" element={<StockLivePage />} />
             <Route path="assets/:id" element={<AssetDetailPage />} />
           </Route>
           <Route element={<RequireCapability capability="receipt.read" />}>

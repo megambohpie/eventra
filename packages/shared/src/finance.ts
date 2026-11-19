@@ -18,6 +18,47 @@ const money = z.number().int().min(1).max(MAX_MONEY);
 
 const DAY_MS = 86_400_000;
 
+/**
+ * Keputusan owner (19 Nov 2026): tidak ada deposit. Barang keluar wajib didahului DP minimum.
+ * Kolom/data deposit lama tetap ada demi riwayat; pesanan baru selalu berdeposit 0.
+ */
+export const DEPOSIT_ENABLED = false;
+
+/** DP minimum default (persen dari sewa) bila Owner belum mengaturnya. */
+export const DEFAULT_DP_MIN_PERCENT = 30;
+
+export const paymentPolicySchema = z.object({
+  dpMinPercent: z.number().int().min(0).max(100),
+});
+export type PaymentPolicyInput = z.input<typeof paymentPolicySchema>;
+export interface PaymentPolicyDto {
+  dpMinPercent: number;
+}
+
+export const dpWaiverSchema = z.object({ reason: z.string().trim().min(3).max(300) });
+export type DpWaiverInput = z.input<typeof dpWaiverSchema>;
+
+/** Status DP sebuah pesanan: syarat barang boleh keluar gudang. */
+export interface DpStatusDto {
+  /** Persen minimum yang berlaku. */
+  percent: number;
+  /** Nilai sewa pesanan (dasar perhitungan). */
+  rentAmount: number;
+  /** Nominal DP minimum (dibulatkan ke atas). */
+  required: number;
+  /** Pembayaran sewa yang sudah diterima (SUCCEEDED). */
+  paid: number;
+  /** Kekurangan DP (0 bila terpenuhi). */
+  shortfall: number;
+  met: boolean;
+  waived: boolean;
+  waivedReason: string | null;
+}
+
+/** DP minimum = persen × sewa, dibulatkan ke atas ke rupiah bulat. */
+export const requiredDp = (rentAmount: number, percent: number): number =>
+  Math.ceil((rentAmount * percent) / 100);
+
 // ---------- Invoice ----------
 
 export const INVOICE_STATUSES = ['ISSUED', 'VOID'] as const;
@@ -143,16 +184,25 @@ export const invoiceListQuerySchema = z.object({
 });
 export type InvoiceListQuery = z.input<typeof invoiceListQuerySchema>;
 
+/** Tujuan di permintaan: `FULL` melunasi sisa sewa + deposit sekaligus (dicatat sebagai dua baris). */
+export const PAYMENT_REQUEST_PURPOSES = [...PAYMENT_PURPOSES, 'FULL'] as const;
+export type PaymentRequestPurpose = (typeof PAYMENT_REQUEST_PURPOSES)[number];
+
 export const paymentCreateSchema = z
   .object({
-    purpose: z.enum(PAYMENT_PURPOSES),
+    purpose: z.enum(PAYMENT_REQUEST_PURPOSES),
     method: z.enum(PAYMENT_METHODS),
-    amount: money,
+    /** Wajib kecuali `FULL` (nominal ditentukan dari sisa tagihan). */
+    amount: money.optional(),
     /** Nomor bukti transfer / referensi gateway. */
     reference: optionalText(120),
     note: optionalText(300),
     /** Waktu uang diterima; default sekarang. */
     paidAt: z.iso.datetime().optional(),
+  })
+  .refine((v) => v.purpose === 'FULL' || v.amount !== undefined, {
+    path: ['amount'],
+    message: 'Nominal wajib diisi',
   })
   .refine((v) => v.method === 'CASH' || v.method === 'OTHER' || Boolean(v.reference), {
     path: ['reference'],

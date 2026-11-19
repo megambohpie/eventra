@@ -63,3 +63,34 @@ export function weekBars(week: (string | null)[], orders: CalendarOrderDto[]): W
       a.col - b.col || b.span - a.span || a.order.orderNumber.localeCompare(b.order.orderNumber),
   );
 }
+
+/** Sudut emas: hue berurutan saling berjauhan sehingga pelanggan berdekatan tetap mudah dibedakan. */
+const GOLDEN_ANGLE = 137.508;
+
+export interface CustomerTone {
+  customerId: string;
+  customerName: string;
+  /** Hue 0–359 untuk `--ev-hue` pada CSS kalender. */
+  hue: number;
+}
+
+/**
+ * Satu warna (hue) per pelanggan pada tampilan kalender: pelanggan diurutkan menurut pesanan
+ * pertamanya (tanggal mulai, lalu nomor) lalu diberi hue sudut emas, sehingga setiap pelanggan
+ * pada bulan itu berbeda dan urutannya stabil selama data tidak berubah.
+ */
+export function customerTones(orders: CalendarOrderDto[]): Map<string, CustomerTone> {
+  const sorted = [...orders].sort(
+    (a, b) => a.startDate.localeCompare(b.startDate) || a.orderNumber.localeCompare(b.orderNumber),
+  );
+  const tones = new Map<string, CustomerTone>();
+  for (const o of sorted) {
+    if (tones.has(o.customerId)) continue;
+    tones.set(o.customerId, {
+      customerId: o.customerId,
+      customerName: o.customerName,
+      hue: Math.round((tones.size * GOLDEN_ANGLE) % 360),
+    });
+  }
+  return tones;
+}

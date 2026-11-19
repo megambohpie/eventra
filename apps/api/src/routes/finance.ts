@@ -3,10 +3,13 @@ import type { Prisma, PrismaClient } from '@prisma/client';
 import {
   ACTIVE_ORDER_STATUSES,
   INVOICEABLE_ORDER_STATUSES,
+  dpWaiverSchema,
   invoiceCreateSchema,
   invoiceListQuerySchema,
   invoiceVoidSchema,
   paymentCreateSchema,
+  paymentPolicySchema,
+  type PaymentPolicyDto,
   paymentReasonSchema,
   reminderInputSchema,
   revenueQuerySchema,
@@ -26,6 +29,9 @@ import { HttpError } from '../errors';
 import { parseId } from '../http';
 import {
   balanceOf,
+  getDpPercent,
+  getDpStatus,
+  setDpPercent,
   invoiceInclude,
   isoDay,
   loadInvoice,
@@ -212,6 +218,63 @@ export function financeRouter(db: PrismaClient): Router {
     res.json({ data: await respond(id) });
   });
 
+  // ---------- Kebijakan DP ----------
+
+  router.get('/settings/payment-policy', requireCapability('finance.read'), async (_req, res) => {
+    const data: PaymentPolicyDto = { dpMinPercent: await getDpPercent(db) };
+    res.json({ data });
+  });
+
+  /** Owner mengatur persen DP minimum (0–100; 0 = tanpa syarat DP). */
+  router.put('/settings/payment-policy', requireCapability('finance.policy'), async (req, res) => {
+    const input = paymentPolicySchema.parse(req.body);
+    await db.$transaction(async (tx) => {
+      const before = await getDpPercent(tx);
+      await setDpPercent(tx, input.dpMinPercent, currentUser(req).id);
+      await writeAudit(tx, req, {
+        action: 'settings.payment_policy',
+        entity: 'settings',
+        before: { dpMinPercent: before },
+        after: { dpMinPercent: input.dpMinPercent },
+      });
+    });
+    const data: PaymentPolicyDto = { dpMinPercent: await getDpPercent(db) };
+    res.json({ data });
+  });
+
+  router.get('/orders/:id/dp', requireCapability('finance.read'), async (req, res) => {
+    res.json({ data: await getDpStatus(db, parseId(req.params.id)) });
+  });
+
+  /** Owner mengizinkan barang keluar tanpa DP minimum (alasan wajib, tercatat di pesanan dan audit). */
+  router.post('/orders/:id/dp-waiver', requireCapability('finance.policy'), async (req, res) => {
+    const id = parseId(req.params.id);
+    const { reason } = dpWaiverSchema.parse(req.body);
+    const user = currentUser(req);
+    await db.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({ where: { id }, select: { status: true } });
+      if (!order) throw new HttpError(404, 'NOT_FOUND', 'Pesanan tidak ditemukan');
+      if (order.status !== 'CONFIRMED' && order.status !== 'SCHEDULED') {
+        throw new HttpError(
+          409,
+          'INVALID_ORDER_STATE',
+          'Izin tanpa DP hanya untuk pesanan terkonfirmasi/terjadwal',
+        );
+      }
+      await tx.order.update({
+        where: { id },
+        data: { dpWaivedAt: new Date(), dpWaivedBy: user.id, dpWaiveReason: reason },
+      });
+      await writeAudit(tx, req, {
+        action: 'order.dp_waiver',
+        entity: 'order',
+        entityId: id,
+        after: { reason },
+      });
+    });
+    res.json({ data: await getDpStatus(db, id) });
+  });
+
   // ---------- Pembayaran ----------
 
   /**
@@ -236,43 +299,60 @@ export function financeRouter(db: PrismaClient): Router {
         throw new HttpError(409, 'INVALID_INVOICE_STATE', 'Invoice sudah dibatalkan');
       }
       const b = balanceOf(row, today());
-      const payable = input.purpose === 'RENT' ? b.payableRent : b.payableDeposit;
-      if (input.amount > payable) {
-        throw new HttpError(
-          409,
-          'OVERPAYMENT',
-          `Nominal melebihi sisa tagihan ${input.purpose === 'RENT' ? 'sewa' : 'deposit'} (${payable})`,
-        );
+      // Lunas sekaligus: sisa sewa dan sisa deposit dicatat sebagai dua baris agar pendapatan sewa
+      // tetap terpisah dari deposit.
+      const lines: { purpose: 'RENT' | 'DEPOSIT'; amount: number }[] =
+        input.purpose === 'FULL'
+          ? [
+              { purpose: 'RENT' as const, amount: b.payableRent },
+              { purpose: 'DEPOSIT' as const, amount: b.payableDeposit },
+            ].filter((l) => l.amount > 0)
+          : [{ purpose: input.purpose, amount: input.amount ?? 0 }];
+      if (lines.length === 0) {
+        throw new HttpError(409, 'NOTHING_OUTSTANDING', 'Invoice tidak memiliki sisa tagihan');
+      }
+      for (const line of lines) {
+        const payable = line.purpose === 'RENT' ? b.payableRent : b.payableDeposit;
+        if (line.amount > payable) {
+          throw new HttpError(
+            409,
+            'OVERPAYMENT',
+            `Nominal melebihi sisa tagihan ${line.purpose === 'RENT' ? 'sewa' : 'deposit'} (${payable})`,
+          );
+        }
       }
       const confirmed = input.method !== 'GATEWAY';
-      const payment = await tx.payment.create({
-        data: {
-          invoiceId: id,
-          purpose: input.purpose,
-          method: input.method,
-          status: confirmed ? 'SUCCEEDED' : 'PENDING',
-          amount: BigInt(input.amount),
-          reference: input.reference ?? null,
-          note: input.note ?? null,
-          paidAt,
-          recordedBy: user.id,
-          confirmedBy: confirmed ? user.id : null,
-          confirmedAt: confirmed ? new Date() : null,
-        },
-      });
-      await writeAudit(tx, req, {
-        action: 'payment.create',
-        entity: 'payment',
-        entityId: payment.id,
-        after: {
-          invoiceNumber: row.number,
-          purpose: payment.purpose,
-          method: payment.method,
-          status: payment.status,
-          amount: payment.amount,
-          reference: payment.reference,
-        },
-      });
+      for (const line of lines) {
+        const payment = await tx.payment.create({
+          data: {
+            invoiceId: id,
+            purpose: line.purpose,
+            method: input.method,
+            status: confirmed ? 'SUCCEEDED' : 'PENDING',
+            amount: BigInt(line.amount),
+            reference: input.reference ?? null,
+            note: input.note ?? null,
+            paidAt,
+            recordedBy: user.id,
+            confirmedBy: confirmed ? user.id : null,
+            confirmedAt: confirmed ? new Date() : null,
+          },
+        });
+        await writeAudit(tx, req, {
+          action: 'payment.create',
+          entity: 'payment',
+          entityId: payment.id,
+          after: {
+            invoiceNumber: row.number,
+            purpose: payment.purpose,
+            method: payment.method,
+            status: payment.status,
+            amount: payment.amount,
+            reference: payment.reference,
+            full: input.purpose === 'FULL',
+          },
+        });
+      }
     });
     res.status(201).json({ data: await respond(id) });
   });

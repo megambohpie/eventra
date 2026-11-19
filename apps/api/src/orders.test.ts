@@ -231,6 +231,40 @@ describe('Fase 03 — paket, ketersediaan, pesanan', () => {
     ).toBe(false);
   });
 
+  it('mode independen: produk dan paket yang memuatnya tidak saling mengurangi stok di daftar POS', async () => {
+    const { app } = createTestApp();
+    const admin = await loginAs(app, 'ADMIN');
+    const cabinet = await seedProduct('Kabinet', 90);
+    const pack = await seedProduct('Paket', 0);
+    expect(
+      (
+        await request(app)
+          .put(`${V1}/product-bundles/${pack.id}`)
+          .set(auth(admin))
+          .send({ components: [{ componentProductId: cabinet.id, quantity: 2 }] })
+      ).status,
+    ).toBe(200);
+    const items = [
+      { productId: cabinet.id, quantity: 1 },
+      { productId: pack.id, quantity: 1 },
+    ];
+    const run = (independent?: boolean) =>
+      request(app)
+        .post(`${V1}/availability/check`)
+        .set(auth(admin))
+        .send({ startDate: '2026-12-01', endDate: '2026-12-01', items, independent });
+    const max = (res: request.Response, id: string) =>
+      (
+        res.body as { data: { items: { productId: string; maxQuantity: number }[] } }
+      ).data.items.find((i) => i.productId === id)?.maxQuantity;
+    // Satu pesanan gabungan: kabinet berbagi stok dengan paket (90 − 2 = 88).
+    expect(max(await run(), cabinet.id)).toBe(88);
+    // Daftar stok POS: tiap produk dihitung sendiri (kabinet 90, paket 45).
+    const independent = await run(true);
+    expect(max(independent, cabinet.id)).toBe(90);
+    expect(max(independent, pack.id)).toBe(45);
+  });
+
   it('paket tidak boleh bersarang atau menunjuk dirinya sendiri', async () => {
     const { app } = createTestApp();
     const admin = await loginAs(app, 'ADMIN');
@@ -581,11 +615,11 @@ describe('Fase 03 — paket, ketersediaan, pesanan', () => {
         ),
       );
     const order = (created.body as { data: OrderDto }).data;
-    // 100.000 × 2 unit × 2 hari; deposit 50.000 × 2.
+    // 100.000 × 2 unit × 2 hari; deposit dinonaktifkan (selalu 0).
     expect(order).toMatchObject({
       number: expect.stringMatching(/^ORD-2026-\d{6}$/) as string,
       subtotal: 400000,
-      depositTotal: 100000,
+      depositTotal: 0,
       days: 2,
     });
 
@@ -849,9 +883,19 @@ describe('Fase 03 — paket, ketersediaan, pesanan', () => {
     expect(orders.map((o) => o.orderId)).toContain(a);
     expect(orders.find((o) => o.orderId === a)).toMatchObject({
       customerName: 'PT Acara Megah',
+      customerId: expect.any(String) as string,
       startDate: '2026-12-03',
       endDate: '2026-12-05',
     });
+    // Popover kalender: paket diuraikan ke aset fisik (8 LED Panel + 3 Speaker = 11 aset).
+    const content = orders.find((o) => o.orderId === a);
+    expect(content?.assetCount).toBe(11);
+    expect(content?.lines).toEqual(
+      expect.arrayContaining([
+        { productName: 'LED Panel', quantity: 8, kind: 'ASSET' },
+        { productName: 'Speaker', quantity: 3, kind: 'ASSET' },
+      ]),
+    );
     expect(orders.length).toBeGreaterThanOrEqual(2);
     const outside = await request(app)
       .get(`${V1}/calendar/orders?from=2027-02-01&to=2027-02-28`)

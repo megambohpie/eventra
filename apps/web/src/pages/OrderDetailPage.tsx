@@ -13,6 +13,7 @@ import {
 import { PIC_ROLES, SINGLE_PIC_ROLES, type OrderDto, type OrderPicDto } from '@eventra/shared';
 import { api } from '@/api';
 import { useAuth } from '@/auth/AuthProvider';
+import { DpPanel } from '@/components/finance/DpPanel';
 import { OrderNoteModal } from '@/components/orders/OrderNoteModal';
 import { OrderStatusBadge } from '@/components/orders/OrderStatusBadge';
 import { PicModal } from '@/components/orders/PicModal';
@@ -107,6 +108,10 @@ export function OrderDetailPage() {
           <div role="alert" className="alert alert-error ev-notice">
             <span>{t('orders.pricing.noShow')}</span>
           </div>
+        )}
+
+        {can('finance.read') && (s === 'CONFIRMED' || s === 'SCHEDULED') && (
+          <DpPanel orderId={order.id} />
         )}
 
         <div className="ev-detail__actions">
@@ -229,10 +234,12 @@ export function OrderDetailPage() {
                   )}
                 </dd>
               </div>
-              <div className="ev-dl__row">
-                <dt className="ev-dl__term">{t('orders.deposit')}</dt>
-                <dd className="ev-dl__desc">{formatRupiah(order.depositTotal)}</dd>
-              </div>
+              {order.depositTotal > 0 && (
+                <div className="ev-dl__row">
+                  <dt className="ev-dl__term">{t('orders.deposit')}</dt>
+                  <dd className="ev-dl__desc">{formatRupiah(order.depositTotal)}</dd>
+                </div>
+              )}
             </>
           )}
           {order.note && (
@@ -378,7 +385,7 @@ export function OrderDetailPage() {
                   <tr>
                     <th>{t('orders.version')}</th>
                     <th>{t('orders.subtotal')}</th>
-                    <th>{t('orders.deposit')}</th>
+                    {order.quotes.some((q) => q.depositTotal > 0) && <th>{t('orders.deposit')}</th>}
                     <th>{t('orders.createdAt')}</th>
                   </tr>
                 </thead>
@@ -387,7 +394,9 @@ export function OrderDetailPage() {
                     <tr key={q.id} className="ev-table__row">
                       <td>v{q.version}</td>
                       <td>{formatRupiah(q.subtotal)}</td>
-                      <td>{formatRupiah(q.depositTotal)}</td>
+                      {order.quotes.some((x) => x.depositTotal > 0) && (
+                        <td>{formatRupiah(q.depositTotal)}</td>
+                      )}
                       <td>
                         {formatDateTime(q.createdAt)}
                         {q.createdBy && <span className="ev-table__hint">{q.createdBy}</span>}

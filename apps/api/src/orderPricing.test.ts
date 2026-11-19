@@ -78,7 +78,7 @@ describe('Harga negosiasi dan borongan pada pesanan', () => {
     // (80.000×2 + 50.000×4) × 2 hari = 720.000; menurut harga default (100.000×2 + 50.000×4) × 2 = 800.000
     expect(order.subtotal).toBe(720_000);
     expect(order.listSubtotal).toBe(800_000);
-    expect(order.depositTotal).toBe(60_000);
+    expect(order.depositTotal).toBe(0); // deposit dinonaktifkan
   });
 
   it('borongan: subtotal = total borongan (tidak dikali hari), harga baris 0, validasi konsisten', async () => {
@@ -98,9 +98,9 @@ describe('Harga negosiasi dan borongan pada pesanan', () => {
     });
     expect(order.items.every((i) => i.unitPrice === 0 && i.lineTotal === 0)).toBe(true);
     expect(order.items.map((i) => i.listPrice).sort((a, b) => a - b)).toEqual([50_000, 100_000]);
-    // Jumlah barang tetap tercatat (batas gudang) dan deposit tetap per unit.
+    // Jumlah barang tetap tercatat (batas gudang); deposit dinonaktifkan.
     expect(order.items.map((i) => i.quantity).sort((a, b) => a - b)).toEqual([2, 4]);
-    expect(order.depositTotal).toBe(60_000);
+    expect(order.depositTotal).toBe(0);
 
     // LUMP tanpa total, atau LINE dengan total → ditolak.
     expect(errorCode(await create({ pricingMode: 'LUMP', items }))).toBe('VALIDATION_ERROR');
@@ -109,16 +109,14 @@ describe('Harga negosiasi dan borongan pada pesanan', () => {
     );
   });
 
-  it('deposit bisa diganti nominal sendiri (termasuk 0) dan tetap lewat ubah draft', async () => {
+  it('deposit dinonaktifkan: nominal deposit apa pun (default maupun override) menghasilkan 0', async () => {
     const { speaker, create } = await setup();
     const items = [{ productId: speaker.id, quantity: 2 }];
-    const order = data<OrderDto>(await create({ depositOverride: 15_000, items }));
-    expect(order).toMatchObject({ depositOverride: 15_000, depositTotal: 15_000 });
-    const free = data<OrderDto>(await create({ depositOverride: 0, items }));
-    expect(free).toMatchObject({ depositOverride: 0, depositTotal: 0 });
+    const withOverride = data<OrderDto>(await create({ depositOverride: 15_000, items }));
+    expect(withOverride.depositTotal).toBe(0);
     const normal = data<OrderDto>(await create({ items }));
     expect(normal.depositOverride).toBeNull();
-    expect(normal.depositTotal).toBeGreaterThan(0);
+    expect(normal.depositTotal).toBe(0);
   });
 
   it('invoice menyalin total borongan; konfirmasi mengalokasikan stok seperti biasa', async () => {
@@ -140,9 +138,20 @@ describe('Harga negosiasi dan borongan pada pesanan', () => {
     expect(confirmed.status).toBe('CONFIRMED');
     expect(confirmed.subtotal).toBe(2_500_000);
 
-    const invoice = await post('/invoices', { orderId: order.id });
-    expect(invoice.status).toBe(201);
-    expect((invoice.body as { data: { rentAmount: number } }).data.rentAmount).toBe(2_500_000);
+    // Konfirmasi menerbitkan invoice otomatis; penerbitan manual kedua ditolak.
+    const list = await request(app).get(`${V1}/invoices?orderId=${order.id}`).set(auth(admin));
+    const items = (list.body as { data: { items: { rentAmount: number; status: string }[] } }).data
+      .items;
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ rentAmount: 2_500_000, status: 'ISSUED' });
+    expect((await post('/invoices', { orderId: order.id })).status).toBe(409);
+
+    // Pesanan dibatalkan → invoice otomatis batal (VOID).
+    expect((await post(`/orders/${order.id}/cancel`)).status).toBe(200);
+    const after = await request(app).get(`${V1}/invoices?orderId=${order.id}`).set(auth(admin));
+    expect(
+      (after.body as { data: { items: { status: string }[] } }).data.items.map((i) => i.status),
+    ).toEqual(['VOID']);
   });
 
   it('harga negosiasi dan borongan bertahan saat penawaran ulang; hanya draft yang dapat diubah harganya', async () => {

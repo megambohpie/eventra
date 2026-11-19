@@ -40,6 +40,7 @@ import { parseId } from '../http';
 import { QR_TOKEN_PATTERN } from '../assets/service';
 import { planItems, requirements } from '../orders/availability';
 import { claimTransition, recordStatus, toSummaryDto as toOrderSummary } from '../orders/service';
+import { assertDpSatisfied } from '../finance/service';
 import { assetBlockers } from '../incidents/service';
 import { buildHandoverPdf, type PdfSignature } from '../warehouse/pdf';
 import {
@@ -116,6 +117,8 @@ export function warehouseRouter(db: PrismaClient): Router {
             result: 'REJECTED',
             method: ctx.method,
             reason: error.code,
+            // Rincian penolakan (mis. pesanan pemakai aset) sebagai JSON agar log scan dapat menampilkannya.
+            note: error.fields ? JSON.stringify(error.fields) : null,
             pickListId: pick ? ctx.pickListId : null,
             orderId: pick?.orderId ?? null,
             assetId: error.assetId,
@@ -425,6 +428,40 @@ export function warehouseRouter(db: PrismaClient): Router {
             );
           }
           if (asset.status !== 'AVAILABLE') {
+            // Aset masih terikat pada pick list aktif pesanan lain: sebutkan pesanan pemakainya.
+            const holder = await tx.pickListItem.findFirst({
+              where: {
+                assetId: asset.id,
+                status: { in: ACTIVE },
+                pickList: { status: { notIn: ['CANCELLED', 'RETURNED'] } },
+              },
+              orderBy: { pickedAt: 'desc' },
+              select: {
+                status: true,
+                pickList: {
+                  select: {
+                    number: true,
+                    order: { select: { number: true, customer: { select: { name: true } } } },
+                  },
+                },
+              },
+            });
+            if (holder) {
+              const { number: pickList, order } = holder.pickList;
+              const missing = holder.status === 'MISSING';
+              throw new ScanRejected(
+                missing ? 'SCAN_ASSET_MISSING' : 'SCAN_ASSET_IN_USE',
+                `Aset ${missing ? 'tercatat hilang' : 'masih dipakai'} di pesanan ${order.number} (${order.customer.name}), pick list ${pickList}`,
+                asset.id,
+                409,
+                {
+                  order: [order.number],
+                  customer: [order.customer.name],
+                  pickList: [pickList],
+                  status: [asset.status],
+                },
+              );
+            }
             throw new ScanRejected(
               'SCAN_ASSET_UNAVAILABLE',
               `Aset berstatus ${asset.status}, bukan AVAILABLE`,
@@ -710,6 +747,8 @@ export function warehouseRouter(db: PrismaClient): Router {
             'Pesanan harus terkonfirmasi sebelum barang keluar',
           );
         }
+        // Barang hanya keluar bila DP minimum sudah diterima (atau Owner memberi izin).
+        await assertDpSatisfied(tx, pick.orderId);
         // Verifikasi ulang terhadap pick list: jumlah per produk dan kondisi aset saat ini.
         const problems: string[] = [];
         for (const l of pick.lines) {

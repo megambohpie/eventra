@@ -13,6 +13,9 @@ import type {
   AssetScanDto,
   AssetStatusChangeInput,
   AssetSummaryDto,
+  LiveStockAssetDto,
+  LiveStockAssetsQuery,
+  LiveStockDto,
   AssetUpdateInput,
   StockBreakdownDto,
   StockBreakdownQuery,
@@ -113,3 +116,9 @@ export const uploadBatchPhoto = async (
 export const getBatchPhoto = async (c: AxiosInstance, productId: string, photoId: string) =>
   (await c.get<Blob>(`/assets/groups/${productId}/photos/${photoId}`, { responseType: 'blob' }))
     .data;
+
+export const getLiveStock = async (c: AxiosInstance) =>
+  (await c.get<Envelope<LiveStockDto>>('/stock/live')).data.data;
+
+export const getLiveStockAssets = async (c: AxiosInstance, params: LiveStockAssetsQuery) =>
+  (await c.get<Envelope<LiveStockAssetDto[]>>('/stock/live/assets', { params })).data.data;

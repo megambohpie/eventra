@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { mdiPlus } from '@mdi/js';
 import { useTranslation } from 'react-i18next';
 import { listCategories, listProducts } from '@eventra/api-client';
-import type { ProductDto } from '@eventra/shared';
+import { DEPOSIT_ENABLED, type ProductDto } from '@eventra/shared';
 import { api } from '@/api';
 import { useAuth } from '@/auth/AuthProvider';
 import { BundleModal } from '@/components/products/BundleModal';
@@ -71,7 +71,7 @@ export function ProductsPage() {
                   <th>{t('products.sku')}</th>
                   <th>{t('products.category')}</th>
                   <th>{t('products.price')}</th>
-                  <th>{t('products.deposit')}</th>
+                  {DEPOSIT_ENABLED && <th>{t('products.deposit')}</th>}
                   <th>{t('common.status')}</th>
                   <th />
                 </tr>
@@ -109,7 +109,7 @@ export function ProductsPage() {
                         {product.pricingUnit === 'AREA' ? `: ${formatRupiah(product.price)}` : ''})
                       </span>
                     </td>
-                    <td>{formatRupiah(product.deposit)}</td>
+                    {DEPOSIT_ENABLED && <td>{formatRupiah(product.deposit)}</td>}
                     <td>
                       <Badge variant={product.active ? 'success' : 'neutral'}>
                         {product.active ? t('common.active') : t('common.inactive')}
@@ -127,7 +127,7 @@ export function ProductsPage() {
                 ))}
                 {data?.items.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="ev-table__empty">
+                    <td colSpan={DEPOSIT_ENABLED ? 8 : 7} className="ev-table__empty">
                       {t('common.empty')}
                     </td>
                   </tr>

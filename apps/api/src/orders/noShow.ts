@@ -1,6 +1,7 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { HttpError } from '../errors';
 import { cancelPickList, lockOrderPickLists } from '../warehouse/service';
+import { voidInvoicesForOrder } from '../finance/service';
 import { releaseAllocations } from './availability';
 import { claimTransition, recordStatus } from './service';
 
@@ -56,6 +57,8 @@ export async function markNoShow(db: PrismaClient, id: string, now = new Date())
       select: { id: true },
     });
     for (const p of picks) await cancelPickList(tx, p.id, null, 'Pesanan tidak diambil');
+    // Deposit hangus: invoice yang sudah ada pembayaran dibiarkan; yang belum dibayar dibatalkan.
+    await voidInvoicesForOrder(tx, id, null, 'Pesanan tidak diambil (no-show)', false);
     await recordStatus(tx, id, from, 'CANCELLED', null, NO_SHOW_NOTE);
     await tx.auditLog.create({
       data: {

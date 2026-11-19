@@ -9,6 +9,7 @@ import {
   mdiLogout,
   mdiMapMarker,
   mdiPackageDown,
+  mdiPackageVariantClosed,
   mdiQrcode,
   mdiReceiptText,
   mdiSwapHorizontal,
@@ -50,6 +51,12 @@ const NAV_ITEMS: { to: string; labelKey: string; icon: string; capability?: Capa
   },
   { to: '/products', labelKey: 'nav.products', icon: mdiCube, capability: 'product.read' },
   { to: '/assets', labelKey: 'nav.assets', icon: mdiQrcode, capability: 'asset.read' },
+  {
+    to: '/stock',
+    labelKey: 'nav.stock',
+    icon: mdiPackageVariantClosed,
+    capability: 'asset.read',
+  },
   {
     to: '/receipts',
     labelKey: 'nav.receipts',

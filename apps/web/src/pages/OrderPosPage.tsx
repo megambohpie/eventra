@@ -11,6 +11,7 @@ import {
   updateOrder,
 } from '@eventra/api-client';
 import {
+  DEPOSIT_ENABLED,
   MAX_ITEM_QUANTITY,
   rentalDays,
   STOCK_MODES,
@@ -35,13 +36,16 @@ import { useResource } from '@/hooks/useResource';
 import { formatRupiah } from '@/lib/format';
 import { notify } from '@/lib/notifications';
 import { cartTotals, clampQty, priceDiffPercent, setCartQty, type Cart } from '@/lib/pos';
+import { physicalUsed, stockEntry, unitsLeft, type StockMap } from '@/lib/stock';
 
 const CHUNK = 50;
 const todayKey = () => new Date().toISOString().slice(0, 10);
 
-type StockMap = Record<string, number>;
-
-/** Stok live (kuantitas satuan sewa maksimum pada seluruh tanggal) untuk semua produk. */
+/**
+ * Stok live untuk semua produk pada tanggal sewa: sisa fisik tiap komponen. Sisa yang tampil di kartu
+ * dihitung ulang dari isi keranjang (`unitsLeft`), sehingga menambah jumlah mengurangi stok dan
+ * menguranginya mengembalikan stok, termasuk stok yang dipakai bersama paket.
+ */
 async function loadStock(
   products: ProductDto[],
   startDate: string,
@@ -55,8 +59,9 @@ async function loadStock(
       endDate,
       items: products.slice(i, i + CHUNK).map((p) => ({ productId: p.id, quantity: 1 })),
       excludeOrderId,
+      independent: true,
     });
-    for (const item of result.items) stock[item.productId] = item.maxQuantity;
+    for (const item of result.items) stock[item.productId] = stockEntry(item);
   }
   return stock;
 }
@@ -168,10 +173,23 @@ function PosForm({ order, initialStart, products, customers, reloadCustomers }: 
       ? null
       : priceDiffPercent(totals.subtotal, totals.listSubtotal);
   const cartLines = products.filter((p) => (cart[p.id] ?? 0) > 0);
-  const overStock = stock ? cartLines.some((p) => (cart[p.id] ?? 0) > (stock[p.id] ?? 0)) : false;
+  // Sisa stok per produk setelah isi keranjang (negatif = keranjang melebihi stok bersama).
+  const used = stock ? physicalUsed(stock, cart) : undefined;
+  const leftOf = (productId: string): number | undefined => {
+    const entry = stock?.[productId];
+    return entry && used ? unitsLeft(entry, used) : undefined;
+  };
+  const overStock = cartLines.some((p) => (leftOf(p.id) ?? 0) < 0);
 
   const setQty = (productId: string, raw: string | number) =>
-    setCart((prev) => setCartQty(prev, productId, clampQty(raw, stock?.[productId])));
+    setCart((prev) => {
+      const entry = stock?.[productId];
+      // Batas kuantitas = jumlah sekarang + sisa; dihitung dari keranjang sebelumnya agar tak basi.
+      const cap = entry
+        ? (prev[productId] ?? 0) + unitsLeft(entry, physicalUsed(stock, prev))
+        : undefined;
+      return setCartQty(prev, productId, clampQty(raw, cap));
+    });
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -293,8 +311,9 @@ function PosForm({ order, initialStart, products, customers, reloadCustomers }: 
               <div className="ev-pos__grid">
                 {group.items.map((p) => {
                   const qty = cart[p.id] ?? 0;
-                  const max = stock?.[p.id];
-                  const soldOut = max !== undefined && max <= 0;
+                  // Sisa yang masih bisa ditambahkan; turun saat jumlah bertambah, naik saat berkurang.
+                  const left = leftOf(p.id);
+                  const soldOut = left !== undefined && left <= 0 && qty === 0;
                   return (
                     <div
                       key={p.id}
@@ -306,7 +325,7 @@ function PosForm({ order, initialStart, products, customers, reloadCustomers }: 
                       <button
                         type="button"
                         className="ev-pos__pick"
-                        disabled={soldOut || (max !== undefined && qty >= max)}
+                        disabled={left !== undefined && left <= 0}
                         onClick={() => setQty(p.id, qty + 1)}
                       >
                         <span className="ev-pos__thumb">
@@ -324,15 +343,15 @@ function PosForm({ order, initialStart, products, customers, reloadCustomers }: 
                           )}
                         </span>
                         <span className="ev-pos__stock">
-                          {max === undefined ? (
+                          {left === undefined ? (
                             <span className="ev-dots" />
                           ) : (
-                            <Badge variant={soldOut ? 'error' : 'success'}>
+                            <Badge variant={soldOut ? 'error' : left <= 0 ? 'warning' : 'success'}>
                               {soldOut
                                 ? t('orders.pos.soldOut')
-                                : p.stockMode === 'UNLIMITED' || max >= MAX_ITEM_QUANTITY
+                                : p.stockMode === 'UNLIMITED' || left >= MAX_ITEM_QUANTITY
                                   ? t('orders.pos.unlimited')
-                                  : t('orders.pos.stock', { count: max })}
+                                  : t('orders.pos.stock', { count: Math.max(0, left) })}
                             </Badge>
                           )}
                         </span>
@@ -358,7 +377,7 @@ function PosForm({ order, initialStart, products, customers, reloadCustomers }: 
                             variant="ghost"
                             icon={mdiPlus}
                             aria-label={t('orders.pos.increase')}
-                            disabled={max !== undefined && qty >= max}
+                            disabled={left !== undefined && left <= 0}
                             onClick={() => setQty(p.id, qty + 1)}
                           />
                         </div>
@@ -475,21 +494,23 @@ function PosForm({ order, initialStart, products, customers, reloadCustomers }: 
                 <p className="ev-hint">{t('orders.pricing.lumpHint')}</p>
               </>
             )}
-            <label className="label ev-pos__lump-toggle">
-              <input
-                type="checkbox"
-                className="toggle toggle-primary"
-                checked={depositCustom}
-                onChange={(e) => {
-                  setDepositCustom(e.target.checked);
-                  // Mulai dari deposit default agar tinggal disesuaikan.
-                  if (e.target.checked && depositValue === '')
-                    setDepositValue(String(totals.listDeposit));
-                }}
-              />
-              <span>{t('orders.pricing.depositCustom')}</span>
-            </label>
-            {depositCustom && (
+            {DEPOSIT_ENABLED && (
+              <label className="label ev-pos__lump-toggle">
+                <input
+                  type="checkbox"
+                  className="toggle toggle-primary"
+                  checked={depositCustom}
+                  onChange={(e) => {
+                    setDepositCustom(e.target.checked);
+                    // Mulai dari deposit default agar tinggal disesuaikan.
+                    if (e.target.checked && depositValue === '')
+                      setDepositValue(String(totals.listDeposit));
+                  }}
+                />
+                <span>{t('orders.pricing.depositCustom')}</span>
+              </label>
+            )}
+            {DEPOSIT_ENABLED && depositCustom && (
               <>
                 <FormField label={t('orders.pricing.depositTotal')}>
                   <CurrencyInput
@@ -565,8 +586,12 @@ function PosForm({ order, initialStart, products, customers, reloadCustomers }: 
             )}
             <dt>{t('orders.subtotal')}</dt>
             <dd>{formatRupiah(totals.subtotal)}</dd>
-            <dt>{t('orders.deposit')}</dt>
-            <dd>{formatRupiah(totals.deposit)}</dd>
+            {DEPOSIT_ENABLED && (
+              <>
+                <dt>{t('orders.deposit')}</dt>
+                <dd>{formatRupiah(totals.deposit)}</dd>
+              </>
+            )}
           </dl>
           <p className="ev-hint">{t('orders.pos.estimateHint')}</p>
           <Button

@@ -355,3 +355,65 @@ export interface ReceiptDto {
   assetIds?: string[];
   createdAt: string;
 }
+
+// ---------- Stok gudang langsung (ready vs sedang keluar) ----------
+
+/** Pengelompokan status aset untuk tampilan stok langsung; aset pensiun tidak dihitung. */
+export const LIVE_STOCK_BUCKETS = {
+  /** Siap dialokasikan, ada di gudang. */
+  READY: ['AVAILABLE'],
+  /** Sudah dipilih/disiapkan untuk pesanan, masih di gudang. */
+  PREPARED: ['RESERVED', 'PREPARED'],
+  /** Sedang di luar gudang (jalan, di lokasi, menunggu dikonfirmasi kembali, atau bermasalah). */
+  OUT: ['CHECKED_OUT', 'IN_TRANSIT', 'ON_SITE', 'RETURN_PENDING', 'ISSUE_ON_SITE'],
+  /** Di gudang tetapi tidak boleh dialokasikan. */
+  UNAVAILABLE: ['IN_SERVICE', 'QUARANTINED'],
+} as const satisfies Record<string, readonly AssetStatus[]>;
+export type LiveStockBucket = keyof typeof LIVE_STOCK_BUCKETS;
+
+export const liveStockAssetsQuerySchema = z.object({
+  productId: z.uuid(),
+  bucket: z.enum(['READY', 'PREPARED', 'OUT', 'UNAVAILABLE']),
+});
+export type LiveStockAssetsQuery = z.input<typeof liveStockAssetsQuerySchema>;
+
+export interface LiveStockCountsDto {
+  total: number;
+  ready: number;
+  prepared: number;
+  out: number;
+  unavailable: number;
+}
+
+export interface LiveStockProductDto extends LiveStockCountsDto {
+  productId: string;
+  productName: string;
+}
+
+/** Aset yang sedang dipegang pesanan: disiapkan di gudang atau sedang keluar. */
+export interface LiveStockAssetDto {
+  assetId: string;
+  assetCode: string;
+  productName: string;
+  status: AssetStatus;
+  condition: AssetCondition;
+  bucket: LiveStockBucket;
+  orderId: string | null;
+  orderNumber: string | null;
+  customerName: string | null;
+  pickListId: string | null;
+  pickListNumber: string | null;
+  /** Tanggal selesai sewa pesanan (batas kembali). */
+  dueDate: string | null;
+  /** Tanggal barang keluar gudang; bila belum keluar, tanggal mulai sewa (rencana). */
+  outDate: string | null;
+  /** True bila `outDate` masih rencana (barang belum keluar). */
+  outPlanned: boolean;
+}
+
+export interface LiveStockDto {
+  generatedAt: string;
+  totals: LiveStockCountsDto;
+  products: LiveStockProductDto[];
+  holding: LiveStockAssetDto[];
+}

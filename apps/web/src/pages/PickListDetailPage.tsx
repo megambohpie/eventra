@@ -24,8 +24,10 @@ import { DocumentsPanel } from '@/components/warehouse/DocumentsPanel';
 import { CountedLines } from '@/components/warehouse/CountedLines';
 import { ItemPhotos } from '@/components/warehouse/ItemPhotos';
 import { ReturnPanel } from '@/components/warehouse/ReturnPanel';
+import { VerifyPanel } from '@/components/warehouse/VerifyPanel';
 import { PickItemStatusBadge, PickListStatusBadge } from '@/components/warehouse/badges';
 import { useResource } from '@/hooks/useResource';
+import { errorText, scanReasonText } from '@/lib/errors';
 import { formatDate, formatDateTime } from '@/lib/format';
 import { notify } from '@/lib/notifications';
 
@@ -65,7 +67,10 @@ function Detail({ pick, canWrite, canSign, reload }: DetailProps) {
   const { t } = useTranslation();
   const { can } = useAuth();
   const input = useRef<HTMLInputElement>(null);
-  const [mode, setMode] = useState<Mode>('PICK');
+  // Buka tab sesuai progres: semua sudah dipilih → langsung ke verifikasi akhir.
+  const [mode, setMode] = useState<Mode>(() =>
+    pick.required > 0 && pick.picked >= pick.required ? 'VERIFY' : 'PICK',
+  );
   const [value, setValue] = useState('');
   // Aksesori tambahan (include): aset di luar kebutuhan pesanan, mis. tiang sangga atau katrol.
   const [extra, setExtra] = useState(false);
@@ -109,7 +114,7 @@ function Detail({ pick, canWrite, canSign, reload }: DetailProps) {
       if (error instanceof ApiRequestError) {
         setFeedback({
           ok: false,
-          text: t(`errors.${error.code}`, { defaultValue: error.message }),
+          text: errorText(t, error),
         });
       }
     } finally {
@@ -263,23 +268,39 @@ function Detail({ pick, canWrite, canSign, reload }: DetailProps) {
       {canWrite && preparing && (
         <PageCard>
           <h2 className="ev-section-title">{t('warehouse.detail.scanTitle')}</h2>
-          <div className="join ev-scan__mode">
-            {(['PICK', 'VERIFY'] as const).map((m) => (
-              <button
-                key={m}
-                type="button"
-                className={`btn btn-sm join-item ${mode === m ? 'btn-primary' : ''}`.trim()}
-                aria-pressed={mode === m}
-                onClick={() => {
-                  setMode(m);
-                  setFeedback(null);
-                  input.current?.focus();
-                }}
-              >
-                {t(m === 'PICK' ? 'warehouse.detail.modePick' : 'warehouse.detail.modeVerify')}
-              </button>
-            ))}
+          <div role="tablist" className="tabs tabs-border ev-tabs">
+            {(['PICK', 'VERIFY'] as const).map((m) => {
+              // Aksesori tambahan (include) ikut terhitung di `picked`; progres dibatasi ke kebutuhan.
+              const done = Math.min(m === 'PICK' ? pick.picked : pick.verified, pick.required);
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  role="tab"
+                  className={`tab ${mode === m ? 'tab-active' : ''}`.trim()}
+                  aria-selected={mode === m}
+                  onClick={() => {
+                    setMode(m);
+                    setFeedback(null);
+                    input.current?.focus();
+                  }}
+                >
+                  {t(m === 'PICK' ? 'warehouse.detail.modePick' : 'warehouse.detail.modeVerify')}
+                  <span className="ev-tabs__count" data-done={done >= pick.required}>
+                    {Number(done.toFixed(2))} / {Number(pick.required.toFixed(2))}
+                  </span>
+                </button>
+              );
+            })}
           </div>
+          <progress
+            className="progress progress-primary"
+            aria-label={t(
+              mode === 'PICK' ? 'warehouse.detail.modePick' : 'warehouse.detail.modeVerify',
+            )}
+            value={Math.min(mode === 'PICK' ? pick.picked : pick.verified, pick.required)}
+            max={pick.required}
+          />
           <p className="ev-hint">
             {t(
               mode === 'PICK' ? 'warehouse.detail.scanHintPick' : 'warehouse.detail.scanHintVerify',
@@ -320,6 +341,7 @@ function Detail({ pick, canWrite, canSign, reload }: DetailProps) {
               <span>{feedback.text}</span>
             </div>
           )}
+          {mode === 'VERIFY' && <VerifyPanel pick={pick} onChanged={reload} />}
         </PageCard>
       )}
 
@@ -468,9 +490,7 @@ function Detail({ pick, canWrite, canSign, reload }: DetailProps) {
                       {t(`warehouse.detail.results.${s.result}`)}
                     </Badge>
                     {s.reason && (
-                      <span className="ev-table__hint">
-                        {t(`errors.${s.reason}`, { defaultValue: s.reason })}
-                      </span>
+                      <span className="ev-table__hint">{scanReasonText(t, s.reason, s.note)}</span>
                     )}
                   </td>
                   <td>{s.actor ?? '-'}</td>

@@ -43,6 +43,8 @@ export const CAPABILITIES = [
   'replacement.receive',
   'finance.read',
   'finance.write',
+  /** Kebijakan pembayaran: atur DP minimum dan izinkan barang keluar tanpa DP. Hanya Owner. */
+  'finance.policy',
   'dashboard.read',
 ] as const;
 export type Capability = (typeof CAPABILITIES)[number];
@@ -50,7 +52,7 @@ export type Capability = (typeof CAPABILITIES)[number];
 export const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
   // Owner memiliki otorisasi tertinggi: semua capability (superset Admin).
   OWNER: [...CAPABILITIES],
-  ADMIN: [...CAPABILITIES],
+  ADMIN: CAPABILITIES.filter((c) => c !== 'finance.policy'),
   OPS_COORDINATOR: [
     // user.read: koordinator menunjuk PIC internal pada pesanan.
     'user.read',

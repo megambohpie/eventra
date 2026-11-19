@@ -1,13 +1,18 @@
 import { useState } from 'react';
-import { mdiPlus } from '@mdi/js';
+import { mdiCashPlus, mdiPlus } from '@mdi/js';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { listInvoices } from '@eventra/api-client';
-import { INVOICE_PAYMENT_STATES, type InvoicePaymentState } from '@eventra/shared';
+import {
+  INVOICE_PAYMENT_STATES,
+  type InvoicePaymentState,
+  type InvoiceSummaryDto,
+} from '@eventra/shared';
 import { api } from '@/api';
 import { useAuth } from '@/auth/AuthProvider';
 import { InvoiceStateBadge } from '@/components/finance/badges';
-import { InvoiceCreateModal } from '@/components/finance/InvoiceModals';
+import { DpPolicy } from '@/components/finance/DpPolicy';
+import { InvoiceCreateModal, PaymentModal } from '@/components/finance/InvoiceModals';
 import { Button } from '@/components/ui/Button';
 import { Loading } from '@/components/ui/Loading';
 import { PageCard, PageHeader } from '@/components/ui/PageCard';
@@ -26,6 +31,7 @@ export function InvoicesPage() {
   const [state, setState] = useState<InvoicePaymentState | ''>('');
   const [page, setPage] = useState(1);
   const [creating, setCreating] = useState(false);
+  const [paying, setPaying] = useState<InvoiceSummaryDto | null>(null);
 
   const { data, loading, reload } = useResource(
     () =>
@@ -65,6 +71,7 @@ export function InvoicesPage() {
               </option>
             ))}
           </select>
+          <DpPolicy />
           {canWrite && (
             <Button size="sm" variant="primary" icon={mdiPlus} onClick={() => setCreating(true)}>
               {t('finance.newInvoice')}
@@ -80,12 +87,14 @@ export function InvoicesPage() {
               <thead className="ev-table__head">
                 <tr>
                   <th>{t('finance.number')}</th>
+                  <th>{t('finance.orderNumber')}</th>
                   <th>{t('finance.customer')}</th>
                   <th>{t('finance.total')}</th>
                   <th>{t('finance.paid')}</th>
                   <th>{t('finance.outstanding')}</th>
                   <th>{t('finance.dueDate')}</th>
                   <th>{t('common.status')}</th>
+                  <th>{t('finance.actionsCol')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -95,10 +104,9 @@ export function InvoicesPage() {
                       <Link className="ev-link" to={`/invoices/${i.id}`}>
                         {i.number}
                       </Link>
-                      <Link
-                        className="ev-link ev-table__hint ev-table__hint--block"
-                        to={`/orders/${i.orderId}`}
-                      >
+                    </td>
+                    <td>
+                      <Link className="ev-link" to={`/orders/${i.orderId}`}>
                         {i.orderNumber}
                       </Link>
                     </td>
@@ -117,11 +125,25 @@ export function InvoicesPage() {
                     <td>
                       <InvoiceStateBadge state={i.paymentState} />
                     </td>
+                    <td>
+                      {canWrite &&
+                        i.status === 'ISSUED' &&
+                        i.payableRent + i.payableDeposit > 0 && (
+                          <Button
+                            size="sm"
+                            variant="primary"
+                            icon={mdiCashPlus}
+                            onClick={() => setPaying(i)}
+                          >
+                            {t('finance.pay')}
+                          </Button>
+                        )}
+                    </td>
                   </tr>
                 ))}
                 {data?.items.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="ev-table__empty">
+                    <td colSpan={9} className="ev-table__empty">
                       {t('common.empty')}
                     </td>
                   </tr>
@@ -136,6 +158,9 @@ export function InvoicesPage() {
       </PageCard>
 
       {creating && <InvoiceCreateModal onClose={() => setCreating(false)} onChanged={reload} />}
+      {paying && (
+        <PaymentModal invoice={paying} onClose={() => setPaying(null)} onChanged={reload} />
+      )}
     </>
   );
 }

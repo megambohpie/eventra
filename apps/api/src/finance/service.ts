@@ -1,6 +1,9 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 import {
+  DEFAULT_DP_MIN_PERCENT,
   computeInvoiceBalance,
+  requiredDp,
+  type DpStatusDto,
   type InvoiceDto,
   type InvoiceSummaryDto,
   type PaymentDto,
@@ -17,6 +20,176 @@ export const isoDay = (d: Date): string => d.toISOString().slice(0, 10);
 export async function nextInvoiceNumber(tx: Tx, date = new Date()): Promise<string> {
   const rows = await tx.$queryRaw<{ n: bigint }[]>`SELECT nextval('invoice_number_seq') AS n`;
   return `INV-${date.getUTCFullYear()}-${String(rows[0]?.n ?? 0).padStart(6, '0')}`;
+}
+
+const DP_SETTING_KEY = 'payment.dpMinPercent';
+
+/** Persen DP minimum yang berlaku (default bila Owner belum mengaturnya). */
+export async function getDpPercent(db: Db): Promise<number> {
+  const row = await db.appSetting.findUnique({ where: { key: DP_SETTING_KEY } });
+  const v = row?.value;
+  return typeof v === 'number' && v >= 0 && v <= 100 ? v : DEFAULT_DP_MIN_PERCENT;
+}
+
+export async function setDpPercent(tx: Tx, percent: number, actorId: string): Promise<void> {
+  await tx.appSetting.upsert({
+    where: { key: DP_SETTING_KEY },
+    create: { key: DP_SETTING_KEY, value: percent, updatedBy: actorId },
+    update: { value: percent, updatedBy: actorId },
+  });
+}
+
+/**
+ * Status DP pesanan: syarat barang boleh keluar. Dasar = nilai sewa pesanan; yang dihitung hanya
+ * pembayaran sewa berstatus SUCCEEDED pada invoice aktif (pending/void/gagal tidak dihitung).
+ */
+export async function getDpStatus(db: Db, orderId: string): Promise<DpStatusDto> {
+  const [order, percent] = await Promise.all([
+    db.order.findUnique({
+      where: { id: orderId },
+      select: { subtotal: true, dpWaivedAt: true, dpWaiveReason: true },
+    }),
+    getDpPercent(db),
+  ]);
+  if (!order) throw new HttpError(404, 'NOT_FOUND', 'Pesanan tidak ditemukan');
+  const paid = await db.payment.aggregate({
+    where: {
+      purpose: 'RENT',
+      status: 'SUCCEEDED',
+      invoice: { orderId, status: 'ISSUED' },
+    },
+    _sum: { amount: true },
+  });
+  const rentAmount = Number(order.subtotal);
+  const required = requiredDp(rentAmount, percent);
+  const paidAmount = Number(paid._sum.amount ?? 0n);
+  const waived = order.dpWaivedAt != null;
+  return {
+    percent,
+    rentAmount,
+    required,
+    paid: paidAmount,
+    shortfall: Math.max(0, required - paidAmount),
+    met: paidAmount >= required,
+    waived,
+    waivedReason: waived ? order.dpWaiveReason : null,
+  };
+}
+
+/** Gerbang barang keluar: tolak bila DP minimum belum terpenuhi dan Owner belum memberi izin. */
+export async function assertDpSatisfied(db: Db, orderId: string): Promise<void> {
+  const dp = await getDpStatus(db, orderId);
+  if (dp.met || dp.waived) return;
+  throw new HttpError(
+    409,
+    'DP_REQUIRED',
+    `DP minimum ${dp.percent}% belum terpenuhi: perlu ${dp.required}, diterima ${dp.paid}`,
+    {
+      required: [String(dp.required)],
+      paid: [String(dp.paid)],
+      shortfall: [String(dp.shortfall)],
+      percent: [String(dp.percent)],
+    },
+  );
+}
+
+/** BigInt → number agar aman masuk JSON audit. */
+const num = (v: bigint): number => Number(v);
+
+/**
+ * Terbitkan invoice otomatis saat pesanan disetujui (CONFIRMED). Idempoten: tidak membuat bila sudah ada
+ * invoice aktif atau nilai pesanan nol. Mengembalikan nomor invoice baru, atau null bila tidak dibuat.
+ */
+export async function issueInvoiceForOrder(
+  tx: Tx,
+  order: { id: string; number: string; subtotal: bigint; depositTotal: bigint; startDate: Date },
+  actorId: string | null,
+): Promise<string | null> {
+  if (order.subtotal + order.depositTotal <= 0n) return null;
+  const active = await tx.invoice.findFirst({
+    where: { orderId: order.id, status: 'ISSUED' },
+    select: { id: true },
+  });
+  if (active) return null;
+  const invoice = await tx.invoice.create({
+    data: {
+      number: await nextInvoiceNumber(tx),
+      orderId: order.id,
+      rentAmount: order.subtotal,
+      depositAmount: order.depositTotal,
+      dueDate: order.startDate,
+      note: 'Diterbitkan otomatis saat pesanan disetujui',
+      createdBy: actorId,
+    },
+  });
+  await tx.auditLog.create({
+    data: {
+      actorId,
+      action: 'invoice.create',
+      entity: 'invoice',
+      entityId: invoice.id,
+      after: {
+        number: invoice.number,
+        orderNumber: order.number,
+        rentAmount: num(invoice.rentAmount),
+        depositAmount: num(invoice.depositAmount),
+        auto: true,
+      },
+    },
+  });
+  return invoice.number;
+}
+
+/**
+ * Batalkan (void) invoice aktif pesanan yang dibatalkan. Invoice yang sudah punya pembayaran aktif/pending
+ * tidak diubah (uang sudah masuk; butuh koreksi pembayaran manual): `strict` melempar 409, selain itu dilewati.
+ */
+export async function voidInvoicesForOrder(
+  tx: Tx,
+  orderId: string,
+  actorId: string | null,
+  reason: string,
+  strict: boolean,
+): Promise<number> {
+  const invoices = await tx.invoice.findMany({
+    where: { orderId, status: 'ISSUED' },
+    select: { id: true },
+  });
+  let voided = 0;
+  for (const { id } of invoices) {
+    await lockInvoice(tx, id);
+    const invoice = await tx.invoice.findUniqueOrThrow({
+      where: { id },
+      include: { payments: true },
+    });
+    if (invoice.status !== 'ISSUED') continue;
+    if (invoice.payments.some((p) => p.status === 'SUCCEEDED' || p.status === 'PENDING')) {
+      if (strict) {
+        throw new HttpError(
+          409,
+          'INVOICE_HAS_PAYMENTS',
+          `Invoice ${invoice.number} sudah memiliki pembayaran; batalkan (void) pembayarannya terlebih dahulu`,
+        );
+      }
+      continue;
+    }
+    await tx.invoice.update({
+      where: { id },
+      data: { status: 'VOID', voidedAt: new Date(), voidReason: reason },
+    });
+    await tx.auditLog.create({
+      data: {
+        actorId,
+        action: 'invoice.void',
+        entity: 'invoice',
+        entityId: id,
+        before: { status: 'ISSUED' },
+        after: { status: 'VOID', reason, auto: true },
+      },
+    });
+    voided += 1;
+  }
+  return voided;
 }
 
 /** Kunci baris invoice agar pembayaran/pembatalan serentak tidak melewati batas tagihan. */

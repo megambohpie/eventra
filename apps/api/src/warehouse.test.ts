@@ -1,7 +1,14 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import type { Express } from 'express';
-import type { HandoverDocumentDto, OrderDto, PickListDto, ScanOutcomeDto } from '@eventra/shared';
+import type {
+  HandoverDocumentDto,
+  LiveStockAssetDto,
+  LiveStockDto,
+  OrderDto,
+  PickListDto,
+  ScanOutcomeDto,
+} from '@eventra/shared';
 import { createTestApp, db, loginAs, resetDb } from '../test/helpers';
 import { expireNoShows, pickupDeadline } from './orders/noShow';
 
@@ -327,6 +334,95 @@ describe('Fase 04 — gudang, scan, dokumen serah-terima', () => {
     expect(holders).toBe(1);
   });
 
+  it('memilih aset yang masih dipakai menyebut pesanan pemakainya', async () => {
+    const c = await setup();
+    const { product, assets } = await seedProduct('Speaker', 2);
+    const [a1] = assets;
+    if (!a1) throw new Error('seed');
+    const o1 = await order(c, [{ productId: product.id, quantity: 1 }], '2027-05-01', '2027-05-01');
+    const o2 = await order(c, [{ productId: product.id, quantity: 1 }], '2027-05-02', '2027-05-02');
+    const p1 = data<PickListDto>(await createPick(c, o1.id));
+    const p2 = data<PickListDto>(await createPick(c, o2.id));
+    expect((await scan(c, p1.id, { action: 'PICK', qrToken: a1.qrToken })).status).toBe(200);
+
+    const res = await scan(c, p2.id, { action: 'PICK', qrToken: a1.qrToken });
+    expect(res.status).toBe(409);
+    const err = (
+      res.body as { error: { code: string; message: string; fields: Record<string, string[]> } }
+    ).error;
+    expect(err.code).toBe('SCAN_ASSET_IN_USE');
+    expect(err.fields.order).toEqual([o1.number]);
+    expect(err.fields.pickList).toEqual([p1.number]);
+    expect(err.message).toContain(o1.number);
+    // Penolakan tetap tercatat sebagai scan event REJECTED dengan alasan yang sama.
+    const rejected = await db.scanEvent.findFirst({
+      where: { pickListId: p2.id, result: 'REJECTED' },
+    });
+    expect(rejected?.reason).toBe('SCAN_ASSET_IN_USE');
+    // Rincian tersimpan agar log scan dapat menampilkan pesanan pemakainya.
+    expect(JSON.parse(rejected?.note ?? '{}')).toMatchObject({ order: [o1.number] });
+  });
+
+  it('stok langsung: ready vs sedang keluar per produk, beserta pesanan yang memegang aset', async () => {
+    const c = await setup();
+    const { product, assets } = await seedProduct('Speaker', 5);
+    const before = await request(c.app).get(`${V1}/stock/live`).set(auth(c.warehouse));
+    expect(before.status).toBe(200);
+    expect(data<LiveStockDto>(before).totals).toMatchObject({ total: 5, ready: 5, out: 0 });
+
+    // 2 aset keluar; 1 aset diservis (tidak tersedia).
+    const { order: o, pick } = await dispatched(c, product.id, assets, 2);
+    const svc = assets[4];
+    if (!svc) throw new Error('seed');
+    await db.asset.update({ where: { id: svc.id }, data: { status: 'IN_SERVICE' } });
+
+    const live = data<LiveStockDto>(
+      await request(c.app).get(`${V1}/stock/live`).set(auth(c.warehouse)),
+    );
+    expect(live.totals).toEqual({ total: 5, ready: 2, prepared: 0, out: 2, unavailable: 1 });
+    expect(live.products).toEqual([
+      expect.objectContaining({
+        productName: 'Speaker',
+        total: 5,
+        ready: 2,
+        out: 2,
+        unavailable: 1,
+      }),
+    ]);
+    expect(live.holding).toHaveLength(2);
+    expect(live.holding[0]).toMatchObject({
+      status: 'CHECKED_OUT',
+      bucket: 'OUT',
+      orderId: o.id,
+      orderNumber: o.number,
+      pickListNumber: pick.number,
+    });
+    expect(live.holding[0]?.customerName).toBe('PT Acara');
+
+    // Daftar aset per produk dan kelompok (untuk panel samping di halaman stok langsung).
+    const list = async (bucket: string) =>
+      request(c.app)
+        .get(`${V1}/stock/live/assets?productId=${product.id}&bucket=${bucket}`)
+        .set(auth(c.warehouse));
+    const ready = data<LiveStockAssetDto[]>(await list('READY'));
+    expect(ready.map((a) => a.assetCode).sort()).toEqual(
+      [assets[2], assets[3]].map((a) => a?.code).sort(),
+    );
+    expect(ready.every((a) => a.orderId === null && a.bucket === 'READY')).toBe(true);
+    const outList = data<LiveStockAssetDto[]>(await list('OUT'));
+    expect(outList).toHaveLength(2);
+    expect(outList.every((a) => a.orderNumber === o.number && a.condition === 'GOOD')).toBe(true);
+    // Tanggal keluar = tanggal checkout nyata (bukan rencana); tanggal kembali = akhir sewa pesanan.
+    expect(outList.every((a) => !a.outPlanned && /^\d{4}-\d{2}-\d{2}$/.test(a.outDate ?? ''))).toBe(
+      true,
+    );
+    expect(outList.every((a) => a.dueDate === o.endDate.slice(0, 10))).toBe(true);
+    expect(data<LiveStockAssetDto[]>(await list('UNAVAILABLE')).map((a) => a.assetCode)).toEqual([
+      svc.code,
+    ]);
+    expect((await list('BOGUS')).status).toBe(400);
+  });
+
   it('alur keluar → dokumen → tanda tangan → revisi (dokumen immutable)', async () => {
     const c = await setup();
     const { product, assets } = await seedProduct('Speaker', 2);
@@ -503,7 +599,7 @@ describe('Fase 04 — gudang, scan, dokumen serah-terima', () => {
     const o2 = await order(c, [{ productId: product.id, quantity: 1 }], '2027-06-01', '2027-06-01');
     const p2 = data<PickListDto>(await createPick(c, o2.id));
     expect(errorCode(await scan(c, p2.id, { action: 'PICK', qrToken: a2.qrToken }))).toBe(
-      'SCAN_ASSET_UNAVAILABLE',
+      'SCAN_ASSET_MISSING',
     );
 
     // Aset ditemukan terlambat dan rusak → karantina, berita acara direvisi, pesanan selesai.

@@ -343,6 +343,39 @@
   .ev-qty {
     @apply text-lg font-bold;
   }
+  .ev-qty[data-tone='ready'] {
+    @apply text-success;
+  }
+  .ev-qty[data-tone='out'] {
+    @apply text-warning;
+  }
+  /* Angka stok yang dapat diklik membuka panel daftar aset di sisi kanan. */
+  /* Kolom pesanan di drawer unit aset: cukup lebar agar nomor, pelanggan, dan tanggal terbaca. */
+  .ev-unit-order {
+    @apply min-w-48;
+  }
+  .ev-qty--link {
+    @apply cursor-pointer rounded-lg px-2 py-0.5 underline-offset-4 transition-colors hover:bg-base-200 hover:underline disabled:cursor-default disabled:no-underline disabled:opacity-50 disabled:hover:bg-transparent;
+  }
+  .ev-qty--link[data-active='true'] {
+    @apply bg-primary/15 ring-1 ring-primary;
+  }
+  .ev-table__row[data-selected='true'] {
+    @apply bg-primary/5;
+  }
+  /* Indikator penyegaran otomatis (stok langsung). */
+  .ev-live {
+    @apply inline-flex items-center gap-2 text-sm font-medium;
+  }
+  .ev-live__dot {
+    @apply size-2.5 rounded-full bg-success;
+  }
+  .ev-live[data-live='true'] .ev-live__dot {
+    @apply animate-pulse;
+  }
+  .ev-live[data-live='false'] .ev-live__dot {
+    @apply bg-base-content/30;
+  }
   .ev-chips {
     @apply flex flex-wrap items-center gap-2;
   }
@@ -448,64 +481,144 @@
   .ev-availability {
     @apply flex flex-wrap items-center gap-2 text-sm;
   }
+  /* ---------- Kalender pesanan ---------- */
   .ev-calendar {
-    @apply grid gap-1;
+    @apply overflow-hidden rounded-2xl border border-base-300 bg-base-100 shadow-sm;
   }
   .ev-calendar__weekdays {
-    @apply grid grid-cols-7 gap-0.5;
+    @apply grid grid-cols-7 border-b border-base-300 bg-base-200/60;
   }
   .ev-calendar__weekday {
-    @apply px-1 text-center text-xs font-medium text-base-content/60 uppercase;
+    @apply px-1 py-2 text-center text-[0.65rem] font-semibold tracking-wider text-base-content/60 uppercase sm:text-xs;
   }
-  /* Satu minggu: baris tanggal, lalu blok pesanan (kolom/lebar dari data-col & data-span). */
+  .ev-calendar__weekday[data-weekend='true'] {
+    @apply text-error/70;
+  }
+  /*
+   * Satu minggu: baris tanggal, lalu blok pesanan (kolom/lebar dari data-col & data-span). Garis pemisah
+   * kolom digambar di latar minggu (bukan di sel tanggal) agar tidak terputus oleh blok pesanan.
+   */
   .ev-calendar__week {
-    @apply grid grid-flow-row-dense grid-cols-7 gap-x-0.5 gap-y-1 rounded-lg border border-base-300/60 bg-base-100 pb-1;
+    @apply grid min-h-24 grid-flow-row-dense grid-cols-7 content-start gap-y-1 border-b border-base-300/70 pb-2 last:border-b-0 sm:min-h-32;
+    background-image: linear-gradient(
+      to right,
+      transparent calc(100% - 1px),
+      color-mix(in oklab, var(--color-base-content) 10%, transparent) 0
+    );
+    background-size: calc(100% / 7) 100%;
+    background-repeat: repeat-x;
   }
   .ev-calendar__cell {
-    @apply flex min-h-9 items-start justify-between gap-1 border-r border-base-300/40 p-1 last:border-r-0 sm:min-h-12 sm:p-2;
+    @apply relative flex min-h-9 items-start justify-between gap-1 p-1 sm:min-h-10 sm:p-1.5;
   }
   .ev-calendar__cell[data-blank='true'] {
-    @apply bg-base-200/40;
+    @apply bg-base-200/50;
   }
   .ev-calendar__cell[data-past='true'] .ev-calendar__date {
     @apply text-base-content/40;
   }
+  .ev-calendar__cell[data-weekend='true'] .ev-calendar__date {
+    @apply text-error/70;
+  }
   .ev-calendar__cell[data-today='true'] {
-    @apply bg-secondary/10;
+    @apply bg-primary/5;
   }
   .ev-calendar__cell[data-today='true'] .ev-calendar__date {
-    @apply text-secondary;
+    @apply grid size-6 place-items-center rounded-full bg-primary text-xs text-primary-content sm:size-7 sm:text-sm;
   }
   .ev-calendar__add {
-    @apply text-primary;
+    @apply text-primary opacity-0 transition-opacity focus-visible:opacity-100;
   }
+  .ev-calendar__cell:hover .ev-calendar__add {
+    @apply opacity-100;
+  }
+  @media (hover: none) {
+    .ev-calendar__add {
+      @apply opacity-100;
+    }
+  }
+  /* Warna per pelanggan: hue dikirim komponen lewat --ev-hue; terang/gelap mengikuti tema. */
   .ev-calendar__bar {
-    @apply mx-0.5 block min-w-0 truncate rounded-md border border-transparent px-1.5 py-0.5 text-[0.65rem] font-medium leading-snug sm:text-xs;
-    @apply bg-neutral/15 text-base-content transition-colors hover:brightness-95;
+    --ev-bar-l: 90%;
+    --ev-bar-c: 0.07;
+    --ev-bar-edge-l: 62%;
+    @apply mx-1 flex min-w-0 items-center gap-1.5 rounded-lg px-2 py-1 text-[0.7rem] leading-tight font-semibold text-base-content shadow-sm transition sm:text-xs;
+    background-color: oklch(var(--ev-bar-l) var(--ev-bar-c) var(--ev-hue, 250));
+    border-left: 4px solid oklch(var(--ev-bar-edge-l) 0.16 var(--ev-hue, 250));
+  }
+  :root[data-theme='eventra-dark'] .ev-calendar__bar {
+    --ev-bar-l: 36%;
+    --ev-bar-c: 0.08;
+    --ev-bar-edge-l: 70%;
+  }
+  .ev-calendar__bar:hover,
+  .ev-calendar__bar:focus-visible {
+    @apply -translate-y-px shadow-md brightness-95;
   }
   .ev-calendar__bar[data-before='true'] {
-    @apply ml-0 rounded-l-none;
+    @apply ml-0 rounded-l-none border-l-0 pl-2.5;
   }
   .ev-calendar__bar[data-after='true'] {
     @apply mr-0 rounded-r-none;
   }
+  .ev-calendar__bar-name {
+    @apply min-w-0 truncate;
+  }
+  .ev-calendar__bar-count {
+    @apply ml-auto hidden shrink-0 rounded-full bg-base-100/70 px-1.5 text-[0.65rem] font-bold sm:inline;
+  }
+  /* Status tetap terbaca tanpa warna: belum dikonfirmasi = garis putus-putus, selesai = pudar, kendala = cincin. */
   .ev-calendar__bar[data-status='PENDING_REVIEW'],
   .ev-calendar__bar[data-status='QUOTED'],
   .ev-calendar__bar[data-status='AWAITING_PAYMENT'] {
-    @apply bg-warning/25;
-  }
-  .ev-calendar__bar[data-status='CONFIRMED'],
-  .ev-calendar__bar[data-status='SCHEDULED'] {
-    @apply bg-primary/25;
-  }
-  .ev-calendar__bar[data-status='IN_PROGRESS'] {
-    @apply bg-info/25;
+    @apply outline-1 -outline-offset-1 outline-base-content/40 outline-dashed;
   }
   .ev-calendar__bar[data-status='COMPLETED'] {
-    @apply bg-success/25;
+    @apply opacity-60;
   }
   .ev-calendar__bar[data-status='ISSUE'] {
-    @apply bg-error/25;
+    @apply ring-2 ring-error;
+  }
+  .ev-calendar__legend {
+    @apply mt-3 flex flex-wrap gap-x-4 gap-y-2;
+  }
+  .ev-calendar__legend-item {
+    @apply inline-flex items-center gap-1.5 text-xs font-medium;
+  }
+  .ev-calendar__swatch {
+    @apply size-3 rounded-full;
+    background-color: oklch(62% 0.16 var(--ev-hue, 250));
+  }
+  .ev-calendar__summary {
+    @apply text-sm text-base-content/60;
+  }
+  /* Popover rincian pesanan saat kursor di atas blok. */
+  .ev-calendar__pop {
+    @apply pointer-events-none fixed z-50 w-72 max-w-[calc(100vw-1rem)] rounded-xl border border-base-300 bg-base-100 p-3 text-sm shadow-xl;
+  }
+  .ev-calendar__pop-head {
+    @apply flex items-start justify-between gap-2;
+  }
+  .ev-calendar__pop-title {
+    @apply flex min-w-0 items-center gap-2 leading-tight font-semibold;
+  }
+  .ev-calendar__pop-meta {
+    @apply mt-2 grid gap-1 text-xs text-base-content/70;
+  }
+  .ev-calendar__pop-row {
+    @apply flex items-start gap-1.5;
+  }
+  .ev-calendar__pop-assets {
+    @apply mt-3 rounded-lg bg-base-200/70 p-2;
+  }
+  .ev-calendar__pop-count {
+    @apply flex items-baseline gap-1 text-lg leading-none font-bold;
+  }
+  .ev-calendar__pop-lines {
+    @apply mt-2 grid gap-0.5 text-xs;
+  }
+  .ev-calendar__pop-line {
+    @apply flex justify-between gap-2;
   }
   /* ---------- POS pesanan ---------- */
   .ev-pos {
@@ -651,27 +764,7 @@
   .ev-pos__bar {
     @apply fixed inset-x-0 bottom-0 z-20 flex items-center justify-between gap-2 border-t border-base-300 bg-base-100 px-4 py-3 shadow-lg lg:hidden;
   }
-  .ev-calendar__bar[data-col='1'] {
-    @apply col-start-1;
-  }
-  .ev-calendar__bar[data-col='2'] {
-    @apply col-start-2;
-  }
-  .ev-calendar__bar[data-col='3'] {
-    @apply col-start-3;
-  }
-  .ev-calendar__bar[data-col='4'] {
-    @apply col-start-4;
-  }
-  .ev-calendar__bar[data-col='5'] {
-    @apply col-start-5;
-  }
-  .ev-calendar__bar[data-col='6'] {
-    @apply col-start-6;
-  }
-  .ev-calendar__bar[data-col='7'] {
-    @apply col-start-7;
-  }
+  /* Urutan penting: col-span-* adalah shorthand grid-column yang mereset col-start-*, jadi aturan lebar harus lebih dulu. */
   .ev-calendar__bar[data-span='1'] {
     @apply col-span-1;
   }
@@ -692,6 +785,27 @@
   }
   .ev-calendar__bar[data-span='7'] {
     @apply col-span-7;
+  }
+  .ev-calendar__bar[data-col='1'] {
+    @apply col-start-1;
+  }
+  .ev-calendar__bar[data-col='2'] {
+    @apply col-start-2;
+  }
+  .ev-calendar__bar[data-col='3'] {
+    @apply col-start-3;
+  }
+  .ev-calendar__bar[data-col='4'] {
+    @apply col-start-4;
+  }
+  .ev-calendar__bar[data-col='5'] {
+    @apply col-start-5;
+  }
+  .ev-calendar__bar[data-col='6'] {
+    @apply col-start-6;
+  }
+  .ev-calendar__bar[data-col='7'] {
+    @apply col-start-7;
   }
   .ev-calendar__day {
     @apply flex min-h-16 flex-col items-start gap-0.5 rounded-lg border border-base-300/60 bg-base-100 p-1 text-left text-[0.65rem] leading-tight transition-colors hover:bg-base-200 sm:min-h-24 sm:p-2 sm:text-xs;
@@ -748,6 +862,9 @@
   .ev-tabs__count[data-alert='true'] {
     @apply bg-warning/30;
   }
+  .ev-tabs__count[data-done='true'] {
+    @apply bg-success/30;
+  }
   .ev-checklist {
     @apply mb-4 rounded-box border border-base-300;
   }
@@ -786,12 +903,6 @@
   }
   .ev-progress-cell {
     @apply min-w-24;
-  }
-  .ev-scan__mode {
-    @apply w-full sm:w-auto;
-  }
-  .ev-scan__mode .join-item {
-    @apply flex-1 sm:flex-none;
   }
   .ev-scan__form {
     @apply grid items-end gap-2 sm:grid-cols-[1fr_auto];

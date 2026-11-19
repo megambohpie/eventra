@@ -204,7 +204,7 @@ export async function checkAvailability(
   items: RequestItem[],
   start: string,
   end: string,
-  opts: { excludeOrderId?: string; now?: Date } = {},
+  opts: { excludeOrderId?: string; now?: Date; independent?: boolean } = {},
 ): Promise<AvailabilityResultDto> {
   const now = opts.now ?? new Date();
   const plans = await planItems(db, items);
@@ -242,7 +242,8 @@ export async function checkAvailability(
           maxUnits: MAX_ITEM_QUANTITY,
         };
       }
-      const others = (need.get(c.productId) ?? 0) - required;
+      // Mode independen: item lain pada permintaan yang sama tidak mengurangi stok item ini.
+      const others = opts.independent ? 0 : (need.get(c.productId) ?? 0) - required;
       const free = (minRemaining.get(c.productId) ?? 0) - others;
       return {
         c,

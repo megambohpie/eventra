@@ -3,6 +3,8 @@ import type {
   AssetMetricsDto,
   AssetRentalDto,
   DashboardQuery,
+  DpStatusDto,
+  DpWaiverInput,
   InvoiceCreateInput,
   InvoiceDto,
   InvoiceListQuery,
@@ -11,6 +13,8 @@ import type {
   OwnerDashboardDto,
   Page,
   PaymentCreateInput,
+  PaymentPolicyDto,
+  PaymentPolicyInput,
   PaymentReasonInput,
   ReceivablesReportDto,
   ReminderInput,
@@ -19,6 +23,17 @@ import type {
 } from '@eventra/shared';
 
 type Envelope<T> = { data: T };
+
+// ---------- Kebijakan DP ----------
+
+export const getPaymentPolicy = async (c: AxiosInstance) =>
+  (await c.get<Envelope<PaymentPolicyDto>>('/settings/payment-policy')).data.data;
+export const updatePaymentPolicy = async (c: AxiosInstance, input: PaymentPolicyInput) =>
+  (await c.put<Envelope<PaymentPolicyDto>>('/settings/payment-policy', input)).data.data;
+export const getOrderDp = async (c: AxiosInstance, orderId: string) =>
+  (await c.get<Envelope<DpStatusDto>>(`/orders/${orderId}/dp`)).data.data;
+export const waiveOrderDp = async (c: AxiosInstance, orderId: string, input: DpWaiverInput) =>
+  (await c.post<Envelope<DpStatusDto>>(`/orders/${orderId}/dp-waiver`, input)).data.data;
 
 // ---------- Invoice & pembayaran ----------
 

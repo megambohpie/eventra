@@ -43,8 +43,10 @@ export function createTestApp(
 /** Kosongkan semua tabel (kecuali _prisma_migrations) antar test. */
 export async function resetDb(): Promise<void> {
   await db.$executeRawUnsafe(
-    'TRUNCATE TABLE asset_status_events, assets, stock_receipt_items, stock_receipts, audit_logs, refresh_tokens, password_reset_tokens, customers, products, categories, locations, users RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE asset_status_events, assets, stock_receipt_items, stock_receipts, audit_logs, refresh_tokens, password_reset_tokens, customers, products, categories, locations, users, app_settings RESTART IDENTITY CASCADE',
   );
+  // Syarat DP minimum dimatikan secara default di test; test kebijakan DP menyalakannya sendiri.
+  await db.appSetting.create({ data: { key: 'payment.dpMinPercent', value: 0 } });
 }
 
 export async function createUser(role: Role, email = `${role.toLowerCase()}@test.local`) {

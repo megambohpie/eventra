@@ -1,5 +1,6 @@
 import { createApiClient, refreshSession } from '@eventra/api-client';
 import { i18n } from './i18n';
+import { errorText } from './lib/errors';
 import { notifyError } from './lib/notifications';
 import { clearSession, getSession, setSession } from './lib/session';
 
@@ -23,6 +24,6 @@ export const api = createApiClient({
   onUnauthorized: clearSession,
   onError: (error) => {
     // Terjemahan lokal diutamakan; pesan server dipakai bila kode belum diterjemahkan.
-    notifyError(i18n.t(`errors.${error.code}`, { defaultValue: error.message }));
+    notifyError(errorText(i18n.t, error));
   },
 });

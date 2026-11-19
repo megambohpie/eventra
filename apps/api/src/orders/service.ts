@@ -1,5 +1,6 @@
 import type { OrderStatus as DbOrderStatus, Prisma, PrismaClient } from '@prisma/client';
 import {
+  DEPOSIT_ENABLED,
   rentalDays,
   type OrderDto,
   type OrderPicDto,
@@ -170,6 +171,8 @@ export function computeTotals(
   }
   if (pricing.mode === 'LUMP') subtotal = pricing.lumpTotal ?? 0n;
   if (pricing.depositOverride != null) depositTotal = pricing.depositOverride;
+  // Deposit dinonaktifkan (keputusan owner): pesanan baru tidak menagih deposit.
+  if (!DEPOSIT_ENABLED) depositTotal = 0n;
   return { subtotal, depositTotal };
 }
 

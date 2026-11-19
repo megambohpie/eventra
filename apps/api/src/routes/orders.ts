@@ -22,6 +22,7 @@ import {
   type CalendarDayDetailDto,
   type CalendarDayDto,
   type CalendarOrderDto,
+  type CalendarOrderLineDto,
   CALENDAR_HIDDEN_STATUSES,
   type CalendarMovementDto,
   type OrderStatus,
@@ -38,8 +39,10 @@ import {
   insufficientStock,
   planItems,
   releaseAllocations,
+  type PlanComponent,
 } from '../orders/availability';
 import { cancelPickList, lockOrderPickLists } from '../warehouse/service';
+import { issueInvoiceForOrder, voidInvoicesForOrder } from '../finance/service';
 import {
   claimTransition,
   computeTotals,
@@ -65,6 +68,30 @@ const MOVEMENT_STATUSES: OrderStatus[] = [
   'COMPLETED',
 ];
 const PIC_LOCKED_STATUSES: OrderStatus[] = ['COMPLETED', 'REJECTED', 'CANCELLED', 'EXPIRED'];
+
+/**
+ * Isi pesanan untuk kalender: item diuraikan ke produk fisik (paket → komponen) dan dijumlahkan.
+ * `assetCount` hanya aset berQR; barang tak terbatas dan kelompok per meter (m²) dicantumkan terpisah.
+ */
+function orderContents(
+  items: { productId: string; quantity: number }[],
+  planById: Map<string, { components: PlanComponent[] }>,
+): { assetCount: number; lines: CalendarOrderLineDto[] } {
+  const merged = new Map<string, CalendarOrderLineDto>();
+  for (const item of items) {
+    for (const c of planById.get(item.productId)?.components ?? []) {
+      const kind = c.areaPool ? 'AREA' : c.unlimited ? 'BULK' : 'ASSET';
+      const cur = merged.get(c.productId) ?? { productName: c.productName, quantity: 0, kind };
+      cur.quantity += item.quantity * c.perUnit;
+      merged.set(c.productId, cur);
+    }
+  }
+  const lines = [...merged.values()].sort(
+    (a, b) => b.quantity - a.quantity || a.productName.localeCompare(b.productName),
+  );
+  const assetCount = lines.filter((l) => l.kind === 'ASSET').reduce((n, l) => n + l.quantity, 0);
+  return { assetCount, lines };
+}
 
 export function ordersRouter(db: PrismaClient): Router {
   const router = Router();
@@ -442,6 +469,9 @@ export function ordersRouter(db: PrismaClient): Router {
         now,
       );
       await recordStatus(tx, id, from, 'CONFIRMED', currentUser(req).id);
+      // Pesanan disetujui → invoice terbit otomatis (nilai dari snapshot pesanan terbaru).
+      const fresh = await tx.order.findUniqueOrThrow({ where: { id } });
+      await issueInvoiceForOrder(tx, fresh, currentUser(req).id);
       await writeAudit(tx, req, {
         action: 'order.confirm',
         entity: 'order',
@@ -496,6 +526,7 @@ export function ordersRouter(db: PrismaClient): Router {
       for (const p of activePicks) {
         await cancelPickList(tx, p.id, user.id, 'Pesanan dibatalkan');
       }
+      await voidInvoicesForOrder(tx, id, user.id, 'Pesanan dibatalkan', true);
       await recordStatus(tx, id, from, 'CANCELLED', user.id, note);
       await writeAudit(tx, req, {
         action: 'order.cancel',
@@ -757,17 +788,32 @@ export function ordersRouter(db: PrismaClient): Router {
         status: true,
         startDate: true,
         endDate: true,
+        customerId: true,
+        eventLocation: true,
         customer: { select: { name: true } },
+        items: { select: { productId: true, quantity: true } },
       },
       orderBy: [{ startDate: 'asc' }, { number: 'asc' }],
     });
+    // Isi pesanan diuraikan ke aset fisik (paket → komponen) untuk popover kalender.
+    const plans = await planItems(
+      db,
+      [...new Set(orders.flatMap((o) => o.items.map((i) => i.productId)))].map((productId) => ({
+        productId,
+        quantity: 1,
+      })),
+    );
+    const planById = new Map(plans.map((p) => [p.productId, p]));
     const data: CalendarOrderDto[] = orders.map((o) => ({
       orderId: o.id,
       orderNumber: o.number,
       status: o.status,
+      customerId: o.customerId,
       customerName: o.customer.name,
+      eventLocation: o.eventLocation,
       startDate: isoDate(o.startDate),
       endDate: isoDate(o.endDate),
+      ...orderContents(o.items, planById),
     }));
     res.json({ data });
   });

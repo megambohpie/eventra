@@ -13,6 +13,7 @@ export function availabilityRouter(db: PrismaClient): Router {
     const input = availabilityCheckSchema.parse(req.body);
     const data = await checkAvailability(db, input.items, input.startDate, input.endDate, {
       excludeOrderId: input.excludeOrderId,
+      independent: input.independent,
     });
     res.json({ data });
   });
