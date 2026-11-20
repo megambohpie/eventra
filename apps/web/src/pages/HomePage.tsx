@@ -22,6 +22,7 @@ import {
 import type { Capability, HealthResponse } from '@eventra/shared';
 import { api } from '@/api';
 import { useAuth } from '@/auth/AuthProvider';
+import { OwnerOverview } from '@/components/dashboard/OwnerOverview';
 import { OrderCalendar } from '@/components/orders/OrderCalendar';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -132,6 +133,8 @@ export function HomePage() {
         <h1 className="ev-hero__title">{t('home.welcome', { name: user?.name ?? '' })}</h1>
         <p className="ev-hero__text">{t('home.welcomeSub')}</p>
       </section>
+
+      {can('dashboard.read') && <OwnerOverview />}
 
       {shortcuts.length > 0 && (
         <div className="ev-shortcuts">

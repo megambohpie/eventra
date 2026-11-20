@@ -1,10 +1,9 @@
-import { Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import { RequireAuth, RequireCapability } from './auth/guards';
 import { Layout } from './components/Layout';
 import { AssetDetailPage } from './pages/AssetDetailPage';
 import { AssetsPage } from './pages/AssetsPage';
 import { StockLivePage } from './pages/StockLivePage';
-import { DashboardPage } from './pages/DashboardPage';
 import { FinancePage } from './pages/FinancePage';
 import { InvoiceDetailPage } from './pages/InvoiceDetailPage';
 import { InvoicesPage } from './pages/InvoicesPage';
@@ -75,9 +74,7 @@ export function App() {
           <Route element={<RequireCapability capability="service.read" />}>
             <Route path="service-tickets" element={<ServiceTicketsPage />} />
           </Route>
-          <Route element={<RequireCapability capability="dashboard.read" />}>
-            <Route path="dashboard" element={<DashboardPage />} />
-          </Route>
+          <Route path="dashboard" element={<Navigate to="/" replace />} />
           <Route element={<RequireCapability capability="finance.read" />}>
             <Route path="invoices" element={<InvoicesPage />} />
             <Route path="invoices/:id" element={<InvoiceDetailPage />} />

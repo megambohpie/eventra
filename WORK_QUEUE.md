@@ -106,6 +106,7 @@
 - [x] Detail aset: umur, harga beli, jumlah sewa, hari pakai, jumlah/biaya servis, dan insiden.
 
 - [x] Tambahan di luar daftar: invoice per pesanan (snapshot sewa + deposit, satu invoice aktif per pesanan, void + terbit ulang); pembayaran dengan tujuan SEWA/DEPOSIT (hanya sewa yang SUCCEEDED menjadi pendapatan; deposit dilaporkan terpisah), metode tunai/transfer/gateway/lainnya (gateway PENDING sampai dikonfirmasi lewat `settlePayment`, titik masuk tunggal untuk konfirmasi manual maupun adapter gateway kelak), batas bayar per tujuan dengan kunci baris invoice, koreksi lewat void (baris tidak dihapus; trigger DB melarang hapus/ubah nominal); pengingat tagihan manual + job otomatis (jatuh tempo ≤ 3 hari atau terlambat, maks. 1 per 24 jam, notifikasi dalam aplikasi); status turunan Belum dibayar/Sebagian/Lunas/Terlambat; capability baru `finance.read/write`, `dashboard.read`; UI `/dashboard`, `/invoices`, `/invoices/:id`, `/finance`, metrik di detail aset.
+- [x] Tambahan di luar daftar: Beranda dan Dashboard digabung menjadi satu halaman `/` (kalender tetap paling atas, lalu statistik/aset stale/peringkat lewat `components/dashboard/OwnerOverview`, pintasan, status API/DB); menu dan halaman `/dashboard` dihapus, rute lama dialihkan ke `/`; strip pergerakan 14 hari dihapus karena duplikat kalender.
 
 **Selesai bila:** pendapatan hanya menghitung pembayaran yang diterima dan piutang menampilkan sisa tagihan aktual per invoice.
 

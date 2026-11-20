@@ -17,7 +17,6 @@ export const id: Messages<typeof en> = {
     incidents: 'Insiden',
     replacements: 'Penggantian',
     service: 'Servis',
-    dashboard: 'Dashboard',
     invoices: 'Invoice',
     finance: 'Keuangan',
     menu: 'Menu',
@@ -1098,10 +1097,6 @@ export const id: Messages<typeof en> = {
     rentals: 'Sewa',
     incidentsCount: 'Laporan',
     noData: 'Belum ada data',
-    movements: 'Pergerakan barang',
-    movementsHint:
-      '14 hari ke depan. Pilih tanggal untuk melihat pesanan, jumlah, lokasi, dan PIC.',
-    openCalendar: 'Buka kalender',
     asset: 'Aset',
     product: 'Produk',
     status: 'Status',

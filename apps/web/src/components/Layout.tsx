@@ -13,7 +13,6 @@ import {
   mdiQrcode,
   mdiReceiptText,
   mdiSwapHorizontal,
-  mdiViewDashboard,
   mdiWrench,
   mdiWarehouse,
   mdiMenu,
@@ -37,12 +36,6 @@ export const FOOTER_TEXT = 'Sistem ini dibuat oleh PT Trijaya Digital Koneksindo
 // Semua menu hanya tampil setelah login; `capability` menyaring lebih lanjut per peran.
 const NAV_ITEMS: { to: string; labelKey: string; icon: string; capability?: Capability }[] = [
   { to: '/', labelKey: 'nav.home', icon: mdiHome },
-  {
-    to: '/dashboard',
-    labelKey: 'nav.dashboard',
-    icon: mdiViewDashboard,
-    capability: 'dashboard.read',
-  },
   {
     to: '/customers',
     labelKey: 'nav.customers',

@@ -1,12 +1,11 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { getMovementCalendar, getMovementDay, getOwnerDashboard } from '@eventra/api-client';
-import { eachDate, type AssetRankDto } from '@eventra/shared';
+import { getOwnerDashboard } from '@eventra/api-client';
+import type { AssetRankDto } from '@eventra/shared';
 import { api } from '@/api';
 import { useAuth } from '@/auth/AuthProvider';
 import { AssetStatusBadge, ConditionBadge } from '@/components/assets/badges';
-import { MovementList } from '@/components/orders/MovementList';
 import { Loading } from '@/components/ui/Loading';
 import { PageCard, PageHeader } from '@/components/ui/PageCard';
 import { StatTile } from '@/components/ui/StatTile';
@@ -14,11 +13,6 @@ import { useResource } from '@/hooks/useResource';
 import { formatDate } from '@/lib/format';
 
 const STALE_OPTIONS = [7, 14, 30, 60, 90];
-const MOVEMENT_DAYS = 14;
-
-const isoToday = () => new Date().toISOString().slice(0, 10);
-const addDays = (date: string, days: number) =>
-  new Date(Date.parse(`${date}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
 
 function RankTable({
   title,
@@ -68,29 +62,15 @@ function RankTable({
   );
 }
 
-export function DashboardPage() {
+export function OwnerOverview() {
   const { t } = useTranslation();
   const { can } = useAuth();
   const [staleDays, setStaleDays] = useState(30);
-  const [selected, setSelected] = useState<string | null>(null);
-  const canOrders = can('order.read');
-
-  const from = isoToday();
-  const to = addDays(from, MOVEMENT_DAYS - 1);
 
   const dash = useResource(() => getOwnerDashboard(api, { staleDays }), `dash|${staleDays}`);
-  const movement = useResource(
-    () => (canOrders ? getMovementCalendar(api, from, to) : Promise.resolve(undefined)),
-    `move|${from}`,
-  );
-  const detail = useResource(
-    () => (canOrders && selected ? getMovementDay(api, selected) : Promise.resolve(undefined)),
-    `day|${selected ?? ''}`,
-  );
 
   const d = dash.data;
   const s = d?.byStatus;
-  const byDate = new Map((movement.data ?? []).map((day) => [day.date, day]));
 
   return (
     <>
@@ -223,67 +203,6 @@ export function DashboardPage() {
               countLabel={t('dashboard.incidentsCount')}
             />
           </div>
-        </PageCard>
-      )}
-
-      {canOrders && (
-        <PageCard>
-          <PageHeader title={t('dashboard.movements')} subtitle={t('dashboard.movementsHint')}>
-            <Link className="btn btn-ghost btn-sm" to="/">
-              {t('dashboard.openCalendar')}
-            </Link>
-          </PageHeader>
-          {movement.loading && !movement.data ? (
-            <Loading />
-          ) : (
-            <div className="ev-strip" role="list">
-              {eachDate(from, to).map((date) => {
-                const day = byDate.get(date);
-                const active = (day?.outgoingOrders ?? 0) + (day?.returningOrders ?? 0) > 0;
-                return (
-                  <button
-                    key={date}
-                    type="button"
-                    role="listitem"
-                    className="ev-calendar__day"
-                    data-today={date === from}
-                    data-selected={date === selected}
-                    data-active={active}
-                    onClick={() => setSelected(date)}
-                  >
-                    <span className="ev-calendar__date">{formatDate(date)}</span>
-                    {day && day.outgoingUnits > 0 && (
-                      <span className="ev-calendar__out">
-                        ↑ {day.outgoingOrders} · {day.outgoingUnits}
-                      </span>
-                    )}
-                    {day && day.returningUnits > 0 && (
-                      <span className="ev-calendar__in">
-                        ↓ {day.returningOrders} · {day.returningUnits}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-          {selected &&
-            (detail.loading && !detail.data ? (
-              <Loading />
-            ) : (
-              detail.data && (
-                <>
-                  <h2 className="ev-section-title">{formatDate(selected)}</h2>
-                  <div className="ev-master__grid">
-                    <MovementList title={t('calendar.outgoing')} movements={detail.data.outgoing} />
-                    <MovementList
-                      title={t('calendar.returning')}
-                      movements={detail.data.returning}
-                    />
-                  </div>
-                </>
-              )
-            ))}
         </PageCard>
       )}
     </>
