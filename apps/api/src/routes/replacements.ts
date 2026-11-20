@@ -4,6 +4,7 @@ import {
   pickScanSchema,
   replacementCancelSchema,
   replacementListQuerySchema,
+  replacementOldReturnSchema,
   replacementReceiveSchema,
   hasCapability,
   type Page,
@@ -373,17 +374,26 @@ export function replacementsRouter(db: PrismaClient): Router {
       const id = parseId(req.params.id);
       const input = replacementReceiveSchema.parse(req.body);
       const user = currentUser(req);
+      const manual = !input.qrToken;
+      // Kode aset diketik hanya oleh Owner/Admin atau pelanggan pesanan itu (kode di stiker aset).
+      if (manual && !hasCapability(user.role, 'scan.manual') && !user.portalOrderId) {
+        throw new HttpError(403, 'MANUAL_SCAN_FORBIDDEN', 'Penerimaan wajib memindai QR');
+      }
       const head = await db.replacementTask.findUnique({
         where: { id },
         select: { orderId: true, incidentId: true },
       });
       if (!head) throw new HttpError(404, 'NOT_FOUND', 'Tugas penggantian tidak ditemukan');
+      // Pelanggan (portal) hanya boleh menerima pengganti pada pesanannya sendiri.
+      if (user.portalOrderId && head.orderId !== user.portalOrderId) {
+        throw new HttpError(404, 'NOT_FOUND', 'Tugas penggantian tidak ditemukan');
+      }
       await guardedScan(
         db,
         req,
         {
           action: 'REPLACEMENT_RECEIVE',
-          method: 'QR',
+          method: manual ? 'MANUAL' : 'QR',
           entity: 'replacement_task',
           entityId: id,
           orderId: head.orderId,
@@ -415,7 +425,10 @@ export function replacementsRouter(db: PrismaClient): Router {
               'Barang pesanan ini sudah selesai dikembalikan',
             );
           }
-          const asset = await resolveAsset(tx, { qrToken: input.qrToken });
+          const asset = await resolveAsset(tx, {
+            qrToken: input.qrToken,
+            assetCode: input.assetCode,
+          });
           if (asset.id !== task.replacementAssetId) {
             throw new ScanRejected(
               'SCAN_WRONG_REPLACEMENT',
@@ -477,7 +490,7 @@ export function replacementsRouter(db: PrismaClient): Router {
             data: {
               action: 'REPLACEMENT_RECEIVE',
               result: 'OK',
-              method: 'QR',
+              method: manual ? 'MANUAL' : 'QR',
               pickListId: task.pickListId,
               orderId: task.orderId,
               incidentId: task.incidentId,
@@ -522,6 +535,74 @@ export function replacementsRouter(db: PrismaClient): Router {
           });
         },
       );
+      res.json({ data: await respond(id) });
+    },
+  );
+
+  // ---------- Aset rusak dikembalikan lebih awal ----------
+
+  /**
+   * Penyewa/PIC menyerahkan aset rusak (mis. dibawa staf pengantar pengganti). Hanya mencatat
+   * permintaan dan memberi tahu gudang; gudang yang menerimanya lewat scan pengembalian pick list.
+   */
+  router.post(
+    '/replacement-tasks/:id/return-old',
+    requireCapability('replacement.receive'),
+    async (req, res) => {
+      const id = parseId(req.params.id);
+      const { note } = replacementOldReturnSchema.parse(req.body ?? {});
+      const user = currentUser(req);
+      const head = await db.replacementTask.findUnique({
+        where: { id },
+        select: { orderId: true },
+      });
+      // Pelanggan (portal) hanya pada pesanannya sendiri; PIC lapangan hanya pada pesanan yang ditugaskan.
+      if (!head || (user.portalOrderId && head.orderId !== user.portalOrderId)) {
+        throw new HttpError(404, 'NOT_FOUND', 'Tugas penggantian tidak ditemukan');
+      }
+      await db.$transaction(async (tx) => {
+        const { task } = await lockTask(tx, id);
+        if (user.role === 'FIELD_PIC' && !(await fieldPicOf(tx, task.orderId, user.id))) {
+          throw new HttpError(403, 'NOT_ASSIGNED', 'Anda bukan PIC lapangan pada pesanan ini');
+        }
+        if (task.status !== 'RECEIVED') {
+          throw wrongState('Aset rusak baru dapat diserahkan setelah pengganti diterima');
+        }
+        if (task.oldReturnRequestedAt) {
+          throw wrongState('Aset rusak sudah diserahkan; menunggu gudang menerima');
+        }
+        const returned = await tx.pickListItem.findFirst({
+          where: { pickListId: task.pickListId, assetId: task.oldAssetId, status: 'RETURNED' },
+          select: { id: true },
+        });
+        if (returned) throw wrongState('Aset rusak sudah diterima gudang');
+        await tx.replacementTask.update({
+          where: { id },
+          data: {
+            oldReturnRequestedAt: new Date(),
+            oldReturnRequestedBy: user.id,
+            oldReturnNote: note ?? null,
+          },
+        });
+        await notify(tx, await usersWithCapability(tx, 'warehouse.write'), {
+          type: 'replacement.oldReturnRequested',
+          entity: 'replacement_task',
+          entityId: id,
+          params: {
+            number: task.number,
+            assetCode: task.oldAsset.code,
+            orderNumber: task.order.number,
+            incidentId: task.incidentId,
+          },
+          exclude: user.id,
+        });
+        await writeAudit(tx, req, {
+          action: 'replacement.old_return_request',
+          entity: 'replacement_task',
+          entityId: id,
+          after: { oldAsset: task.oldAsset.code, note: note ?? null },
+        });
+      });
       res.json({ data: await respond(id) });
     },
   );

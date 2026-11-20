@@ -469,35 +469,35 @@ model AppSetting {
 }
 
 model Order {
-  id            String      @id @default(uuid()) @db.Uuid
-  number        String      @unique
-  customerId    String      @map("customer_id") @db.Uuid
-  status        OrderStatus @default(DRAFT)
-  startDate     DateTime    @map("start_date") @db.Date
-  endDate       DateTime    @map("end_date") @db.Date
-  eventLocation String      @map("event_location")
-  eventAddress  String?     @map("event_address")
-  eventLat      Float?      @map("event_lat")
-  eventLng      Float?      @map("event_lng")
-  note          String?
-  subtotal      BigInt      @default(0)
-  depositTotal  BigInt      @default(0) @map("deposit_total")
-  pricingMode   OrderPricingMode @default(LINE) @map("pricing_mode")
+  id              String           @id @default(uuid()) @db.Uuid
+  number          String           @unique
+  customerId      String           @map("customer_id") @db.Uuid
+  status          OrderStatus      @default(DRAFT)
+  startDate       DateTime         @map("start_date") @db.Date
+  endDate         DateTime         @map("end_date") @db.Date
+  eventLocation   String           @map("event_location")
+  eventAddress    String?          @map("event_address")
+  eventLat        Float?           @map("event_lat")
+  eventLng        Float?           @map("event_lng")
+  note            String?
+  subtotal        BigInt           @default(0)
+  depositTotal    BigInt           @default(0) @map("deposit_total")
+  pricingMode     OrderPricingMode @default(LINE) @map("pricing_mode")
   // Total borongan (seluruh sewa, tidak dikali hari); terisi hanya bila pricingMode = LUMP. `subtotal` = nilai ini.
-  lumpTotal     BigInt?     @map("lump_total")
+  lumpTotal       BigInt?          @map("lump_total")
   // Deposit hasil negosiasi (menggantikan jumlah deposit per unit); null = deposit default. `depositTotal` = nilai ini bila terisi.
-  depositOverride BigInt?   @map("deposit_override")
+  depositOverride BigInt?          @map("deposit_override")
   // Waktu pesanan dibatalkan otomatis karena barang tidak keluar sampai batas (akhir hari sewa pertama); deposit hangus.
-  noShowAt      DateTime?   @map("no_show_at") @db.Timestamptz(3)
+  noShowAt        DateTime?        @map("no_show_at") @db.Timestamptz(3)
   // Izin Owner mengeluarkan barang tanpa DP minimum (alasan wajib; juga tercatat di audit).
-  dpWaivedAt    DateTime?   @map("dp_waived_at") @db.Timestamptz(3)
-  dpWaivedBy    String?     @map("dp_waived_by") @db.Uuid
-  dpWaiveReason String?     @map("dp_waive_reason")
-  holdExpiresAt DateTime?   @map("hold_expires_at") @db.Timestamptz(3)
-  confirmedAt   DateTime?   @map("confirmed_at") @db.Timestamptz(3)
-  createdBy     String?     @map("created_by") @db.Uuid
-  createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt     DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+  dpWaivedAt      DateTime?        @map("dp_waived_at") @db.Timestamptz(3)
+  dpWaivedBy      String?          @map("dp_waived_by") @db.Uuid
+  dpWaiveReason   String?          @map("dp_waive_reason")
+  holdExpiresAt   DateTime?        @map("hold_expires_at") @db.Timestamptz(3)
+  confirmedAt     DateTime?        @map("confirmed_at") @db.Timestamptz(3)
+  createdBy       String?          @map("created_by") @db.Uuid
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   customer          Customer           @relation(fields: [customerId], references: [id])
   items             OrderItem[]
@@ -931,13 +931,13 @@ model Incident {
 
 // Bukti foto insiden: append-only (trigger), maks. 5 per insiden (ditegakkan backend dalam transaksi berkunci).
 model IncidentPhoto {
-  id         String   @id @default(uuid()) @db.Uuid
-  incidentId String   @map("incident_id") @db.Uuid
+  id         String            @id @default(uuid()) @db.Uuid
+  incidentId String            @map("incident_id") @db.Uuid
   kind       IncidentPhotoKind @default(ITEM)
-  mimeType   String   @map("mime_type")
+  mimeType   String            @map("mime_type")
   data       Bytes
-  createdBy  String?  @map("created_by") @db.Uuid
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  createdBy  String?           @map("created_by") @db.Uuid
+  createdAt  DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
 
   incident Incident @relation(fields: [incidentId], references: [id])
 
@@ -996,27 +996,31 @@ model ServiceTicket {
 // Tugas penggantian: aset lama (rusak) dan aset pengganti ditautkan ke insiden yang sama.
 // Satu tugas aktif (bukan CANCELLED) per insiden (indeks parsial di migrasi).
 model ReplacementTask {
-  id                 String            @id @default(uuid()) @db.Uuid
-  number             String            @unique
-  incidentId         String            @map("incident_id") @db.Uuid
-  orderId            String            @map("order_id") @db.Uuid
-  pickListId         String            @map("pick_list_id") @db.Uuid
-  oldAssetId         String            @map("old_asset_id") @db.Uuid
-  productId          String            @map("product_id") @db.Uuid
-  replacementAssetId String?           @map("replacement_asset_id") @db.Uuid
-  status             ReplacementStatus @default(PENDING_PICK)
-  pickedAt           DateTime?         @map("picked_at") @db.Timestamptz(3)
-  verifiedAt         DateTime?         @map("verified_at") @db.Timestamptz(3)
-  dispatchedAt       DateTime?         @map("dispatched_at") @db.Timestamptz(3)
-  receivedAt         DateTime?         @map("received_at") @db.Timestamptz(3)
-  receivedBy         String?           @map("received_by") @db.Uuid
-  receivedPicId      String?           @map("received_pic_id") @db.Uuid
-  receiveCondition   AssetCondition?   @map("receive_condition")
-  receiveNote        String?           @map("receive_note")
-  cancelledAt        DateTime?         @map("cancelled_at") @db.Timestamptz(3)
-  createdBy          String?           @map("created_by") @db.Uuid
-  createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt          DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id                   String            @id @default(uuid()) @db.Uuid
+  number               String            @unique
+  incidentId           String            @map("incident_id") @db.Uuid
+  orderId              String            @map("order_id") @db.Uuid
+  pickListId           String            @map("pick_list_id") @db.Uuid
+  oldAssetId           String            @map("old_asset_id") @db.Uuid
+  productId            String            @map("product_id") @db.Uuid
+  replacementAssetId   String?           @map("replacement_asset_id") @db.Uuid
+  status               ReplacementStatus @default(PENDING_PICK)
+  pickedAt             DateTime?         @map("picked_at") @db.Timestamptz(3)
+  verifiedAt           DateTime?         @map("verified_at") @db.Timestamptz(3)
+  dispatchedAt         DateTime?         @map("dispatched_at") @db.Timestamptz(3)
+  receivedAt           DateTime?         @map("received_at") @db.Timestamptz(3)
+  receivedBy           String?           @map("received_by") @db.Uuid
+  receivedPicId        String?           @map("received_pic_id") @db.Uuid
+  receiveCondition     AssetCondition?   @map("receive_condition")
+  receiveNote          String?           @map("receive_note")
+  // Penyewa/PIC menyerahkan aset rusak untuk dikembalikan lebih awal; gudang menerimanya lewat scan.
+  oldReturnRequestedAt DateTime?         @map("old_return_requested_at") @db.Timestamptz(3)
+  oldReturnRequestedBy String?           @map("old_return_requested_by") @db.Uuid
+  oldReturnNote        String?           @map("old_return_note")
+  cancelledAt          DateTime?         @map("cancelled_at") @db.Timestamptz(3)
+  createdBy            String?           @map("created_by") @db.Uuid
+  createdAt            DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   incident         Incident    @relation(fields: [incidentId], references: [id])
   order            Order       @relation(fields: [orderId], references: [id])

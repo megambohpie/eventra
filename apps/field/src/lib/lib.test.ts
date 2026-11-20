@@ -63,6 +63,14 @@ const replacement = (over: Partial<ReplacementTaskDto>): ReplacementTaskDto => (
   productId: 'pr1',
   productName: 'Panel LED',
   oldAsset: { id: 'a1', code: 'AST-000001' },
+  pickListId: 'pl1',
+  oldAssetReturn: {
+    requestedAt: null,
+    requestedBy: null,
+    requestNote: null,
+    returnedAt: null,
+    condition: null,
+  },
   replacementAsset: { id: 'a2', code: 'AST-000002' },
   pickedAt: null,
   verifiedAt: null,
@@ -156,7 +164,8 @@ describe('tugas saya', () => {
     expect(fieldAccess('OWNER')).toMatchObject({ scanWarehouse: true, reportIncident: true });
     expect(fieldAccess('CUSTOMER')).toMatchObject({
       scanWarehouse: false,
-      receiveReplacement: false,
+      // Pelanggan menerima pengganti pesanannya lewat portal (dibatasi di API).
+      receiveReplacement: true,
       viewDocuments: false,
       reportIncident: true,
     });

@@ -828,13 +828,32 @@ export const en = {
     dispatchedOk: 'Replacement sent',
     release: 'Release asset',
     released: 'Replacement asset released',
-    receiveTitle: 'Receive replacement',
-    receiveHint:
-      'Scan the QR code on the replacement asset you received. It must be the asset the warehouse sent.',
-    scanReceive: 'QR token',
-    scanPlaceholder: 'Scan the QR code',
-    confirmReceive: 'Confirm receipt',
-    receivedOk: 'Replacement received; the order asset list is updated',
+    receiveMobileOnly:
+      'Receipt is done only by the field PIC in the mobile app by scanning the replacement asset QR.',
+    oldReturn: {
+      title: 'Damaged asset {{code}}',
+      hint: 'The damaged asset can be brought back now (e.g. by the staff who delivered the replacement) and scanned at the warehouse, or left on site and returned with the other order items when the rental ends.',
+      action: 'Receive damaged asset at warehouse',
+      done: 'Damaged asset returned to the warehouse',
+      returnedAt: 'Returned to the warehouse on {{at}}.',
+      requested:
+        'The renter handed this asset over on {{at}}. Scan its QR to receive it at the warehouse.',
+      qrOnly: 'Only Owner/Admin can type an asset code; scan the damaged asset QR.',
+    },
+    steps: { PICK: 'Select asset', VERIFY: 'Verify', DISPATCH: 'Dispatch', RECEIVE: 'Receive' },
+    stepState: { done: 'Done', current: 'Current step', todo: 'Not reached yet' },
+    stepProgress: 'Step {{current}} of {{total}}: {{name}}',
+    allDone: 'All steps are done. The replacement asset was received on site.',
+    locked: 'Finish the previous step first.',
+    waitingWarehouse: 'Waiting for the warehouse to finish this step.',
+    chosenAsset: 'Selected replacement asset',
+    pickedAt: 'Selected',
+    verifiedAt: 'Verified',
+    verifiedDone: 'The replacement asset has been verified.',
+    dispatchTitle: 'Dispatch to the event site',
+    dispatchHint:
+      'Make sure the replacement asset is packed. After dispatch, the field PIC scans the QR to receive it.',
+    receivedSummary: 'Replacement complete: the replacement asset was received on site.',
     statuses: {
       PENDING_PICK: 'Waiting for selection',
       PICKED: 'Selected',
@@ -854,7 +873,7 @@ export const en = {
     number: 'Ticket',
     asset: 'Asset',
     assetCode: 'Asset code',
-    assetNotFound: 'Asset code not found',
+    noDamaged: 'No damaged or flagged assets to service.',
     complaint: 'Complaint',
     vendor: 'Vendor / technician',
     cost: 'Cost',
@@ -897,6 +916,8 @@ export const en = {
         created: 'Replacement task {{number}} for {{incidentNumber}} is ready',
         dispatched: 'Replacement {{assetCode}} ({{number}}) was sent to order {{orderNumber}}',
         received: 'Replacement {{assetCode}} received for {{number}}',
+        oldReturnRequested:
+          'Renter handed over damaged asset {{assetCode}} ({{orderNumber}}); please receive it at the warehouse',
       },
       invoice: {
         reminder:

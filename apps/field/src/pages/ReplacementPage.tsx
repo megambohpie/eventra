@@ -6,6 +6,7 @@ import {
   receiveReplacement,
   releaseReplacementAsset,
   scanReplacement,
+  scanReturn,
 } from '@eventra/api-client';
 import {
   ASSET_CONDITIONS,
@@ -36,7 +37,7 @@ import { formatDateTime } from '@/lib/format';
 import { CONDITION_LABEL, REPLACEMENT_STATUS_LABEL, URGENCY_LABEL } from '@/lib/labels';
 import { notify } from '@/lib/notifications';
 
-type Mode = 'PICK' | 'VERIFY' | 'RECEIVE' | null;
+type Mode = 'PICK' | 'VERIFY' | 'RECEIVE' | 'RETURN_OLD' | null;
 
 const CONDITION_OPTIONS = ASSET_CONDITIONS.map((value) => ({
   value,
@@ -67,9 +68,8 @@ export function ReplacementPage() {
 
   const onScan = async (value: ScanValue): Promise<string> => {
     if (mode === 'RECEIVE') {
-      if (!value.qrToken) throw new Error('Penerimaan wajib memindai QR aset pengganti.');
       const updated = await receiveReplacement(api, task.id, {
-        qrToken: value.qrToken,
+        ...value,
         condition,
         note: note.trim() || undefined,
       });
@@ -77,6 +77,17 @@ export function ReplacementPage() {
       setNote('');
       notify('success', 'Aset pengganti diterima dan masuk daftar pesanan.');
       return 'Diterima';
+    }
+    if (mode === 'RETURN_OLD') {
+      await scanReturn(api, task.pickListId, {
+        ...value,
+        condition,
+        note: note.trim() || undefined,
+      });
+      setData(await getReplacement(api, task.id));
+      setNote('');
+      notify('success', 'Aset rusak dikembalikan ke gudang.');
+      return 'Dikembalikan';
     }
     const action = mode === 'VERIFY' ? 'VERIFY' : 'PICK';
     const updated = await scanReplacement(api, task.id, { action, ...value });
@@ -179,6 +190,46 @@ export function ReplacementPage() {
       )}
 
       {task.status === 'RECEIVED' && (
+        <Section title={`Aset rusak ${task.oldAsset.code}`}>
+          {task.oldAssetReturn.returnedAt ? (
+            <Muted>
+              Sudah dikembalikan ke gudang {formatDateTime(task.oldAssetReturn.returnedAt)}
+              {task.oldAssetReturn.condition
+                ? ` · ${CONDITION_LABEL[task.oldAssetReturn.condition]}`
+                : ''}
+            </Muted>
+          ) : (
+            <>
+              <Muted>
+                {task.oldAssetReturn.requestedAt
+                  ? `Penyewa menyerahkan aset ini ${formatDateTime(task.oldAssetReturn.requestedAt)}. Scan QR untuk menerimanya di gudang.`
+                  : 'Boleh dibawa kembali sekarang oleh staf pengantar pengganti, atau dibiarkan di lokasi dan ikut dikembalikan bersama barang pesanan saat sewa selesai.'}
+              </Muted>
+              {can('warehouse.write') && (
+                <>
+                  <Choice
+                    label="Kondisi saat kembali"
+                    value={condition}
+                    options={CONDITION_OPTIONS}
+                    onChange={setCondition}
+                  />
+                  <Button
+                    className="ev-btn--block"
+                    onClick={() => {
+                      setCondition('DAMAGED');
+                      setMode('RETURN_OLD');
+                    }}
+                  >
+                    Scan & terima aset rusak
+                  </Button>
+                </>
+              )}
+            </>
+          )}
+        </Section>
+      )}
+
+      {task.status === 'RECEIVED' && (
         <Card>
           <Strong>Diterima {task.receivedAt ? formatDateTime(task.receivedAt) : ''}</Strong>
           <Muted>
@@ -192,14 +243,16 @@ export function ReplacementPage() {
       <Scanner
         open={mode !== null}
         title={
-          mode === 'RECEIVE'
-            ? 'Scan QR aset pengganti'
-            : mode === 'VERIFY'
-              ? 'Verifikasi aset pengganti (QR)'
-              : 'Pilih aset pengganti'
+          mode === 'RETURN_OLD'
+            ? 'Scan QR aset rusak'
+            : mode === 'RECEIVE'
+              ? 'Scan QR aset pengganti'
+              : mode === 'VERIFY'
+                ? 'Verifikasi aset pengganti (QR)'
+                : 'Pilih aset pengganti'
         }
         allowManual={mode === 'PICK' || can('scan.manual')}
-        closeOnSuccess={mode === 'RECEIVE'}
+        closeOnSuccess={mode === 'RECEIVE' || mode === 'RETURN_OLD'}
         onScan={onScan}
         onClose={() => setMode(null)}
       />

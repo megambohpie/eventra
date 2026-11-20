@@ -5,6 +5,7 @@ import { completeServiceTicket, createServiceTicket, listAssets } from '@eventra
 import {
   ASSET_CONDITIONS,
   INSPECTION_RESULTS,
+  SERVICEABLE_ASSET_STATUSES,
   type AssetCondition,
   type InspectionResult,
   type ServiceTicketDto,
@@ -13,18 +14,31 @@ import { api } from '@/api';
 import { Button } from '@/components/ui/Button';
 import { CurrencyInput } from '@/components/ui/CurrencyInput';
 import { FormField } from '@/components/ui/FormField';
+import { Loading } from '@/components/ui/Loading';
 import { Modal } from '@/components/ui/Modal';
-import { notify, notifyError } from '@/lib/notifications';
+import { SearchSelect } from '@/components/ui/SearchSelect';
+import { useResource } from '@/hooks/useResource';
+import { notify } from '@/lib/notifications';
 
 interface CreateProps {
   onClose: () => void;
   onChanged: () => void;
 }
 
-/** Buka tiket servis: aset dicari lewat kode aset (AST-…). Aset di gudang otomatis berstatus Dalam servis. */
+/** Buka tiket servis: aset rusak/perlu perhatian dipilih dari daftar (cari lewat kode atau produk). */
 export function TicketCreateModal({ onClose, onChanged }: CreateProps) {
   const { t } = useTranslation();
-  const [code, setCode] = useState('');
+  const [assetId, setAssetId] = useState('');
+  const assets = useResource(
+    () => listAssets(api, { attention: 'true', pageSize: 100 }),
+    'service-ticket-assets',
+  );
+  const options = (assets.data?.items ?? [])
+    .filter((a) => SERVICEABLE_ASSET_STATUSES.includes(a.status))
+    .map((a) => ({
+      value: a.id,
+      label: `${a.code} · ${a.product.name} · ${t(`assets.conditions.${a.condition}`)}`,
+    }));
   const [complaint, setComplaint] = useState('');
   const [vendor, setVendor] = useState('');
   const [saving, setSaving] = useState(false);
@@ -33,14 +47,7 @@ export function TicketCreateModal({ onClose, onChanged }: CreateProps) {
     event.preventDefault();
     setSaving(true);
     try {
-      const wanted = code.trim().toUpperCase();
-      const found = await listAssets(api, { q: wanted, pageSize: 20 });
-      const asset = found.items.find((a) => a.code.toUpperCase() === wanted);
-      if (!asset) {
-        notifyError(t('service.assetNotFound'));
-        return;
-      }
-      await createServiceTicket(api, { assetId: asset.id, complaint, vendor });
+      await createServiceTicket(api, { assetId, complaint, vendor });
       notify('success', t('common.saved'));
       onChanged();
       onClose();
@@ -55,16 +62,20 @@ export function TicketCreateModal({ onClose, onChanged }: CreateProps) {
     <Modal open title={t('service.newTitle')} onClose={onClose}>
       <form className="ev-form" onSubmit={submit}>
         <p className="ev-hint">{t('service.newHint')}</p>
-        <FormField label={t('service.assetCode')}>
-          <input
-            className="input ev-control"
-            autoComplete="off"
-            autoFocus
-            required
-            placeholder="AST-000001"
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-          />
+        <FormField label={t('service.asset')}>
+          {assets.loading && !assets.data ? (
+            <Loading />
+          ) : (
+            <SearchSelect
+              options={options}
+              value={assetId}
+              onChange={setAssetId}
+              ariaLabel={t('service.asset')}
+            />
+          )}
+          {!assets.loading && options.length === 0 && (
+            <p className="ev-hint">{t('service.noDamaged')}</p>
+          )}
         </FormField>
         <FormField label={t('service.complaint')}>
           <textarea
@@ -86,7 +97,13 @@ export function TicketCreateModal({ onClose, onChanged }: CreateProps) {
           />
         </FormField>
         <div className="modal-action">
-          <Button type="submit" variant="primary" icon={mdiContentSave} loading={saving}>
+          <Button
+            type="submit"
+            variant="primary"
+            icon={mdiContentSave}
+            loading={saving}
+            disabled={!assetId}
+          >
             {t('service.create')}
           </Button>
         </div>

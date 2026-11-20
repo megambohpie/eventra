@@ -52,7 +52,9 @@ export function taskSourcesFor(role: Role) {
   return {
     pickLists: hasCapability(role, 'warehouse.read'),
     replacements:
-      hasCapability(role, 'warehouse.read') || hasCapability(role, 'replacement.receive'),
+      hasCapability(role, 'warehouse.read') ||
+      // Pelanggan menerima pengganti lewat halaman portal, bukan daftar tugas.
+      (role !== 'CUSTOMER' && hasCapability(role, 'replacement.receive')),
     incidents: hasCapability(role, 'incident.read'),
   };
 }

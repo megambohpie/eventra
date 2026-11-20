@@ -205,33 +205,51 @@ export async function toReplacementDtos(
 ): Promise<ReplacementTaskDto[]> {
   const names = await userNames(
     db,
-    rows.map((r) => r.receivedBy),
+    rows.flatMap((r) => [r.receivedBy, r.oldReturnRequestedBy]),
   );
-  return rows.map((r) => ({
-    id: r.id,
-    number: r.number,
-    status: r.status,
-    incidentId: r.incidentId,
-    incidentNumber: r.incident.number,
-    urgency: r.incident.urgency,
-    orderId: r.orderId,
-    orderNumber: r.order.number,
-    eventLocation: r.order.eventLocation,
-    productId: r.productId,
-    productName: r.oldAsset.product.name,
-    oldAsset: { id: r.oldAsset.id, code: r.oldAsset.code },
-    replacementAsset: r.replacementAsset
-      ? { id: r.replacementAsset.id, code: r.replacementAsset.code }
-      : null,
-    pickedAt: r.pickedAt?.toISOString() ?? null,
-    verifiedAt: r.verifiedAt?.toISOString() ?? null,
-    dispatchedAt: r.dispatchedAt?.toISOString() ?? null,
-    receivedAt: r.receivedAt?.toISOString() ?? null,
-    receivedBy: r.receivedBy ? (names.get(r.receivedBy) ?? null) : null,
-    receiveCondition: r.receiveCondition,
-    receiveNote: r.receiveNote,
-    createdAt: r.createdAt.toISOString(),
-  }));
+  const returned = await db.pickListItem.findMany({
+    where: {
+      status: 'RETURNED',
+      OR: rows.map((r) => ({ pickListId: r.pickListId, assetId: r.oldAssetId })),
+    },
+    select: { pickListId: true, assetId: true, returnedAt: true, returnCondition: true },
+  });
+  return rows.map((r) => {
+    const back = returned.find((i) => i.pickListId === r.pickListId && i.assetId === r.oldAssetId);
+    return {
+      id: r.id,
+      number: r.number,
+      status: r.status,
+      pickListId: r.pickListId,
+      oldAssetReturn: {
+        requestedAt: r.oldReturnRequestedAt?.toISOString() ?? null,
+        requestedBy: r.oldReturnRequestedBy ? (names.get(r.oldReturnRequestedBy) ?? null) : null,
+        requestNote: r.oldReturnNote,
+        returnedAt: back?.returnedAt?.toISOString() ?? null,
+        condition: back?.returnCondition ?? null,
+      },
+      incidentId: r.incidentId,
+      incidentNumber: r.incident.number,
+      urgency: r.incident.urgency,
+      orderId: r.orderId,
+      orderNumber: r.order.number,
+      eventLocation: r.order.eventLocation,
+      productId: r.productId,
+      productName: r.oldAsset.product.name,
+      oldAsset: { id: r.oldAsset.id, code: r.oldAsset.code },
+      replacementAsset: r.replacementAsset
+        ? { id: r.replacementAsset.id, code: r.replacementAsset.code }
+        : null,
+      pickedAt: r.pickedAt?.toISOString() ?? null,
+      verifiedAt: r.verifiedAt?.toISOString() ?? null,
+      dispatchedAt: r.dispatchedAt?.toISOString() ?? null,
+      receivedAt: r.receivedAt?.toISOString() ?? null,
+      receivedBy: r.receivedBy ? (names.get(r.receivedBy) ?? null) : null,
+      receiveCondition: r.receiveCondition,
+      receiveNote: r.receiveNote,
+      createdAt: r.createdAt.toISOString(),
+    };
+  });
 }
 
 export async function loadReplacement(db: Db, id: string): Promise<ReplacementRow> {

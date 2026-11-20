@@ -95,7 +95,7 @@ export const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
   // PIC lapangan: lapor insiden, lihat laporannya sendiri, dan terima aset pengganti.
   FIELD_PIC: ['incident.read', 'incident.report', 'replacement.receive'],
   // Pelanggan hanya lewat portal per pesanan; cakupan dibatasi pada pesanannya sendiri di API.
-  CUSTOMER: ['incident.read', 'incident.report'],
+  CUSTOMER: ['incident.read', 'incident.report', 'replacement.receive'],
 };
 
 export function hasCapability(role: Role, capability: Capability): boolean {

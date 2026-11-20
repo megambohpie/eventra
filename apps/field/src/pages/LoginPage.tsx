@@ -4,7 +4,6 @@ import { portalLogin } from '@eventra/api-client';
 import { loginSchema, portalLoginSchema } from '@eventra/shared';
 import { api } from '@/api';
 import { useAuth } from '@/auth/AuthProvider';
-import { usePortal } from '@/auth/portal';
 import { Button } from '@/components/Button';
 import { Field, Muted } from '@/components/ui';
 import { errorMessage } from '@/lib/errors';
@@ -15,7 +14,6 @@ type Mode = 'customer' | 'staff';
 /** Masuk pelanggan (no HP + no pesanan, satu pesanan per login) atau staf (email + kata sandi). */
 export function LoginPage() {
   const { status, login } = useAuth();
-  const portal = usePortal();
   const location = useLocation();
   const navigate = useNavigate();
   const from = (location.state as { from?: { pathname: string; search?: string } } | null)?.from;
@@ -29,7 +27,6 @@ export function LoginPage() {
   if (status === 'authenticated') {
     return <Navigate to={from ? `${from.pathname}${from.search ?? ''}` : '/'} replace />;
   }
-  if (portal) return <Navigate to="/p" replace />;
 
   const submitCustomer = async () => {
     const parsed = portalLoginSchema.safeParse({ phone, orderNumber });
@@ -48,6 +45,8 @@ export function LoginPage() {
       return;
     }
     await login(parsed.data);
+    // Staf yang masuk menggantikan sesi pelanggan lama agar tidak terjebak di /p.
+    setPortal(null);
   };
 
   const submit = async (event: FormEvent) => {

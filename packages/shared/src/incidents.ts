@@ -221,12 +221,23 @@ export const replacementListQuerySchema = z.object({
 });
 export type ReplacementListQuery = z.input<typeof replacementListQuerySchema>;
 
-export const replacementReceiveSchema = z.object({
-  qrToken,
-  condition: z.enum(ASSET_CONDITIONS),
-  note: optionalText(500),
-});
+/** Penerimaan lewat scan QR (utama) atau kode aset (hanya peran dengan `scan.manual`). */
+export const replacementReceiveSchema = z
+  .object({
+    qrToken: qrToken.optional(),
+    assetCode: assetCode.optional(),
+    condition: z.enum(ASSET_CONDITIONS),
+    note: optionalText(500),
+  })
+  .refine((v) => Boolean(v.qrToken) !== Boolean(v.assetCode), {
+    path: ['qrToken'],
+    message: 'Isi tepat satu: token QR atau kode aset',
+  });
 export type ReplacementReceiveInput = z.input<typeof replacementReceiveSchema>;
+
+/** Penyewa/PIC menyerahkan aset rusak (dibawa staf pengantar pengganti) agar dikembalikan lebih awal. */
+export const replacementOldReturnSchema = z.object({ note: optionalText(500) });
+export type ReplacementOldReturnInput = z.input<typeof replacementOldReturnSchema>;
 
 export const replacementCancelSchema = z.object({ reason: z.string().trim().min(3).max(500) });
 export type ReplacementCancelInput = z.input<typeof replacementCancelSchema>;
@@ -289,6 +300,20 @@ export interface ReplacementTaskDto {
   productId: string;
   productName: string;
   oldAsset: { id: string; code: string };
+  /** Pick list pesanan; dipakai untuk memindai kembali aset rusak lebih awal. */
+  pickListId: string;
+  /**
+   * Aset rusak: `returnedAt` terisi bila sudah dibawa kembali ke gudang (lebih awal, mis. oleh staf
+   * pengantar pengganti); null = masih di lokasi dan ikut pengembalian pesanan saat sewa selesai.
+   */
+  oldAssetReturn: {
+    /** Penyewa/PIC sudah menyerahkan aset rusak untuk dikembalikan; menunggu gudang menerima. */
+    requestedAt: string | null;
+    requestedBy: string | null;
+    requestNote: string | null;
+    returnedAt: string | null;
+    condition: AssetCondition | null;
+  };
   replacementAsset: { id: string; code: string } | null;
   pickedAt: string | null;
   verifiedAt: string | null;
@@ -368,6 +393,7 @@ export const NOTIFICATION_TYPES = [
   'replacement.created',
   'replacement.dispatched',
   'replacement.received',
+  'replacement.oldReturnRequested',
   'invoice.reminder',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];

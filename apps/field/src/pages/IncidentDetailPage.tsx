@@ -20,7 +20,9 @@ import { useAuth } from '@/auth/AuthProvider';
 import { usePortal } from '@/auth/portal';
 import { Badge } from '@/components/Badge';
 import { Button } from '@/components/Button';
+import { OldAssetHandover } from '@/components/OldAssetHandover';
 import { PhotoSlot } from '@/components/PhotoSlot';
+import { ReplacementReceive } from '@/components/ReplacementReceive';
 import { Card, ErrorState, Loading, Muted, Row, Screen, Section, Strong } from '@/components/ui';
 import { useAsync } from '@/hooks/useAsync';
 import { formatDateTime } from '@/lib/format';
@@ -64,7 +66,7 @@ function PhotoThumb({ incidentId, photoId }: { incidentId: string; photoId: stri
 
 export function IncidentDetailPage() {
   const { id = '' } = useParams();
-  const { user } = useAuth();
+  const { user, can } = useAuth();
   const access = fieldAccess(user?.role ?? 'CUSTOMER');
   const portal = usePortal();
   const { data, error, loading, reload, setData } = useAsync(() => getIncident(api, id), id);
@@ -206,6 +208,25 @@ export function IncidentDetailPage() {
               Pengganti: {incident.replacement.replacementAsset?.code ?? 'belum dipilih'}
             </Muted>
           </Card>
+          {incident.replacement.status === 'RECEIVED' &&
+            (access.receiveReplacement || portal !== null) && (
+              <Card>
+                <Strong>Aset rusak</Strong>
+                <OldAssetHandover task={incident.replacement} onChanged={reload} />
+              </Card>
+            )}
+          {incident.replacement.status === 'DISPATCHED' &&
+            (access.receiveReplacement || portal !== null) && (
+              <Card>
+                <Strong>Aset pengganti dalam perjalanan</Strong>
+                <ReplacementReceive
+                  taskId={incident.replacement.id}
+                  assetCode={incident.replacement.replacementAsset?.code ?? null}
+                  allowManual={can('scan.manual') || portal !== null}
+                  onReceived={reload}
+                />
+              </Card>
+            )}
         </Section>
       )}
 

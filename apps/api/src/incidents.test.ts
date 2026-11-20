@@ -428,10 +428,37 @@ describe('Fase 05 — insiden, servis, aset pengganti', () => {
       'ISSUE_ON_SITE',
     );
 
-    // Kembali ke gudang: aset rusak masuk karantina walau dilaporkan kondisi baik (insiden belum tuntas).
+    // Aset rusak boleh dibawa kembali lebih awal (staf pengantar pengganti): belum kembali → discan gudang.
+    expect(after.replacement?.oldAssetReturn).toMatchObject({
+      requestedAt: null,
+      returnedAt: null,
+      condition: null,
+    });
+    // Penyewa (PIC lapangan) menyerahkan aset rusak; gudang diberi tahu, lalu menerimanya lewat scan.
+    const handOver = () =>
+      post(c, c.field, `/replacement-tasks/${task.id}/return-old`, { note: 'dibawa kurir' });
+    const handed = await handOver();
+    expect(handed.status).toBe(200);
+    expect(data<ReplacementTaskDto>(handed).oldAssetReturn).toMatchObject({
+      requestNote: 'dibawa kurir',
+      returnedAt: null,
+    });
+    expect(data<ReplacementTaskDto>(handed).oldAssetReturn.requestedAt).not.toBeNull();
+    expect(errorCode(await handOver())).toBe('REPLACEMENT_STATE');
+    expect(
+      data<NotificationListDto>(await get(c, c.warehouse, '/notifications')).items.map(
+        (n) => n.type,
+      ),
+    ).toContain('replacement.oldReturnRequested');
     const ret = (qrToken: string, condition: string) =>
       post(c, c.warehouse, `/pick-lists/${pickId}/return/scan`, { qrToken, condition });
     expect((await ret(a1.qrToken, 'GOOD')).status).toBe(200);
+    const early = data<IncidentDto>(await get(c, c.admin, `/incidents/${id}`)).replacement;
+    expect(early?.oldAssetReturn.condition).toBe('GOOD');
+    expect(early?.oldAssetReturn.returnedAt).not.toBeNull();
+    expect((await db.asset.findUniqueOrThrow({ where: { id: a1.id } })).status).toBe('QUARANTINED');
+    // Tidak bisa discan dua kali; sisanya (aset pengganti) ikut pengembalian saat sewa selesai.
+    expect(errorCode(await ret(a1.qrToken, 'GOOD'))).toBe('SCAN_ALREADY_RETURNED');
     expect((await ret(a2.qrToken, 'GOOD')).status).toBe(200);
     expect((await post(c, c.warehouse, `/pick-lists/${pickId}/return/complete`)).status).toBe(200);
     expect((await db.order.findUniqueOrThrow({ where: { id: orderId } })).status).toBe('COMPLETED');

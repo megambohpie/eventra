@@ -13,7 +13,7 @@ import { useAuth } from '@/auth/AuthProvider';
 import { AssetStatusBadge, ConditionBadge } from '@/components/assets/badges';
 import { IncidentPhotos } from '@/components/incidents/IncidentPhotos';
 import { CloseModal } from '@/components/incidents/CloseModal';
-import { ReceiveForm, ReplacementInfo } from '@/components/incidents/ReplacementInfo';
+import { ReplacementInfo } from '@/components/incidents/ReplacementInfo';
 import { ReviewModal } from '@/components/incidents/ReviewModal';
 import {
   IncidentStatusBadge,
@@ -69,7 +69,6 @@ function Detail({ incident, reload }: { incident: IncidentDto; reload: () => voi
     isDraft &&
     can('incident.report') &&
     INCIDENT_PHOTO_KINDS.every((k) => incident.photos.some((p) => p.kind === k));
-  const canReceive = task?.status === 'DISPATCHED' && can('replacement.receive');
 
   const submit = async () => {
     try {
@@ -232,7 +231,6 @@ function Detail({ incident, reload }: { incident: IncidentDto; reload: () => voi
               </Button>
             )}
           </div>
-          {canReceive && <ReceiveForm task={task} onChanged={reload} />}
         </PageCard>
       )}
 

@@ -13,6 +13,7 @@ import type {
   PickScanInput,
   ReportableOrderDto,
   ReplacementCancelInput,
+  ReplacementOldReturnInput,
   ReplacementListQuery,
   ReplacementReceiveInput,
   ReplacementTaskDto,
@@ -89,6 +90,14 @@ export const receiveReplacement = async (
   input: ReplacementReceiveInput,
 ) =>
   (await c.post<Envelope<ReplacementTaskDto>>(`/replacement-tasks/${id}/receive`, input)).data.data;
+/** Penyewa/PIC menyerahkan aset rusak agar dikembalikan lebih awal; gudang lalu menerimanya. */
+export const requestOldAssetReturn = async (
+  c: AxiosInstance,
+  id: string,
+  input: ReplacementOldReturnInput = {},
+) =>
+  (await c.post<Envelope<ReplacementTaskDto>>(`/replacement-tasks/${id}/return-old`, input)).data
+    .data;
 export const cancelReplacement = async (
   c: AxiosInstance,
   id: string,

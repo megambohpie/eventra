@@ -862,6 +862,21 @@
   .ev-tabs__count[data-alert='true'] {
     @apply bg-warning/30;
   }
+  .ev-tabs__count[data-state='done'] {
+    @apply bg-success/30;
+  }
+  .ev-tabs__count[data-state='current'] {
+    @apply bg-primary/25;
+  }
+  .ev-tabs__count[data-state='todo'] {
+    @apply text-base-content/50;
+  }
+  .ev-steps__panel {
+    @apply mt-2 grid gap-3;
+  }
+  .ev-steps__done {
+    @apply grid justify-items-start gap-2;
+  }
   .ev-tabs__count[data-done='true'] {
     @apply bg-success/30;
   }

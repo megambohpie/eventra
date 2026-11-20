@@ -1,6 +1,6 @@
 import { mdiAlertOctagon, mdiFilePdfBox, mdiLogout, mdiSignatureFreehand } from '@mdi/js';
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { getHandoverPdf, getPortalOrder } from '@eventra/api-client';
 import { INCIDENT_STATUS_BADGE, ORDER_STATUS_BADGE, docLabel } from '@eventra/shared';
 import { api } from '@/api';
@@ -42,6 +42,7 @@ async function downloadPdf(id: string, filename: string): Promise<void> {
 
 /** Beranda pelanggan: satu pesanan (barang, pembayaran, kontrak/dokumen, laporan kerusakan). */
 export function PortalHomePage() {
+  const navigate = useNavigate();
   const [signing, setSigning] = useState<string | null>(null);
   const { data, error, loading, reload } = useAsync(() => getPortalOrder(api), 'portal-order');
 
@@ -195,6 +196,16 @@ export function PortalHomePage() {
       </Muted>
       <Button variant="ghost" className="ev-btn--block" icon={mdiLogout} onClick={portalLogout}>
         Keluar
+      </Button>
+      <Button
+        variant="outline"
+        className="ev-btn--block"
+        onClick={() => {
+          portalLogout();
+          void navigate('/login', { replace: true });
+        }}
+      >
+        Masuk sebagai staf
       </Button>
     </Screen>
   );

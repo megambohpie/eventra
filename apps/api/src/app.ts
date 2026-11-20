@@ -30,7 +30,8 @@ import { dashboardsRouter } from './routes/dashboards';
 import { portalPublicRouter, portalRouter } from './routes/portal';
 
 /** Jalur yang boleh diakses token portal pelanggan (cakupan data dibatasi lagi di tiap rute). */
-const PORTAL_PATHS = /^[/](portal[/]|incidents([/]|$)|handover-documents[/][0-9a-f-]+[/]pdf$)/;
+const PORTAL_PATHS =
+  /^[/](portal[/]|incidents([/]|$)|handover-documents[/][0-9a-f-]+[/]pdf$|replacement-tasks[/][0-9a-f-]+[/](receive|return-old)$)/;
 
 export interface AppDeps {
   /** Mengembalikan true bila database dapat dijangkau. */
