@@ -3,6 +3,9 @@ import request from 'supertest';
 import type { Express } from 'express';
 import type {
   HandoverDocumentDto,
+  InvoiceSummaryDto,
+  LateFeeDto,
+  LateFeePolicyDto,
   LiveStockAssetDto,
   LiveStockDto,
   OrderDto,
@@ -760,5 +763,301 @@ describe('Fase 04 — gudang, scan, dokumen serah-terima', () => {
     const after = await db.order.findUniqueOrThrow({ where: { id: o.id } });
     expect(after.status).toBe('CANCELLED');
     expect(after.noShowAt).not.toBeNull();
+  });
+});
+
+describe('Denda keterlambatan pengembalian', () => {
+  beforeEach(resetDb);
+  afterAll(() => db.$disconnect());
+
+  const wibToday = () => new Date(Date.now() + 7 * 3_600_000).toISOString().slice(0, 10);
+  const daysAgo = (n: number) =>
+    new Date(Date.parse(`${wibToday()}T00:00:00Z`) - n * 86_400_000).toISOString().slice(0, 10);
+
+  /** Keluarkan satu aset, atur masa sewa selesai `late` hari lalu, lalu selesaikan pengembalian. */
+  async function returnLate(c: Ctx, late: number) {
+    const { product, assets } = await seedProduct('Speaker', 1);
+    const { order: o, pick } = await dispatched(c, product.id, assets, 1);
+    await db.order.update({
+      where: { id: o.id },
+      data: {
+        subtotal: 1_000_000n,
+        startDate: new Date(`${daysAgo(late + 1)}T00:00:00Z`),
+        endDate: new Date(`${daysAgo(late)}T00:00:00Z`),
+      },
+    });
+    const a1 = assets[0];
+    if (!a1) throw new Error('seed');
+    const back = await request(c.app)
+      .post(`${V1}/pick-lists/${pick.id}/return/scan`)
+      .set(auth(c.warehouse))
+      .send({ qrToken: a1.qrToken, condition: 'GOOD' });
+    expect(back.status).toBe(200);
+    const done = await request(c.app)
+      .post(`${V1}/pick-lists/${pick.id}/return/complete`)
+      .set(auth(c.warehouse))
+      .send({});
+    expect(done.status).toBe(200);
+    return { orderId: o.id, pickId: pick.id };
+  }
+
+  const fees = async (c: Ctx, orderId: string) =>
+    data<LateFeeDto[]>(
+      await request(c.app).get(`${V1}/orders/${orderId}/late-fees`).set(auth(c.admin)),
+    );
+
+  it('default nonaktif: pengembalian terlambat tidak dikenai denda', async () => {
+    const c = await setup();
+    const policy = data<LateFeePolicyDto>(
+      await request(c.app).get(`${V1}/settings/late-fee-policy`).set(auth(c.admin)),
+    );
+    expect(policy.enabled).toBe(false);
+    const { orderId } = await returnLate(c, 3);
+    expect(await fees(c, orderId)).toEqual([]);
+  });
+
+  it('hanya Owner yang mengubah kebijakan; Admin ditolak', async () => {
+    const c = await setup();
+    const owner = await loginAs(c.app, 'OWNER');
+    const body = { enabled: true, percentPerDay: 10, graceDays: 1 };
+    const denied = await request(c.app)
+      .put(`${V1}/settings/late-fee-policy`)
+      .set(auth(c.admin))
+      .send(body);
+    expect(denied.status).toBe(403);
+    const ok = await request(c.app)
+      .put(`${V1}/settings/late-fee-policy`)
+      .set(auth(owner))
+      .send(body);
+    expect(ok.status).toBe(200);
+    expect(data<LateFeePolicyDto>(ok)).toEqual(body);
+    const bad = await request(c.app)
+      .put(`${V1}/settings/late-fee-policy`)
+      .set(auth(owner))
+      .send({ ...body, percentPerDay: 150 });
+    expect(bad.status).toBe(400);
+  });
+
+  it('aktif: denda = persen × sewa × (hari terlambat − toleransi), sekali per pick list', async () => {
+    const c = await setup();
+    const owner = await loginAs(c.app, 'OWNER');
+    await request(c.app)
+      .put(`${V1}/settings/late-fee-policy`)
+      .set(auth(owner))
+      .send({ enabled: true, percentPerDay: 10, graceDays: 1 });
+    const { orderId, pickId } = await returnLate(c, 3);
+    const [fee, ...rest] = await fees(c, orderId);
+    expect(rest).toEqual([]);
+    expect(fee).toMatchObject({
+      pickListId: pickId,
+      daysLate: 3,
+      chargeableDays: 2,
+      percentPerDay: 10,
+      graceDays: 1,
+      baseAmount: 1_000_000,
+      amount: 200_000,
+      status: 'ACTIVE',
+    });
+    // Ditagih lewat invoice terpisah (kind LATE_FEE) agar masuk pembayaran/piutang.
+    const inv = await db.invoice.findMany({ where: { orderId, kind: 'LATE_FEE' } });
+    expect(inv).toHaveLength(1);
+    expect(inv[0]).toMatchObject({ rentAmount: 200_000n, depositAmount: 0n, status: 'ISSUED' });
+    expect(fee?.invoiceId).toBe(inv[0]?.id);
+  });
+
+  it('kembali tepat waktu atau dalam toleransi tidak didenda', async () => {
+    const c = await setup();
+    const owner = await loginAs(c.app, 'OWNER');
+    await request(c.app)
+      .put(`${V1}/settings/late-fee-policy`)
+      .set(auth(owner))
+      .send({ enabled: true, percentPerDay: 10, graceDays: 2 });
+    const { orderId } = await returnLate(c, 2);
+    expect(await fees(c, orderId)).toEqual([]);
+  });
+
+  it('Owner menghapuskan denda dengan alasan; nominal tetap, tidak bisa dua kali', async () => {
+    const c = await setup();
+    const owner = await loginAs(c.app, 'OWNER');
+    await request(c.app)
+      .put(`${V1}/settings/late-fee-policy`)
+      .set(auth(owner))
+      .send({ enabled: true, percentPerDay: 5, graceDays: 0 });
+    const { orderId } = await returnLate(c, 2);
+    const fee = (await fees(c, orderId))[0];
+    if (!fee) throw new Error('denda tidak terbentuk');
+    expect(fee.amount).toBe(100_000);
+
+    const waive = (token: string, reason = 'Keterlambatan karena cuaca') =>
+      request(c.app).post(`${V1}/late-fees/${fee.id}/waive`).set(auth(token)).send({ reason });
+    expect((await waive(c.admin)).status).toBe(403);
+    expect((await waive(owner, 'x')).status).toBe(400);
+    const done = await waive(owner);
+    expect(done.status).toBe(200);
+    expect(data<LateFeeDto>(done)).toMatchObject({
+      status: 'WAIVED',
+      amount: 100_000,
+      waiveReason: 'Keterlambatan karena cuaca',
+    });
+    expect(errorCode(await waive(owner))).toBe('LATE_FEE_ALREADY_WAIVED');
+    const feeInvoice = await db.invoice.findUniqueOrThrow({ where: { id: fee.invoiceId ?? '' } });
+    expect(feeInvoice.status).toBe('VOID');
+    const audit = await db.auditLog.findFirst({ where: { action: 'late_fee.waive' } });
+    expect(audit).not.toBeNull();
+  });
+});
+
+describe('Perpanjangan sewa', () => {
+  beforeEach(resetDb);
+  afterAll(() => db.$disconnect());
+
+  const extend = (c: Ctx, orderId: string, body: object, tok = c.admin) =>
+    request(c.app).post(`${V1}/orders/${orderId}/extend`).set(auth(tok)).send(body);
+  const allocDates = async (orderId: string) =>
+    (
+      await db.stockAllocation.findMany({
+        where: { orderId, status: 'CONFIRMED' },
+        orderBy: { date: 'asc' },
+      })
+    ).map((a) => a.date.toISOString().slice(0, 10));
+
+  it('memperpanjang pesanan berjalan: stok hari tambahan, harga, riwayat, dan invoice tambahan terpisah', async () => {
+    const c = await setup();
+    const { product, assets } = await seedProduct('Speaker', 2);
+    const { order: o } = await dispatched(c, product.id, assets, 1);
+    expect(await allocDates(o.id)).toEqual(['2027-03-08', '2027-03-09']);
+    const baseInvoices = await db.invoice.findMany({ where: { orderId: o.id } });
+    expect(baseInvoices).toHaveLength(1);
+
+    const preview = await request(c.app)
+      .get(`${V1}/orders/${o.id}/extension-preview?newEndDate=2027-03-11`)
+      .set(auth(c.admin));
+    expect(preview.status).toBe(200);
+    expect(data<{ extraDays: number; amount: number; available: boolean }>(preview)).toMatchObject({
+      extraDays: 2,
+      amount: 200_000,
+      available: true,
+    });
+
+    const res = await extend(c, o.id, { newEndDate: '2027-03-11', note: 'Acara diperpanjang' });
+    expect(res.status).toBe(200);
+    const after = await db.order.findUniqueOrThrow({ where: { id: o.id } });
+    expect(after.endDate.toISOString().slice(0, 10)).toBe('2027-03-11');
+    expect(after.subtotal).toBe(200_000n + 200_000n);
+    expect(after.status).toBe('IN_PROGRESS');
+    expect(await allocDates(o.id)).toEqual([
+      '2027-03-08',
+      '2027-03-09',
+      '2027-03-10',
+      '2027-03-11',
+    ]);
+
+    // Invoice awal tidak berubah; invoice tambahan hanya untuk biaya hari tambahan.
+    const invoices = await db.invoice.findMany({
+      where: { orderId: o.id },
+      orderBy: { createdAt: 'asc' },
+    });
+    expect(invoices).toHaveLength(2);
+    expect(invoices[0]?.rentAmount).toBe(baseInvoices[0]?.rentAmount);
+    expect(invoices[1]?.rentAmount).toBe(200_000n);
+    expect(invoices[1]?.status).toBe('ISSUED');
+    const list = data<{ items: InvoiceSummaryDto[] }>(
+      await request(c.app).get(`${V1}/invoices?orderId=${o.id}`).set(auth(c.admin)),
+    );
+    expect(list.items).toHaveLength(2);
+
+    const history = data<
+      { extraDays: number; amount: number; invoiceNumber: string; note: string }[]
+    >(await request(c.app).get(`${V1}/orders/${o.id}/extensions`).set(auth(c.admin)));
+    expect(history).toHaveLength(1);
+    expect(history[0]).toMatchObject({
+      extraDays: 2,
+      amount: 200_000,
+      invoiceNumber: invoices[1]?.number,
+      note: 'Acara diperpanjang',
+    });
+    expect(await db.auditLog.count({ where: { action: 'order.extend' } })).toBe(1);
+
+    // Perpanjangan kedua menambah lagi.
+    expect((await extend(c, o.id, { newEndDate: '2027-03-12' })).status).toBe(200);
+    expect(await allocDates(o.id)).toHaveLength(5);
+    expect((await db.invoice.count({ where: { orderId: o.id } })) as number).toBe(3);
+  });
+
+  it('menolak tanggal tidak valid, hak akses salah, dan pesanan yang sudah kembali', async () => {
+    const c = await setup();
+    const { product, assets } = await seedProduct('Speaker', 2);
+    const { order: o, pick } = await dispatched(c, product.id, assets, 1);
+
+    expect(errorCode(await extend(c, o.id, { newEndDate: '2027-03-09' }))).toBe(
+      'INVALID_EXTENSION_DATE',
+    );
+    expect(errorCode(await extend(c, o.id, { newEndDate: '2027-03-12', extraAmount: 5 }))).toBe(
+      'EXTRA_AMOUNT_NOT_ALLOWED',
+    );
+    expect((await extend(c, o.id, { newEndDate: '2027-03-12' }, c.warehouse)).status).toBe(403);
+    expect(
+      (await extend(c, '00000000-0000-4000-8000-000000000000', { newEndDate: '2027-03-12' }))
+        .status,
+    ).toBe(404);
+
+    const a1 = assets[0];
+    if (!a1) throw new Error('seed');
+    await request(c.app)
+      .post(`${V1}/pick-lists/${pick.id}/return/scan`)
+      .set(auth(c.warehouse))
+      .send({ qrToken: a1.qrToken, condition: 'GOOD' });
+    expect(
+      (
+        await request(c.app)
+          .post(`${V1}/pick-lists/${pick.id}/return/complete`)
+          .set(auth(c.warehouse))
+          .send({})
+      ).status,
+    ).toBe(200);
+    expect(errorCode(await extend(c, o.id, { newEndDate: '2027-03-12' }))).toBe(
+      'ORDER_NOT_EXTENDABLE',
+    );
+  });
+
+  it('tidak overbooking: hari tambahan yang sudah dipakai pesanan lain menolak perpanjangan tanpa efek samping', async () => {
+    const c = await setup();
+    const { product, assets } = await seedProduct('Speaker', 1);
+    const { order: o } = await dispatched(c, product.id, assets, 1);
+    // Pesanan lain memakai satu-satunya unit pada 10 Maret.
+    await order(c, [{ productId: product.id, quantity: 1 }], '2027-03-10', '2027-03-10');
+
+    const res = await extend(c, o.id, { newEndDate: '2027-03-11' });
+    expect(res.status).toBe(409);
+    expect(errorCode(res)).toBe('INSUFFICIENT_STOCK');
+    const after = await db.order.findUniqueOrThrow({ where: { id: o.id } });
+    expect(after.endDate.toISOString().slice(0, 10)).toBe('2027-03-09');
+    expect(await allocDates(o.id)).toEqual(['2027-03-08', '2027-03-09']);
+    expect(await db.invoice.count({ where: { orderId: o.id } })).toBe(1);
+    expect(await db.orderExtension.count({ where: { orderId: o.id } })).toBe(0);
+  });
+
+  it('pesanan borongan: biaya perpanjangan wajib diisi manual dan menambah total borongan', async () => {
+    const c = await setup();
+    const { product, assets } = await seedProduct('Speaker', 1);
+    const { order: o } = await dispatched(c, product.id, assets, 1);
+    await db.order.update({
+      where: { id: o.id },
+      data: { pricingMode: 'LUMP', lumpTotal: 500_000n, subtotal: 500_000n },
+    });
+    expect(errorCode(await extend(c, o.id, { newEndDate: '2027-03-10' }))).toBe(
+      'EXTRA_AMOUNT_REQUIRED',
+    );
+    expect((await extend(c, o.id, { newEndDate: '2027-03-10', extraAmount: 150_000 })).status).toBe(
+      200,
+    );
+    const after = await db.order.findUniqueOrThrow({ where: { id: o.id } });
+    expect(after.lumpTotal).toBe(650_000n);
+    expect(after.subtotal).toBe(650_000n);
+    const inv = await db.invoice.findFirstOrThrow({
+      where: { orderId: o.id },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(inv.rentAmount).toBe(150_000n);
   });
 });

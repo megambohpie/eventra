@@ -510,6 +510,8 @@ model Order {
   incidents         Incident[]
   replacementTasks  ReplacementTask[]
   invoices          Invoice[]
+  lateFees          LateFee[]
+  extensions        OrderExtension[]
 
   @@index([customerId])
   @@index([status])
@@ -688,6 +690,7 @@ model PickList {
   items     PickListItem[]
   scans     ScanEvent[]
   documents HandoverDocument[]
+  lateFee   LateFee?
 
   @@index([orderId])
   @@index([status])
@@ -1088,6 +1091,8 @@ enum ReminderKind {
 model Invoice {
   id            String        @id @default(uuid()) @db.Uuid
   number        String        @unique
+  // BASE = invoice utama (satu aktif per pesanan); EXTENSION = tagihan perpanjangan sewa.
+  kind          InvoiceKind   @default(BASE)
   orderId       String        @map("order_id") @db.Uuid
   status        InvoiceStatus @default(ISSUED)
   rentAmount    BigInt        @map("rent_amount")
@@ -1102,6 +1107,7 @@ model Invoice {
   updatedAt     DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   order     Order             @relation(fields: [orderId], references: [id])
+  lateFee   LateFee?
   payments  Payment[]
   reminders InvoiceReminder[]
 
@@ -1147,4 +1153,63 @@ model InvoiceReminder {
 
   @@index([invoiceId, createdAt])
   @@map("invoice_reminders")
+}
+
+enum InvoiceKind {
+  BASE
+  EXTENSION
+  LATE_FEE
+}
+
+enum LateFeeStatus {
+  ACTIVE
+  WAIVED
+}
+
+// Denda keterlambatan pengembalian. Satu baris per pick list; nominal tidak diubah — Owner
+// menghapuskan dengan status WAIVED + alasan (riwayat tetap utuh dan masuk audit).
+model LateFee {
+  id             String        @id @default(uuid()) @db.Uuid
+  orderId        String        @map("order_id") @db.Uuid
+  pickListId     String        @unique @map("pick_list_id") @db.Uuid
+  daysLate       Int           @map("days_late")
+  chargeableDays Int           @map("chargeable_days")
+  percentPerDay  Decimal       @map("percent_per_day") @db.Decimal(5, 2)
+  graceDays      Int           @map("grace_days")
+  baseAmount     BigInt        @map("base_amount")
+  amount         BigInt
+  status         LateFeeStatus @default(ACTIVE)
+  returnedOn     DateTime      @map("returned_on") @db.Date
+  waivedAt       DateTime?     @map("waived_at") @db.Timestamptz(3)
+  waivedBy       String?       @map("waived_by") @db.Uuid
+  waiveReason    String?       @map("waive_reason")
+  invoiceId      String?       @unique @map("invoice_id") @db.Uuid
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  order    Order    @relation(fields: [orderId], references: [id])
+  pickList PickList @relation(fields: [pickListId], references: [id])
+  invoice  Invoice? @relation(fields: [invoiceId], references: [id])
+
+  @@index([orderId])
+  @@map("late_fees")
+}
+
+// Riwayat perpanjangan sewa (append-only). Tanggal selesai pesanan berubah, baris ini menyimpan
+// tanggal lama/baru, biaya tambahan, dan invoice tambahan yang diterbitkan.
+model OrderExtension {
+  id              String   @id @default(uuid()) @db.Uuid
+  orderId         String   @map("order_id") @db.Uuid
+  previousEndDate DateTime @map("previous_end_date") @db.Date
+  newEndDate      DateTime @map("new_end_date") @db.Date
+  extraDays       Int      @map("extra_days")
+  amount          BigInt
+  invoiceId       String?  @map("invoice_id") @db.Uuid
+  note            String?
+  createdBy       String?  @map("created_by") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@index([orderId, createdAt])
+  @@map("order_extensions")
 }

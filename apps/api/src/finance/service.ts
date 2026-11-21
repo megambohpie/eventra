@@ -1,11 +1,16 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 import {
   DEFAULT_DP_MIN_PERCENT,
+  DEFAULT_LATE_FEE_POLICY,
   computeInvoiceBalance,
+  computeLateFee,
+  lateFeePolicySchema,
   requiredDp,
   type DpStatusDto,
   type InvoiceDto,
   type InvoiceSummaryDto,
+  type LateFeeDto,
+  type LateFeePolicyDto,
   type PaymentDto,
 } from '@eventra/shared';
 import { HttpError } from '../errors';
@@ -107,7 +112,7 @@ export async function issueInvoiceForOrder(
 ): Promise<string | null> {
   if (order.subtotal + order.depositTotal <= 0n) return null;
   const active = await tx.invoice.findFirst({
-    where: { orderId: order.id, status: 'ISSUED' },
+    where: { orderId: order.id, status: 'ISSUED', kind: 'BASE' },
     select: { id: true },
   });
   if (active) return null;
@@ -241,6 +246,7 @@ export function toInvoiceSummary(row: InvoiceRow, today: string): InvoiceSummary
     orderId: row.orderId,
     orderNumber: row.order.number,
     customerName: row.order.customer.name,
+    kind: row.kind,
     status: row.status,
     paymentState: b.paymentState,
     rentAmount: Number(row.rentAmount),
@@ -403,4 +409,186 @@ export async function sendDueReminders(db: PrismaClient, now = new Date()): Prom
     sent += 1;
   }
   return sent;
+}
+
+// ---------- Denda keterlambatan ----------
+
+const LATE_FEE_SETTING_KEY = 'payment.lateFee';
+
+/** Kebijakan denda yang berlaku; default nonaktif bila Owner belum mengaturnya atau data rusak. */
+export async function getLateFeePolicy(db: Db): Promise<LateFeePolicyDto> {
+  const row = await db.appSetting.findUnique({ where: { key: LATE_FEE_SETTING_KEY } });
+  const parsed = lateFeePolicySchema.safeParse(row?.value);
+  return parsed.success ? parsed.data : { ...DEFAULT_LATE_FEE_POLICY };
+}
+
+export async function setLateFeePolicy(
+  tx: Tx,
+  policy: LateFeePolicyDto,
+  actorId: string,
+): Promise<void> {
+  const value = {
+    enabled: policy.enabled,
+    percentPerDay: policy.percentPerDay,
+    graceDays: policy.graceDays,
+  };
+  await tx.appSetting.upsert({
+    where: { key: LATE_FEE_SETTING_KEY },
+    create: { key: LATE_FEE_SETTING_KEY, value, updatedBy: actorId },
+    update: { value, updatedBy: actorId },
+  });
+}
+
+export function toLateFeeDto(f: {
+  id: string;
+  orderId: string;
+  pickListId: string;
+  daysLate: number;
+  chargeableDays: number;
+  percentPerDay: Prisma.Decimal | number;
+  graceDays: number;
+  baseAmount: bigint;
+  amount: bigint;
+  status: 'ACTIVE' | 'WAIVED';
+  returnedOn: Date;
+  waivedAt: Date | null;
+  waiveReason: string | null;
+  invoiceId: string | null;
+  createdAt: Date;
+}): LateFeeDto {
+  return {
+    id: f.id,
+    orderId: f.orderId,
+    pickListId: f.pickListId,
+    daysLate: f.daysLate,
+    chargeableDays: f.chargeableDays,
+    percentPerDay: Number(f.percentPerDay),
+    graceDays: f.graceDays,
+    baseAmount: Number(f.baseAmount),
+    amount: Number(f.amount),
+    status: f.status,
+    returnedOn: isoDay(f.returnedOn),
+    waivedAt: f.waivedAt?.toISOString() ?? null,
+    waiveReason: f.waiveReason,
+    invoiceId: f.invoiceId,
+    createdAt: f.createdAt.toISOString(),
+  };
+}
+
+/**
+ * Hitung denda saat pengembalian dikonfirmasi. No-op bila kebijakan nonaktif, denda 0, atau
+ * pick list sudah pernah dihitung (penyelesaian ulang pada RETURN_ISSUE tidak menggandakan).
+ * `returnedOn` = tanggal kembali (WIB) sebagai tanggal murni UTC 00:00.
+ */
+export async function recordLateFee(
+  tx: Tx,
+  input: { orderId: string; pickListId: string; returnedOn: Date; actorId?: string | null },
+): Promise<LateFeeDto | null> {
+  const policy = await getLateFeePolicy(tx);
+  if (!policy.enabled || policy.percentPerDay <= 0) return null;
+  const existing = await tx.lateFee.findUnique({ where: { pickListId: input.pickListId } });
+  if (existing) return null;
+  const order = await tx.order.findUniqueOrThrow({
+    where: { id: input.orderId },
+    select: { endDate: true, subtotal: true },
+  });
+  const result = computeLateFee({
+    endDate: isoDay(order.endDate),
+    returnedOn: isoDay(input.returnedOn),
+    rentAmount: Number(order.subtotal),
+    percentPerDay: policy.percentPerDay,
+    graceDays: policy.graceDays,
+  });
+  if (result.amount <= 0) return null;
+  const row = await tx.lateFee.create({
+    data: {
+      orderId: input.orderId,
+      pickListId: input.pickListId,
+      daysLate: result.daysLate,
+      chargeableDays: result.chargeableDays,
+      percentPerDay: policy.percentPerDay,
+      graceDays: policy.graceDays,
+      baseAmount: order.subtotal,
+      amount: BigInt(result.amount),
+      returnedOn: input.returnedOn,
+    },
+  });
+  // Tagih lewat invoice terpisah (jatuh tempo hari pengembalian) agar masuk pembayaran/piutang.
+  const order2 = await tx.order.findUniqueOrThrow({
+    where: { id: input.orderId },
+    select: { number: true },
+  });
+  const invoice = await issueAuxInvoice(
+    tx,
+    {
+      kind: 'LATE_FEE',
+      orderId: input.orderId,
+      orderNumber: order2.number,
+      amount: row.amount,
+      dueDate: input.returnedOn,
+      note: `Denda keterlambatan ${result.chargeableDays} hari × ${policy.percentPerDay}%/hari`,
+    },
+    input.actorId ?? null,
+  );
+  const linked = invoice
+    ? await tx.lateFee.update({ where: { id: row.id }, data: { invoiceId: invoice.id } })
+    : row;
+  return toLateFeeDto(linked);
+}
+
+/**
+ * Invoice tambahan untuk biaya perpanjangan sewa. Terpisah dari invoice awal (yang beserta
+ * pembayarannya tidak disentuh), sehingga tidak bergantung pada ada/tidaknya invoice aktif lain.
+ */
+export async function issueExtensionInvoice(
+  tx: Tx,
+  input: { orderId: string; orderNumber: string; amount: bigint; dueDate: Date; note: string },
+  actorId: string | null,
+): Promise<{ id: string; number: string } | null> {
+  return issueAuxInvoice(tx, { ...input, kind: 'EXTENSION' }, actorId);
+}
+
+/** Invoice pendamping (perpanjangan/denda): terpisah dari invoice awal, tanpa deposit. */
+async function issueAuxInvoice(
+  tx: Tx,
+  input: {
+    kind: 'EXTENSION' | 'LATE_FEE';
+    orderId: string;
+    orderNumber: string;
+    amount: bigint;
+    dueDate: Date;
+    note: string;
+  },
+  actorId: string | null,
+): Promise<{ id: string; number: string } | null> {
+  if (input.amount <= 0n) return null;
+  const invoice = await tx.invoice.create({
+    data: {
+      number: await nextInvoiceNumber(tx),
+      kind: input.kind,
+      orderId: input.orderId,
+      rentAmount: input.amount,
+      depositAmount: 0n,
+      dueDate: input.dueDate,
+      note: input.note,
+      createdBy: actorId,
+    },
+  });
+  await tx.auditLog.create({
+    data: {
+      actorId,
+      action: 'invoice.create',
+      entity: 'invoice',
+      entityId: invoice.id,
+      after: {
+        number: invoice.number,
+        orderNumber: input.orderNumber,
+        rentAmount: num(invoice.rentAmount),
+        depositAmount: 0,
+        auto: true,
+        [input.kind === 'LATE_FEE' ? 'lateFee' : 'extension']: true,
+      },
+    },
+  });
+  return { id: invoice.id, number: invoice.number };
 }

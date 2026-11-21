@@ -69,7 +69,14 @@ export function InvoiceDetailPage() {
   return (
     <div className="ev-detail">
       <PageCard>
-        <PageHeader title={inv.number} subtitle={inv.orderNumber}>
+        <PageHeader
+          title={inv.number}
+          subtitle={
+            inv.kind !== 'BASE'
+              ? `${inv.orderNumber} · ${t(inv.kind === 'LATE_FEE' ? 'finance.lateFeeInvoice' : 'finance.extensionInvoice')}`
+              : inv.orderNumber
+          }
+        >
           <Link to="/invoices" className="btn btn-ghost btn-sm">
             <Icon path={mdiArrowLeft} />
             {t('finance.backToList')}

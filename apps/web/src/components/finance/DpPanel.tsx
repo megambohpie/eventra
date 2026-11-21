@@ -27,7 +27,7 @@ export function DpPanel({ orderId }: { orderId: string }) {
     () => listInvoices(api, { orderId, pageSize: 100 }),
     `dp-invoices-${orderId}`,
   );
-  const invoice = invoices.data?.items.find((i) => i.status === 'ISSUED');
+  const invoice = invoices.data?.items.find((i) => i.status === 'ISSUED' && i.kind === 'BASE');
   const status = dp.data;
   if (!status || status.rentAmount <= 0 || status.percent <= 0) return null;
 

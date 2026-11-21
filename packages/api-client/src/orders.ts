@@ -10,6 +10,10 @@ import type {
   CalendarOrderDto,
   GeocodeResultDto,
   HoldInput,
+  OrderExtendInput,
+  OrderExtensionDto,
+  OrderExtensionPreviewDto,
+  OrderExtensionPreviewQuery,
   OrderDto,
   OrderInput,
   OrderListQuery,
@@ -81,3 +85,22 @@ export const getMovementDay = async (c: AxiosInstance, date: string) =>
   (await c.get<Envelope<CalendarDayDetailDto>>('/calendar/day', { params: { date } })).data.data;
 export const searchPlaces = async (c: AxiosInstance, q: string, lang: 'id' | 'en') =>
   (await c.get<Envelope<GeocodeResultDto[]>>('/geocode/search', { params: { q, lang } })).data.data;
+
+// ---------- Perpanjangan sewa ----------
+
+export const previewOrderExtension = async (
+  c: AxiosInstance,
+  id: string,
+  params: OrderExtensionPreviewQuery,
+) =>
+  (await c.get<Envelope<OrderExtensionPreviewDto>>(`/orders/${id}/extension-preview`, { params }))
+    .data.data;
+export const listOrderExtensions = async (c: AxiosInstance, id: string) =>
+  (await c.get<Envelope<OrderExtensionDto[]>>(`/orders/${id}/extensions`)).data.data;
+export const extendOrder = async (c: AxiosInstance, id: string, input: OrderExtendInput) =>
+  (
+    await c.post<Envelope<OrderDto & { extensionInvoice: string | null }>>(
+      `/orders/${id}/extend`,
+      input,
+    )
+  ).data.data;

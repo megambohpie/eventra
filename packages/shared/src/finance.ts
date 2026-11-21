@@ -64,6 +64,10 @@ export const requiredDp = (rentAmount: number, percent: number): number =>
 export const INVOICE_STATUSES = ['ISSUED', 'VOID'] as const;
 export type InvoiceStatus = (typeof INVOICE_STATUSES)[number];
 
+/** BASE = invoice utama; EXTENSION = tagihan perpanjangan sewa. */
+export const INVOICE_KINDS = ['BASE', 'EXTENSION', 'LATE_FEE'] as const;
+export type InvoiceKind = (typeof INVOICE_KINDS)[number];
+
 /** Status pembayaran turunan (PRD: Belum dibayar, Sebagian, Lunas, Terlambat). */
 export const INVOICE_PAYMENT_STATES = ['UNPAID', 'PARTIAL', 'PAID', 'OVERDUE', 'VOID'] as const;
 export type InvoicePaymentState = (typeof INVOICE_PAYMENT_STATES)[number];
@@ -249,6 +253,7 @@ export interface InvoiceSummaryDto {
   orderId: string;
   orderNumber: string;
   customerName: string;
+  kind: InvoiceKind;
   status: InvoiceStatus;
   paymentState: InvoicePaymentState;
   rentAmount: number;
@@ -407,4 +412,81 @@ export interface AssetMetricsDto {
   /** Hanya untuk pemegang `asset.cost.read`. */
   serviceCost: number | null;
   incidentCount: number;
+}
+
+// ---------- Denda keterlambatan ----------
+
+/**
+ * Kebijakan denda keterlambatan pengembalian (keputusan owner, 20 Nov 2026): nonaktif secara
+ * default; Owner mengaktifkan, mengatur persen per hari dari nilai sewa, dan masa toleransi.
+ */
+export const DEFAULT_LATE_FEE_POLICY = { enabled: false, percentPerDay: 10, graceDays: 0 } as const;
+
+export const lateFeePolicySchema = z.object({
+  enabled: z.boolean(),
+  /** Persen dari nilai sewa pesanan per hari terlambat (0–100). */
+  percentPerDay: z.number().min(0).max(100),
+  /** Hari toleransi setelah tanggal selesai sewa sebelum denda dihitung. */
+  graceDays: z.number().int().min(0).max(30),
+});
+export type LateFeePolicyInput = z.input<typeof lateFeePolicySchema>;
+export interface LateFeePolicyDto {
+  enabled: boolean;
+  percentPerDay: number;
+  graceDays: number;
+}
+
+export const LATE_FEE_STATUSES = ['ACTIVE', 'WAIVED'] as const;
+export type LateFeeStatus = (typeof LATE_FEE_STATUSES)[number];
+
+export const lateFeeWaiveSchema = z.object({ reason: z.string().trim().min(3).max(300) });
+export type LateFeeWaiveInput = z.input<typeof lateFeeWaiveSchema>;
+
+export interface LateFeeDto {
+  id: string;
+  orderId: string;
+  pickListId: string;
+  /** Hari terlambat sebelum toleransi dikurangkan (tanggal kembali − tanggal selesai sewa). */
+  daysLate: number;
+  /** Hari yang dikenai denda (daysLate − graceDays). */
+  chargeableDays: number;
+  /** Snapshot kebijakan saat denda dihitung. */
+  percentPerDay: number;
+  graceDays: number;
+  /** Nilai sewa pesanan saat dihitung (dasar denda). */
+  baseAmount: number;
+  amount: number;
+  status: LateFeeStatus;
+  returnedOn: string;
+  waivedAt: string | null;
+  waiveReason: string | null;
+  /** Invoice denda (kind LATE_FEE); null bila belum/tidak diterbitkan. */
+  invoiceId: string | null;
+  createdAt: string;
+}
+
+export interface LateFeeResult {
+  daysLate: number;
+  chargeableDays: number;
+  amount: number;
+}
+
+/**
+ * Denda = nilai sewa × persen/hari × hari terkena denda (dibulatkan ke atas ke rupiah bulat).
+ * Tanggal berupa `YYYY-MM-DD`. Kembali tepat waktu/lebih awal atau masih dalam toleransi = 0.
+ */
+export function computeLateFee(input: {
+  endDate: string;
+  returnedOn: string;
+  rentAmount: number;
+  percentPerDay: number;
+  graceDays: number;
+}): LateFeeResult {
+  const daysLate = Math.max(
+    0,
+    Math.floor((utcDay(input.returnedOn) - utcDay(input.endDate)) / DAY_MS),
+  );
+  const chargeableDays = Math.max(0, daysLate - input.graceDays);
+  const amount = Math.ceil((input.rentAmount * input.percentPerDay * chargeableDays) / 100);
+  return { daysLate, chargeableDays, amount };
 }

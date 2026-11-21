@@ -40,7 +40,7 @@ import { parseId } from '../http';
 import { QR_TOKEN_PATTERN } from '../assets/service';
 import { planItems, requirements } from '../orders/availability';
 import { claimTransition, recordStatus, toSummaryDto as toOrderSummary } from '../orders/service';
-import { assertDpSatisfied } from '../finance/service';
+import { assertDpSatisfied, recordLateFee } from '../finance/service';
 import { assetBlockers } from '../incidents/service';
 import { buildHandoverPdf, type PdfSignature } from '../warehouse/pdf';
 import {
@@ -1085,6 +1085,13 @@ export function warehouseRouter(db: PrismaClient): Router {
           where: { id },
           data: { status: missing === 0 ? 'RETURNED' : 'RETURN_ISSUE', returnedAt: now },
         });
+        // Denda keterlambatan (hanya bila Owner mengaktifkannya; tanggal kembali = hari ini WIB).
+        const lateFee = await recordLateFee(tx, {
+          orderId: pick.orderId,
+          pickListId: id,
+          returnedOn: todayWib(),
+          actorId: user.id,
+        });
         if (orderStatus !== target) {
           const from = await claimTransition(tx, pick.orderId, ['IN_PROGRESS', 'ISSUE'], target);
           await recordStatus(
@@ -1117,6 +1124,7 @@ export function warehouseRouter(db: PrismaClient): Router {
             status: missing === 0 ? 'RETURNED' : 'RETURN_ISSUE',
             missing,
             lostCounted,
+            lateFee: lateFee ? { amount: lateFee.amount, daysLate: lateFee.daysLate } : null,
             document: `${doc.number} v${doc.version}`,
           },
         });

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { computeInvoiceBalance, paymentCreateSchema, revenueQuerySchema } from './finance';
+import {
+  computeInvoiceBalance,
+  computeLateFee,
+  paymentCreateSchema,
+  revenueQuerySchema,
+} from './finance';
 
 const base = {
   rentAmount: 1_000_000,
@@ -80,5 +85,43 @@ describe('skema keuangan', () => {
     expect(revenueQuerySchema.safeParse({ from: '2000-01-01', to: '2027-01-31' }).success).toBe(
       false,
     );
+  });
+});
+
+describe('computeLateFee', () => {
+  const late = {
+    endDate: '2027-06-10',
+    returnedOn: '2027-06-10',
+    rentAmount: 1_000_000,
+    percentPerDay: 10,
+    graceDays: 0,
+  };
+  it('tepat waktu atau lebih awal = 0', () => {
+    expect(computeLateFee(late).amount).toBe(0);
+    expect(computeLateFee({ ...late, returnedOn: '2027-06-08' })).toMatchObject({
+      daysLate: 0,
+      amount: 0,
+    });
+  });
+  it('persen × sewa × hari terlambat', () => {
+    expect(computeLateFee({ ...late, returnedOn: '2027-06-13' })).toEqual({
+      daysLate: 3,
+      chargeableDays: 3,
+      amount: 300_000,
+    });
+  });
+  it('toleransi mengurangi hari yang dikenai denda', () => {
+    expect(computeLateFee({ ...late, returnedOn: '2027-06-13', graceDays: 1 })).toEqual({
+      daysLate: 3,
+      chargeableDays: 2,
+      amount: 200_000,
+    });
+    expect(computeLateFee({ ...late, returnedOn: '2027-06-11', graceDays: 1 }).amount).toBe(0);
+  });
+  it('dibulatkan ke atas ke rupiah bulat', () => {
+    expect(
+      computeLateFee({ ...late, rentAmount: 333_333, percentPerDay: 7.5, returnedOn: '2027-06-11' })
+        .amount,
+    ).toBe(25_000);
   });
 });

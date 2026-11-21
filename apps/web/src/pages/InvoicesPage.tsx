@@ -12,6 +12,7 @@ import { api } from '@/api';
 import { useAuth } from '@/auth/AuthProvider';
 import { InvoiceStateBadge } from '@/components/finance/badges';
 import { DpPolicy } from '@/components/finance/DpPolicy';
+import { LateFeePolicy } from '@/components/finance/LateFeePolicy';
 import { InvoiceCreateModal, PaymentModal } from '@/components/finance/InvoiceModals';
 import { Button } from '@/components/ui/Button';
 import { Loading } from '@/components/ui/Loading';
@@ -72,6 +73,7 @@ export function InvoicesPage() {
             ))}
           </select>
           <DpPolicy />
+          <LateFeePolicy />
           {canWrite && (
             <Button size="sm" variant="primary" icon={mdiPlus} onClick={() => setCreating(true)}>
               {t('finance.newInvoice')}
@@ -104,6 +106,15 @@ export function InvoicesPage() {
                       <Link className="ev-link" to={`/invoices/${i.id}`}>
                         {i.number}
                       </Link>
+                      {i.kind !== 'BASE' && (
+                        <span className="ev-table__hint ev-table__hint--block">
+                          {t(
+                            i.kind === 'LATE_FEE'
+                              ? 'finance.lateFeeInvoice'
+                              : 'finance.extensionInvoice',
+                          )}
+                        </span>
+                      )}
                     </td>
                     <td>
                       <Link className="ev-link" to={`/orders/${i.orderId}`}>

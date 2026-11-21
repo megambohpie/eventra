@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { mdiCancel, mdiCheckCircle, mdiPencil, mdiPlus, mdiSend } from '@mdi/js';
+import { mdiCalendarPlus, mdiCancel, mdiCheckCircle, mdiPencil, mdiPlus, mdiSend } from '@mdi/js';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 import {
@@ -10,10 +10,19 @@ import {
   listUsers,
   submitOrder,
 } from '@eventra/api-client';
-import { PIC_ROLES, SINGLE_PIC_ROLES, type OrderDto, type OrderPicDto } from '@eventra/shared';
+import {
+  EXTENDABLE_ORDER_STATUSES,
+  PIC_ROLES,
+  SINGLE_PIC_ROLES,
+  type OrderDto,
+  type OrderPicDto,
+} from '@eventra/shared';
 import { api } from '@/api';
 import { useAuth } from '@/auth/AuthProvider';
 import { DpPanel } from '@/components/finance/DpPanel';
+import { LateFeePanel } from '@/components/finance/LateFeePanel';
+import { ExtendOrderModal } from '@/components/orders/ExtendOrderModal';
+import { ExtensionHistory } from '@/components/orders/ExtensionHistory';
 import { OrderNoteModal } from '@/components/orders/OrderNoteModal';
 import { OrderStatusBadge } from '@/components/orders/OrderStatusBadge';
 import { PicModal } from '@/components/orders/PicModal';
@@ -27,7 +36,7 @@ import { useResource } from '@/hooks/useResource';
 import { formatDate, formatDateTime, formatRupiah } from '@/lib/format';
 import { notify } from '@/lib/notifications';
 
-type Dialog = 'cancel' | { kind: 'pic'; pic?: OrderPicDto } | null;
+type Dialog = 'cancel' | 'extend' | { kind: 'pic'; pic?: OrderPicDto } | null;
 
 const PIC_LOCKED = ['COMPLETED', 'REJECTED', 'CANCELLED', 'EXPIRED'];
 
@@ -114,6 +123,9 @@ export function OrderDetailPage() {
           <DpPanel orderId={order.id} />
         )}
 
+        {can('finance.read') && <LateFeePanel orderId={order.id} />}
+        <ExtensionHistory orderId={order.id} version={order.endDate} />
+
         <div className="ev-detail__actions">
           {canWrite && s === 'DRAFT' && (
             <>
@@ -158,6 +170,16 @@ export function OrderDetailPage() {
                 {t('orders.actions.warehouse')}
               </Link>
             )}
+          {canApprove && EXTENDABLE_ORDER_STATUSES.includes(s) && (
+            <Button
+              size="sm"
+              variant="secondary"
+              icon={mdiCalendarPlus}
+              onClick={() => setDialog('extend')}
+            >
+              {t('orders.extend.action')}
+            </Button>
+          )}
           {canWrite &&
             [
               'DRAFT',
@@ -410,6 +432,9 @@ export function OrderDetailPage() {
         )}
       </PageCard>
 
+      {dialog === 'extend' && (
+        <ExtendOrderModal order={order} onClose={closeDialog} onDone={reload} />
+      )}
       {dialog === 'cancel' && (
         <OrderNoteModal
           title={t('orders.actions.cancel')}

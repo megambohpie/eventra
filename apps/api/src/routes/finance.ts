@@ -7,6 +7,8 @@ import {
   invoiceCreateSchema,
   invoiceListQuerySchema,
   invoiceVoidSchema,
+  lateFeePolicySchema,
+  lateFeeWaiveSchema,
   paymentCreateSchema,
   paymentPolicySchema,
   type PaymentPolicyDto,
@@ -15,6 +17,8 @@ import {
   revenueQuerySchema,
   type InvoiceDto,
   type InvoiceSummaryDto,
+  type LateFeeDto,
+  type LateFeePolicyDto,
   type Page,
   type ReceivableItemDto,
   type ReceivablesReportDto,
@@ -31,6 +35,9 @@ import {
   balanceOf,
   getDpPercent,
   getDpStatus,
+  getLateFeePolicy,
+  setLateFeePolicy,
+  toLateFeeDto,
   setDpPercent,
   invoiceInclude,
   isoDay,
@@ -121,7 +128,7 @@ export function financeRouter(db: PrismaClient): Router {
         );
       }
       const active = await tx.invoice.findFirst({
-        where: { orderId: order.id, status: 'ISSUED' },
+        where: { orderId: order.id, status: 'ISSUED', kind: 'BASE' },
         select: { number: true },
       });
       if (active) {
@@ -273,6 +280,98 @@ export function financeRouter(db: PrismaClient): Router {
       });
     });
     res.json({ data: await getDpStatus(db, id) });
+  });
+
+  // ---------- Denda keterlambatan ----------
+
+  router.get('/settings/late-fee-policy', requireCapability('finance.read'), async (_req, res) => {
+    const data: LateFeePolicyDto = await getLateFeePolicy(db);
+    res.json({ data });
+  });
+
+  /** Owner mengaktifkan/menonaktifkan denda dan mengatur persen per hari + toleransi. */
+  router.put('/settings/late-fee-policy', requireCapability('finance.policy'), async (req, res) => {
+    const input = lateFeePolicySchema.parse(req.body);
+    await db.$transaction(async (tx) => {
+      const before = await getLateFeePolicy(tx);
+      await setLateFeePolicy(tx, input, currentUser(req).id);
+      await writeAudit(tx, req, {
+        action: 'settings.late_fee_policy',
+        entity: 'settings',
+        before,
+        after: input,
+      });
+    });
+    const data: LateFeePolicyDto = await getLateFeePolicy(db);
+    res.json({ data });
+  });
+
+  router.get('/orders/:id/late-fees', requireCapability('finance.read'), async (req, res) => {
+    const rows = await db.lateFee.findMany({
+      where: { orderId: parseId(req.params.id) },
+      orderBy: { createdAt: 'asc' },
+    });
+    const data: LateFeeDto[] = rows.map(toLateFeeDto);
+    res.json({ data });
+  });
+
+  /** Owner menghapuskan denda (alasan wajib). Nominal tidak diubah; status jadi WAIVED + audit. */
+  router.post('/late-fees/:id/waive', requireCapability('finance.policy'), async (req, res) => {
+    const id = parseId(req.params.id);
+    const { reason } = lateFeeWaiveSchema.parse(req.body);
+    const user = currentUser(req);
+    const row = await db.$transaction(async (tx) => {
+      const fee = await tx.lateFee.findUnique({ where: { id } });
+      if (!fee) throw new HttpError(404, 'NOT_FOUND', 'Denda tidak ditemukan');
+      if (fee.status === 'WAIVED') {
+        throw new HttpError(409, 'LATE_FEE_ALREADY_WAIVED', 'Denda sudah dihapuskan');
+      }
+      if (fee.invoiceId) {
+        await lockInvoice(tx, fee.invoiceId);
+        const inv = await tx.invoice.findUniqueOrThrow({
+          where: { id: fee.invoiceId },
+          include: { payments: true },
+        });
+        if (inv.payments.some((p) => p.status === 'SUCCEEDED' || p.status === 'PENDING')) {
+          throw new HttpError(
+            409,
+            'INVOICE_HAS_PAYMENTS',
+            'Batalkan (void) pembayaran invoice denda ini terlebih dahulu',
+          );
+        }
+        if (inv.status === 'ISSUED') {
+          await tx.invoice.update({
+            where: { id: inv.id },
+            data: {
+              status: 'VOID',
+              voidedAt: new Date(),
+              voidReason: `Denda dihapuskan: ${reason}`,
+            },
+          });
+          await writeAudit(tx, req, {
+            action: 'invoice.void',
+            entity: 'invoice',
+            entityId: inv.id,
+            before: { status: 'ISSUED' },
+            after: { status: 'VOID', reason, lateFeeId: id },
+          });
+        }
+      }
+      const updated = await tx.lateFee.update({
+        where: { id },
+        data: { status: 'WAIVED', waivedAt: new Date(), waivedBy: user.id, waiveReason: reason },
+      });
+      await writeAudit(tx, req, {
+        action: 'late_fee.waive',
+        entity: 'late_fee',
+        entityId: id,
+        before: { status: fee.status, amount: Number(fee.amount) },
+        after: { status: 'WAIVED', reason },
+      });
+      return updated;
+    });
+    const data: LateFeeDto = toLateFeeDto(row);
+    res.json({ data });
   });
 
   // ---------- Pembayaran ----------

@@ -15,6 +15,8 @@ import {
   orderInputSchema,
   orderListQuerySchema,
   effectiveUnitPrice,
+  orderExtendSchema,
+  orderExtensionPreviewQuerySchema,
   orderNoteSchema,
   picInputSchema,
   quoteInputSchema,
@@ -55,6 +57,7 @@ import {
   toOrderDto,
   toSummaryDto,
 } from '../orders/service';
+import { applyExtension, listExtensions, previewExtension } from '../orders/extension';
 import { pickupDeadlinePassed } from '../orders/noShow';
 
 type Tx = Prisma.TransactionClient;
@@ -537,6 +540,54 @@ export function ordersRouter(db: PrismaClient): Router {
       });
     });
     res.json({ data: await respond(id, req) });
+  });
+
+  // ---------- Perpanjangan sewa ----------
+
+  /** Pratinjau: hari tambahan, biaya, dan kecukupan stok untuk tanggal selesai baru. */
+  router.get(
+    '/orders/:id/extension-preview',
+    requireCapability('order.approve'),
+    async (req, res) => {
+      const id = parseId(req.params.id);
+      const q = orderExtensionPreviewQuerySchema.parse(req.query);
+      res.json({
+        data: await previewExtension(db, id, q.newEndDate, q.extraAmount, canSeePrices(req)),
+      });
+    },
+  );
+
+  router.get('/orders/:id/extensions', requireCapability('order.read'), async (req, res) => {
+    res.json({ data: await listExtensions(db, parseId(req.params.id), canSeePrices(req)) });
+  });
+
+  /** Perpanjang sewa (Owner/Admin): stok hari tambahan dialokasikan atomik; invoice tambahan terbit. */
+  router.post('/orders/:id/extend', requireCapability('order.approve'), async (req, res) => {
+    const id = parseId(req.params.id);
+    const input = orderExtendSchema.parse(req.body);
+    const user = currentUser(req);
+    const result = await db.$transaction(async (tx) => {
+      const before = await tx.order.findUnique({
+        where: { id },
+        select: { endDate: true, subtotal: true },
+      });
+      const out = await applyExtension(tx, id, input, user.id, new Date());
+      await writeAudit(tx, req, {
+        action: 'order.extend',
+        entity: 'order',
+        entityId: id,
+        before: before
+          ? { endDate: isoDate(before.endDate), subtotal: Number(before.subtotal) }
+          : null,
+        after: {
+          newEndDate: input.newEndDate,
+          extensionId: out.extensionId,
+          invoice: out.invoiceNumber,
+        },
+      });
+      return out;
+    });
+    res.json({ data: { ...(await respond(id, req)), extensionInvoice: result.invoiceNumber } });
   });
 
   /** Jadwalkan: PIC gudang keluar, gudang kembali, dan lapangan wajib sudah ditetapkan. */

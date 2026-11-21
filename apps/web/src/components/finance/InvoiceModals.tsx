@@ -36,7 +36,7 @@ async function loadInvoicedOrderIds(): Promise<Set<string>> {
   const ids = new Set<string>();
   for (let page = 1; page <= MAX_ORDER_PAGES; page += 1) {
     const res = await listInvoices(api, { page, pageSize: ORDER_PAGE });
-    for (const i of res.items) if (i.status === 'ISSUED') ids.add(i.orderId);
+    for (const i of res.items) if (i.status === 'ISSUED' && i.kind === 'BASE') ids.add(i.orderId);
     if (res.items.length < ORDER_PAGE) break;
   }
   return ids;

@@ -10,6 +10,10 @@ import type {
   InvoiceListQuery,
   InvoiceSummaryDto,
   InvoiceVoidInput,
+  LateFeeDto,
+  LateFeePolicyDto,
+  LateFeePolicyInput,
+  LateFeeWaiveInput,
   OwnerDashboardDto,
   Page,
   PaymentCreateInput,
@@ -34,6 +38,17 @@ export const getOrderDp = async (c: AxiosInstance, orderId: string) =>
   (await c.get<Envelope<DpStatusDto>>(`/orders/${orderId}/dp`)).data.data;
 export const waiveOrderDp = async (c: AxiosInstance, orderId: string, input: DpWaiverInput) =>
   (await c.post<Envelope<DpStatusDto>>(`/orders/${orderId}/dp-waiver`, input)).data.data;
+
+// ---------- Denda keterlambatan ----------
+
+export const getLateFeePolicy = async (c: AxiosInstance) =>
+  (await c.get<Envelope<LateFeePolicyDto>>('/settings/late-fee-policy')).data.data;
+export const updateLateFeePolicy = async (c: AxiosInstance, input: LateFeePolicyInput) =>
+  (await c.put<Envelope<LateFeePolicyDto>>('/settings/late-fee-policy', input)).data.data;
+export const getOrderLateFees = async (c: AxiosInstance, orderId: string) =>
+  (await c.get<Envelope<LateFeeDto[]>>(`/orders/${orderId}/late-fees`)).data.data;
+export const waiveLateFee = async (c: AxiosInstance, id: string, input: LateFeeWaiveInput) =>
+  (await c.post<Envelope<LateFeeDto>>(`/late-fees/${id}/waive`, input)).data.data;
 
 // ---------- Invoice & pembayaran ----------
 

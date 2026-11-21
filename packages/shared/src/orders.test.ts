@@ -4,6 +4,7 @@ import {
   ORDER_TRANSITIONS,
   canTransitionOrder,
   eachDate,
+  extensionDays,
   orderInputSchema,
   picInputSchema,
   rentalDays,
@@ -105,5 +106,16 @@ describe('capability pesanan', () => {
     expect(hasCapability('WAREHOUSE', 'order.write')).toBe(false);
     expect(hasCapability('ADMIN', 'order.approve')).toBe(true);
     expect(hasCapability('FIELD_PIC', 'order.read')).toBe(false);
+  });
+});
+
+describe('extensionDays', () => {
+  it('menghitung hari tambahan dari tanggal selesai lama ke baru', () => {
+    expect(extensionDays('2027-03-09', '2027-03-11')).toBe(2);
+    expect(extensionDays('2027-02-27', '2027-03-02')).toBe(3);
+  });
+  it('0 bila tidak lebih akhir', () => {
+    expect(extensionDays('2027-03-09', '2027-03-09')).toBe(0);
+    expect(extensionDays('2027-03-09', '2027-03-01')).toBe(0);
   });
 });

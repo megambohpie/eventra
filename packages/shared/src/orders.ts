@@ -498,3 +498,60 @@ export interface CalendarDayDetailDto {
   outgoing: CalendarMovementDto[];
   returning: CalendarMovementDto[];
 }
+
+// ---------- Perpanjangan sewa ----------
+
+/** Status pesanan yang boleh diperpanjang (barang belum kembali; pick list kembali dicek di server). */
+export const EXTENDABLE_ORDER_STATUSES: readonly OrderStatus[] = [
+  'CONFIRMED',
+  'SCHEDULED',
+  'IN_PROGRESS',
+  'ISSUE',
+];
+
+export const orderExtendSchema = z.object({
+  /** Tanggal selesai baru; harus lebih akhir dari tanggal selesai saat ini. */
+  newEndDate: dateOnly,
+  /** Biaya tambahan; wajib untuk pesanan borongan (LUMP), tidak boleh untuk pesanan per baris. */
+  extraAmount: z.number().int().min(0).max(1_000_000_000_000).optional(),
+  note: optionalText(500),
+});
+export type OrderExtendInput = z.input<typeof orderExtendSchema>;
+
+export const orderExtensionPreviewQuerySchema = z.object({
+  newEndDate: dateOnly,
+  extraAmount: z.coerce.number().int().min(0).max(1_000_000_000_000).optional(),
+});
+export type OrderExtensionPreviewQuery = z.input<typeof orderExtensionPreviewQuerySchema>;
+
+/** Hari tambahan dari tanggal selesai lama ke baru (`YYYY-MM-DD`); 0 bila tidak lebih akhir. */
+export function extensionDays(previousEnd: string, newEnd: string): number {
+  return Math.max(0, Math.round((toUtc(newEnd) - toUtc(previousEnd)) / DAY_MS));
+}
+
+export interface OrderExtensionPreviewDto {
+  previousEndDate: string;
+  newEndDate: string;
+  extraDays: number;
+  /** Biaya tambahan; null bila pemanggil tanpa izin melihat harga. */
+  amount: number | null;
+  /** Pesanan borongan: nominal wajib diisi manual. */
+  needsAmount: boolean;
+  /** Stok mencukupi untuk seluruh hari tambahan. */
+  available: boolean;
+  availability: AvailabilityResultDto;
+}
+
+export interface OrderExtensionDto {
+  id: string;
+  orderId: string;
+  previousEndDate: string;
+  newEndDate: string;
+  extraDays: number;
+  amount: number | null;
+  invoiceId: string | null;
+  invoiceNumber: string | null;
+  note: string | null;
+  createdByName: string | null;
+  createdAt: string;
+}
